@@ -1,0 +1,18 @@
+echo "Running pre-commit quality gate..."
+
+echo "→ Client: typecheck + tests"
+npm run quality || exit 1
+
+if git diff --cached --name-only | grep -q '^server/'; then
+  echo "→ server/ changed — Server: typecheck + tests (needs Postgres reachable on DATABASE_URL)"
+  (cd server && npm run quality) || {
+    echo ""
+    echo "Server quality gate failed. If this is a connection error, start Postgres first:"
+    echo "  docker compose up -d postgres"
+    exit 1
+  }
+else
+  echo "→ no server/ changes — skipping server test suite (needs a live Postgres connection)"
+fi
+
+echo "Pre-commit quality gate passed."

@@ -1,0 +1,41 @@
+import request from 'supertest';
+import crypto from 'crypto';
+import { eq } from 'drizzle-orm';
+import { createApp } from '../app';
+import { db } from '../db/client';
+import { users } from '../db/schema';
+
+export const app = createApp();
+
+// No API promotes a user to admin (self-registration always creates
+// role: 'user' — deliberately, see docs/MASTER_BUILD_PROMPT_v3_BACKEND.md).
+// Tests reach into the database directly, the same way a real operator
+// would seed the very first admin (see db/seed-accounts.ts).
+export const promoteToAdmin = (userId: number) => db.update(users).set({ role: 'admin' }).where(eq(users.id, userId));
+export const setUserActive = (userId: number, isActive: boolean) => db.update(users).set({ isActive }).where(eq(users.id, userId));
+
+// crypto.randomUUID(), not a per-module counter — Jest runs test files in
+// separate worker processes by default, each with its own counter starting
+// at 0, so a counter + Date.now() scheme can still collide across workers.
+// @test.local domain — globalTeardown.ts deletes every account under it after the suite runs.
+export const uniqueEmail = (prefix: string): string => `${prefix}-${crypto.randomUUID()}@test.local`;
+
+export interface RegisteredUser {
+  accessToken: string;
+  refreshToken: string;
+  user: { id: number; name: string; email: string; tier: string; budgetClass: string | null; role: string; isActive: boolean };
+}
+
+export const registerUser = async (overrides: { name?: string; email?: string; password?: string } = {}): Promise<RegisteredUser> => {
+  const res = await request(app)
+    .post('/api/v1/auth/register')
+    .send({
+      name: overrides.name ?? 'Test User',
+      email: overrides.email ?? uniqueEmail('user'),
+      password: overrides.password ?? 'password123',
+    });
+  if (res.status !== 201) {
+    throw new Error(`registerUser failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
+  return res.body;
+};

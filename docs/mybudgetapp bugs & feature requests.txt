@@ -1,0 +1,6 @@
+resolved 1. while adding transactions it is not knwone whetehr momnthly/ quarterly or yearly
+resolved 2. after adding the trasnaction its not editable if any manual mistakes been amde
+resolved 3. sames goes for all other tabs data
+resolved 4. there should be a delete option too on transaction, loan, investment & goals tab to delete any row dded by mistake or not relevant anymore
+Open 5. on transsactions tab > old data migradtion to period is not done
+Open 5. goals tab > add funds are not visible for updating -> they should be updatable for any corrections

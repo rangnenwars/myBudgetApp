@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Budget Database Schema</title>
+<style>
+  :root {
+    --bg: #EEF2F0;
+    --surface: #FFFFFF;
+    --surface-2: #F7FAF8;
+    --border: #D7DEDA;
+    --text: #101815;
+    --text-muted: #55635C;
+    --text-faint: #8A968F;
+    --accent: #0E7C5A;
+    --accent-soft: #E4F3EC;
+    --warn: #A85A06;
+    --warn-soft: #FBEDDC;
+    --ref: #33529E;
+    --ref-soft: #E7ECF8;
+    --shadow: 0 1px 2px rgba(16, 24, 21, 0.04), 0 8px 24px rgba(16, 24, 21, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0A0F1E;
+      --surface: #111827;
+      --surface-2: #0D1420;
+      --border: #232E45;
+      --text: #ECEFF5;
+      --text-muted: #98A2B8;
+      --text-faint: #5C6883;
+      --accent: #34D399;
+      --accent-soft: #10352A;
+      --warn: #F0A94E;
+      --warn-soft: #3A2A12;
+      --ref: #86A9EE;
+      --ref-soft: #172236;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0A0F1E;
+    --surface: #111827;
+    --surface-2: #0D1420;
+    --border: #232E45;
+    --text: #ECEFF5;
+    --text-muted: #98A2B8;
+    --text-faint: #5C6883;
+    --accent: #34D399;
+    --accent-soft: #10352A;
+    --warn: #F0A94E;
+    --warn-soft: #3A2A12;
+    --ref: #86A9EE;
+    --ref-soft: #172236;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 900px; margin: 0 auto; padding: 56px 24px 96px; }
+
+  h1, h2, h3 {
+    font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    text-wrap: balance;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+  .masthead { padding-bottom: 32px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  }
+  .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  h1.title { font-size: 36px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.15; }
+  .subtitle { margin-top: 12px; color: var(--text-muted); font-size: 16.5px; max-width: 64ch; }
+  .status-line {
+    margin-top: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px;
+    color: var(--warn); background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+    padding: 6px 12px; border-radius: 999px;
+  }
+
+  section { margin-top: 48px; }
+  h2 { font-size: 22px; font-weight: 500; margin-bottom: 6px; }
+  h3 { font-size: 16px; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin-top: 24px; margin-bottom: 10px; }
+  p { margin: 12px 0; color: var(--text); max-width: 70ch; }
+  p.lede { color: var(--text-muted); margin-top: 8px; }
+
+  code.fn {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px; background: var(--surface-2); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 5px; color: var(--accent);
+  }
+  code.ref { color: var(--ref); }
+
+  figure.diagram { margin: 20px 0 8px; padding: 20px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  figure.diagram svg { width: 100%; height: auto; display: block; color: var(--text-faint); }
+  figure.diagram svg .n-user { color: var(--accent); }
+  figure.diagram svg .n-ref { color: var(--ref); }
+  figure.diagram svg text { fill: currentColor; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  figcaption { margin-top: 12px; font-size: 13px; color: var(--text-muted); text-align: center; }
+
+  .table-wrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--border); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); }
+  th, td { text-align: left; padding: 10px 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); font-weight: 600; background: var(--surface-2); }
+  tr:last-child td { border-bottom: none; }
+
+  .callout { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 16px 18px; margin: 18px 0; box-shadow: var(--shadow); }
+  .callout.ref { border-left: 3px solid var(--ref); }
+  .callout-label { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; display: block; color: var(--ref); }
+  .callout p { margin: 4px 0; font-size: 14.5px; }
+
+  ul.plain { margin: 12px 0; padding-left: 22px; max-width: 68ch; }
+  ul.plain li { margin: 6px 0; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .page { animation: rise 0.5s ease-out; }
+    @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  }
+  @media (max-width: 520px) {
+    h1.title { font-size: 28px; }
+    .page { padding: 40px 18px 72px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="masthead">
+    <div class="eyebrow">My Budget — database design</div>
+    <h1 class="title">Schema &amp; relationships</h1>
+    <p class="subtitle">What tables exist, how they relate, and the one real normalization gap the old local schema had — now implemented and running in Postgres.</p>
+    <div class="status-line">Implemented — matches server/src/db/schema.ts, verified by 52 passing server tests</div>
+  </div>
+
+  <section id="erd">
+    <h2>Entity relationships</h2>
+    <p class="lede">Every table hangs off <code class="fn">users</code> with a cascading foreign key. <code class="ref mono">categories</code> is mostly a global lookup table, but a nullable <code class="fn">user_id</code> also lets it hold a user's own custom categories — referenced by <code class="fn">transactions</code>/<code class="fn">budgets</code> like any other lookup, and owned by <code class="fn">users</code> like any other per-account table, at the same time.</p>
+
+    <figure class="diagram">
+      <svg viewBox="0 0 820 530" role="img" aria-label="users is the central table. Seven tables — transactions, loans, investments, savings_goals, net_worth_snapshots, budgets, and refresh_tokens — each hold a user_id foreign key with cascading delete back to users. categories also holds a nullable user_id foreign key back to users (NULL for system categories, set for a user's own custom ones), shown as a separate solid edge routed around the right side; it is additionally referenced by both transactions and budgets via a category_key foreign key, shown as dashed lines.">
+        <defs>
+          <marker id="arrowERD" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+          </marker>
+        </defs>
+
+        <!-- legend -->
+        <text x="620" y="120" font-size="9.5" opacity="0.75">— user_id FK · ON DELETE CASCADE</text>
+        <text x="620" y="134" font-size="9.5" opacity="0.75" stroke="currentColor" stroke-width="0">┄ category_key reference</text>
+
+        <!-- users (hub) -->
+        <rect x="410" y="20" width="180" height="98" rx="8" fill="none" stroke="currentColor" stroke-width="1.8" class="n-user" />
+        <text x="500" y="42" font-size="13.5" text-anchor="middle" class="n-user" font-weight="600">users</text>
+        <text x="500" y="59" font-size="10" text-anchor="middle" class="n-user" opacity="0.85">id PK · email UNIQUE</text>
+        <text x="500" y="73" font-size="10" text-anchor="middle" class="n-user" opacity="0.85">tier · budget_class</text>
+        <text x="500" y="87" font-size="10" text-anchor="middle" class="n-user" opacity="0.85">role · is_active</text>
+        <text x="500" y="102" font-size="8.5" text-anchor="middle" class="n-user" opacity="0.65">role: user|admin — see docs/README.md §3a</text>
+
+        <line x1="500" y1="118" x2="500" y2="150" stroke="currentColor" />
+
+        <!-- row 2 bus -->
+        <line x1="115" y1="150" x2="685" y2="150" stroke="currentColor" />
+        <line x1="115" y1="150" x2="115" y2="188" stroke="currentColor" marker-end="url(#arrowERD)" />
+        <line x1="305" y1="150" x2="305" y2="188" stroke="currentColor" marker-end="url(#arrowERD)" />
+        <line x1="495" y1="150" x2="495" y2="188" stroke="currentColor" marker-end="url(#arrowERD)" />
+        <line x1="685" y1="150" x2="685" y2="188" stroke="currentColor" marker-end="url(#arrowERD)" />
+
+        <!-- row 2 boxes -->
+        <rect x="30" y="190" width="170" height="80" rx="8" fill="none" stroke="currentColor" />
+        <text x="115" y="212" font-size="12" text-anchor="middle" font-weight="600">transactions</text>
+        <text x="115" y="230" font-size="10" text-anchor="middle" opacity="0.8">user_id FK</text>
+        <text x="115" y="248" font-size="10" text-anchor="middle" opacity="0.8">category_key FK</text>
+
+        <rect x="220" y="190" width="170" height="80" rx="8" fill="none" stroke="currentColor" />
+        <text x="305" y="212" font-size="12" text-anchor="middle" font-weight="600">loans</text>
+        <text x="305" y="230" font-size="10" text-anchor="middle" opacity="0.8">user_id FK</text>
+        <text x="305" y="248" font-size="10" text-anchor="middle" opacity="0.8">principal · emi</text>
+
+        <rect x="410" y="190" width="170" height="80" rx="8" fill="none" stroke="currentColor" />
+        <text x="495" y="212" font-size="12" text-anchor="middle" font-weight="600">investments</text>
+        <text x="495" y="230" font-size="10" text-anchor="middle" opacity="0.8">user_id FK</text>
+        <text x="495" y="248" font-size="10" text-anchor="middle" opacity="0.8">amount · current_value</text>
+
+        <rect x="600" y="190" width="170" height="80" rx="8" fill="none" stroke="currentColor" />
+        <text x="685" y="212" font-size="12" text-anchor="middle" font-weight="600">savings_goals</text>
+        <text x="685" y="230" font-size="10" text-anchor="middle" opacity="0.8">user_id FK</text>
+        <text x="685" y="248" font-size="10" text-anchor="middle" opacity="0.8">target · saved</text>
+
+        <!-- corridor row2 bus -> row3 bus, through the investments/savings_goals gap -->
+        <line x1="590" y1="150" x2="590" y2="300" stroke="currentColor" />
+
+        <!-- row 3 bus -->
+        <line x1="125" y1="300" x2="590" y2="300" stroke="currentColor" />
+        <line x1="125" y1="300" x2="125" y2="328" stroke="currentColor" marker-end="url(#arrowERD)" />
+        <line x1="335" y1="300" x2="335" y2="328" stroke="currentColor" marker-end="url(#arrowERD)" />
+        <line x1="540" y1="300" x2="540" y2="328" stroke="currentColor" marker-end="url(#arrowERD)" />
+
+        <!-- row 3 boxes -->
+        <rect x="30" y="330" width="190" height="80" rx="8" fill="none" stroke="currentColor" />
+        <text x="125" y="352" font-size="11.5" text-anchor="middle" font-weight="600">net_worth_snapshots</text>
+        <text x="125" y="370" font-size="10" text-anchor="middle" opacity="0.8">user_id FK</text>
+        <text x="125" y="388" font-size="10" text-anchor="middle" opacity="0.8">UNIQUE(user, mo, yr)</text>
+
+        <rect x="250" y="330" width="170" height="80" rx="8" fill="none" stroke="currentColor" />
+        <text x="335" y="352" font-size="12" text-anchor="middle" font-weight="600">budgets</text>
+        <text x="335" y="370" font-size="10" text-anchor="middle" opacity="0.8">user_id FK</text>
+        <text x="335" y="388" font-size="10" text-anchor="middle" opacity="0.8">category_key FK</text>
+
+        <rect x="450" y="330" width="180" height="80" rx="8" fill="none" stroke="currentColor" />
+        <text x="540" y="352" font-size="12" text-anchor="middle" font-weight="600">refresh_tokens</text>
+        <text x="540" y="370" font-size="10" text-anchor="middle" opacity="0.8">user_id FK</text>
+        <text x="540" y="388" font-size="10" text-anchor="middle" opacity="0.8">token_hash UNIQUE</text>
+
+        <!-- categories (mostly global lookup, distinct color — but user_id
+             is nullable now: NULL = system category, set = a user's own custom one -->
+        <rect x="400" y="420" width="200" height="98" rx="8" fill="none" stroke="currentColor" stroke-width="1.8" class="n-ref" />
+        <text x="500" y="442" font-size="13" text-anchor="middle" class="n-ref" font-weight="600">categories</text>
+        <text x="500" y="459" font-size="10" text-anchor="middle" class="n-ref" opacity="0.85">key PK · group · type</text>
+        <text x="500" y="474" font-size="10" text-anchor="middle" class="n-ref" opacity="0.85">user_id FK, NULLable</text>
+        <text x="500" y="489" font-size="9" text-anchor="middle" class="n-ref" opacity="0.7">NULL = system · set = a user's own</text>
+        <text x="500" y="503" font-size="9" text-anchor="middle" class="n-ref" opacity="0.7">custom category (POST /api/v1/categories)</text>
+
+        <!-- solid edge: users optionally owns custom categories — routed
+             around the right side, distinct from the dashed category_key
+             reference lines below -->
+        <line x1="590" y1="60" x2="780" y2="60" stroke="currentColor" />
+        <line x1="780" y1="60" x2="780" y2="465" stroke="currentColor" />
+        <line x1="780" y1="465" x2="602" y2="465" stroke="currentColor" marker-end="url(#arrowERD)" />
+        <text x="784" y="270" font-size="9" transform="rotate(90 784 270)" opacity="0.7">user_id FK, nullable — a user's custom categories</text>
+
+        <!-- dashed reference lines -->
+        <line x1="115" y1="270" x2="115" y2="290" stroke="currentColor" stroke-dasharray="4 3" class="n-ref" />
+        <line x1="115" y1="290" x2="235" y2="290" stroke="currentColor" stroke-dasharray="4 3" class="n-ref" />
+        <line x1="235" y1="290" x2="235" y2="435" stroke="currentColor" stroke-dasharray="4 3" class="n-ref" />
+        <line x1="235" y1="435" x2="398" y2="435" stroke="currentColor" stroke-dasharray="4 3" class="n-ref" marker-end="url(#arrowERD)" />
+
+        <line x1="335" y1="410" x2="335" y2="460" stroke="currentColor" stroke-dasharray="4 3" class="n-ref" />
+        <line x1="335" y1="460" x2="398" y2="460" stroke="currentColor" stroke-dasharray="4 3" class="n-ref" marker-end="url(#arrowERD)" />
+      </svg>
+      <figcaption>Solid = owned by a user, deleted with them (categories included, for a user's own custom ones). Dashed = references a category by key, without owning it.</figcaption>
+    </figure>
+  </section>
+
+  <section id="whats-new">
+    <h2>What actually changes from the local schema</h2>
+    <p class="lede">Most tables carry over as-is, just properly typed. Two things are genuinely new.</p>
+
+    <div class="callout ref">
+      <span class="callout-label">categories becomes a real table</span>
+      <p>Today, <code class="fn">category</code> is a free-text string on every transaction, matched against a hardcoded list in <code class="fn">constants/categories.ts</code> — client-side only, nothing stops a typo from silently creating an orphan category. As a table with a foreign key, that becomes structurally impossible.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Table</th><th>Status</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td><code class="fn">users</code></td><td>Carries over</td><td>+ real bcrypt hash server-side (replacing the client-side SHA-256 placeholder), + <code class="fn">role</code>/<code class="fn">is_active</code> for admin-managed access control</td></tr>
+          <tr><td><code class="fn">categories</code></td><td>New table</td><td>Seeded from <code class="fn">constants/categories.ts</code> — 61 system rows, generated not hand-typed. Also gained a nullable <code class="fn">user_id</code> after launch, so users can add their own custom categories on top</td></tr>
+          <tr><td><code class="fn">transactions</code></td><td>Carries over</td><td><code class="fn">category</code> string → <code class="fn">category_key</code> foreign key</td></tr>
+          <tr><td><code class="fn">loans</code>, <code class="fn">investments</code>, <code class="fn">savings_goals</code></td><td>Carry over</td><td>Same shape, proper <code class="fn">NUMERIC</code> types instead of floats for money</td></tr>
+          <tr><td><code class="fn">net_worth_snapshots</code></td><td>Carries over</td><td>Same unique-per-month constraint as today</td></tr>
+          <tr><td><code class="fn">budgets</code></td><td>Carries over</td><td>Existed in the local schema, unused by any screen — kept for continuity</td></tr>
+          <tr><td><code class="fn">refresh_tokens</code></td><td>New table</td><td>Didn't need to exist locally — there was no server to hold a session against</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>What doesn't change at all</h3>
+    <p><code class="fn">utils/calculations.ts</code> — every pure function (<code class="fn">computeMonthSummary</code>, <code class="fn">simulateDebtPayoff</code>, <code class="fn">bucketForGroup</code>, all 15 of them) operates on plain arrays already fetched from storage. Swapping the storage layer for Postgres over HTTP doesn't touch this module or its 47 tests — that separation is the entire point of how the app was already built.</p>
+  </section>
+
+  <section id="next">
+    <h2>Status</h2>
+    <ul class="plain">
+      <li>Shape confirmed and built — Drizzle ORM, schema in <code class="fn">server/src/db/schema.ts</code>, migrations in <code class="fn">server/drizzle/</code></li>
+      <li>Server: Express + Postgres service in <code class="fn">docker-compose.yml</code>, migrations, real bcrypt/JWT auth — done</li>
+      <li>Client: <code class="fn">utils/database.ts</code>/<code class="fn">.web.ts</code> swapped for a single API-backed <code class="fn">utils/database.ts</code> — the app is fully online-only, no local cache or sync</li>
+    </ul>
+    <p>Full DDL, index rationale, and the auth model are in <code class="fn">docs/DATABASE_DESIGN.md</code> in the repo.</p>
+  </section>
+
+</div>
+</body>
+</html>

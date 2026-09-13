@@ -1,17 +1,22 @@
 {
   "expo": {
-    "name": "MyBudgetApp",
-    "slug": "MyBudgetApp",
+    "name": "My Budget",
+    "slug": "mybudgetapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "scheme": "mybudget",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0F1E",
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rangnenwars.mybudget"
     },
     "android": {
+      "package": "com.rangnenwars.mybudget",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0A0F1E",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -20,6 +25,16 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-status-bar",
+      "expo-splash-screen",
+      "expo-sharing"
+    ],
+    "extra": {
+      "eas": {}
     }
   }
 }

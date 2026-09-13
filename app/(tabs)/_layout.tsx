@@ -1,0 +1,69 @@
+import React from 'react';
+import { Tabs, Redirect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import { COLORS } from '../../constants/theme';
+
+export default function TabsLayout() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) return null;
+  if (!user) return <Redirect href="/login" />;
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: COLORS.accent,
+        tabBarInactiveTintColor: COLORS.textDim,
+        tabBarStyle: {
+          backgroundColor: COLORS.card,
+          borderTopColor: COLORS.cardBorder,
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Dashboard',
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="transactions"
+        options={{
+          title: 'Transactions',
+          tabBarIcon: ({ color, size }) => <Ionicons name="swap-horizontal" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="loans"
+        options={{
+          title: 'Loans',
+          tabBarIcon: ({ color, size }) => <Ionicons name="card" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="investments"
+        options={{
+          title: 'Investments',
+          tabBarIcon: ({ color, size }) => <Ionicons name="trending-up" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="goals"
+        options={{
+          title: 'Goals',
+          tabBarIcon: ({ color, size }) => <Ionicons name="flag" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: 'Reports',
+          tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart" color={color} size={size} />,
+        }}
+      />
+    </Tabs>
+  );
+}

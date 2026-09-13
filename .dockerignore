@@ -1,0 +1,10 @@
+node_modules
+.expo
+dist
+.git
+android
+ios
+*.log
+.DS_Store
+docs
+README.md

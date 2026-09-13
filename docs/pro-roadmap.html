@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Budget Pro Roadmap</title>
+<style>
+  :root {
+    --bg: #EEF2F0;
+    --surface: #FFFFFF;
+    --surface-2: #F7FAF8;
+    --border: #D7DEDA;
+    --text: #101815;
+    --text-muted: #55635C;
+    --text-faint: #8A968F;
+    --accent: #0E7C5A;
+    --accent-soft: #E4F3EC;
+    --warn: #A85A06;
+    --warn-soft: #FBEDDC;
+    --ref: #33529E;
+    --ref-soft: #E7ECF8;
+    --shadow: 0 1px 2px rgba(16, 24, 21, 0.04), 0 8px 24px rgba(16, 24, 21, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0A0F1E;
+      --surface: #111827;
+      --surface-2: #0D1420;
+      --border: #232E45;
+      --text: #ECEFF5;
+      --text-muted: #98A2B8;
+      --text-faint: #5C6883;
+      --accent: #34D399;
+      --accent-soft: #10352A;
+      --warn: #F0A94E;
+      --warn-soft: #3A2A12;
+      --ref: #86A9EE;
+      --ref-soft: #172236;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0A0F1E;
+    --surface: #111827;
+    --surface-2: #0D1420;
+    --border: #232E45;
+    --text: #ECEFF5;
+    --text-muted: #98A2B8;
+    --text-faint: #5C6883;
+    --accent: #34D399;
+    --accent-soft: #10352A;
+    --warn: #F0A94E;
+    --warn-soft: #3A2A12;
+    --ref: #86A9EE;
+    --ref-soft: #172236;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  h1, h2, h3 {
+    font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    text-wrap: balance;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Masthead ---------- */
+  .masthead {
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+  h1.title {
+    font-size: 38px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+  .subtitle {
+    margin-top: 12px;
+    color: var(--text-muted);
+    font-size: 16.5px;
+    max-width: 58ch;
+  }
+  .status-line {
+    margin-top: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--warn);
+    background: var(--warn-soft);
+    border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+
+  /* ---------- Contents ---------- */
+  .toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 28px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .toc a {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .toc a:hover, .toc a:focus-visible {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .toc .letter {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text-faint);
+    margin-right: 2px;
+  }
+
+  /* ---------- Sections ---------- */
+  section { margin-top: 56px; }
+  section:first-of-type { margin-top: 0; }
+
+  .section-label {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .section-label .letter {
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-size: 15px;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 500;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin-top: 28px;
+    margin-bottom: 12px;
+  }
+  p { margin: 12px 0; color: var(--text); max-width: 68ch; }
+  section > p.lede { color: var(--text-muted); margin-top: 10px; }
+
+  ul.plain, ol.plain { margin: 12px 0; padding-left: 22px; max-width: 66ch; }
+  ul.plain li, ol.plain li { margin: 6px 0; }
+  ol.build-order { padding-left: 0; list-style: none; counter-reset: step; max-width: 66ch; }
+  ol.build-order li {
+    counter-increment: step;
+    position: relative;
+    padding: 10px 0 10px 40px;
+    border-top: 1px solid var(--border);
+  }
+  ol.build-order li:first-child { border-top: none; }
+  ol.build-order li::before {
+    content: counter(step);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    position: absolute;
+    left: 0;
+    top: 10px;
+    color: var(--accent);
+    font-size: 13px;
+  }
+
+  a.src { color: var(--ref); }
+
+  /* ---------- Tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--border); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; background: var(--surface); }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); font-weight: 600; background: var(--surface-2); }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--text-muted); width: 28px; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .chip.ready { color: var(--accent); background: var(--accent-soft); }
+  .chip.blocked { color: var(--warn); background: var(--warn-soft); }
+  .chip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  /* ---------- Callouts ---------- */
+  .callout {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin: 18px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout.gap { border-left: 3px solid var(--warn); }
+  .callout.ref { border-left: 3px solid var(--ref); background: var(--ref-soft); }
+  .callout-label {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .callout.gap .callout-label { color: var(--warn); }
+  .callout.ref .callout-label { color: var(--ref); }
+  .callout p { margin: 4px 0; font-size: 14.5px; }
+
+  code.fn {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: var(--accent);
+  }
+
+  /* ---------- Diagram ---------- */
+  figure.diagram {
+    margin: 24px 0 8px;
+    padding: 20px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  figure.diagram svg { width: 100%; height: auto; display: block; color: var(--text-faint); }
+  figure.diagram svg .flow-accent { color: var(--accent); }
+  figure.diagram svg text { fill: currentColor; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  figcaption { margin-top: 12px; font-size: 13px; color: var(--text-muted); text-align: center; }
+
+  /* ---------- Sources / footer ---------- */
+  .sources {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-faint);
+  }
+  .sources ul { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 4px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .page { animation: rise 0.5s ease-out; }
+    @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  }
+
+  @media (max-width: 520px) {
+    h1.title { font-size: 30px; }
+    .page { padding: 40px 18px 72px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="masthead">
+    <div class="eyebrow">My Budget — internal design doc</div>
+    <h1 class="title">Pro tier roadmap</h1>
+    <p class="subtitle">Feature list, local data &amp; session architecture, and the reporting module — reviewed against Ramsey Solutions' EveryDollar before anything gets built.</p>
+    <div class="status-line">Planning only — nothing on this page is built yet</div>
+
+    <ul class="toc">
+      <li><span class="letter">A</span><a href="#research">Reference research</a></li>
+      <li><span class="letter">B</span><a href="#features">Pro feature list</a></li>
+      <li><span class="letter">C</span><a href="#data">Data &amp; session design</a></li>
+      <li><span class="letter">D</span><a href="#reports">Reporting module</a></li>
+      <li><span class="letter">E</span><a href="#order">Build order</a></li>
+    </ul>
+  </div>
+
+  <section id="research">
+    <div class="section-label"><span class="letter">A</span><h2>Reference research — Ramsey Solutions</h2></div>
+    <p class="lede">Pulled from ramseysolutions.com to sanity-check the feature direction against a well-known budgeting product (EveryDollar) before committing to a build list.</p>
+
+    <p>EveryDollar runs on zero-based budgeting — plan every dollar before spending, income minus expenses equals zero. Free tier covers manual entry, categories, bill reminders. Premium (<span class="mono">$79.99/yr</span>) adds bank sync, custom spending reports, a "financial roadmap," projected net worth, a debt tracker, and live coaching.</p>
+
+    <p>Their debt tracker runs the <strong>debt snowball</strong> method: order debts smallest-balance-first regardless of interest rate, pay minimums on the rest, throw every spare rupee at the smallest, then roll that payment into the next-smallest once it clears. They also document <strong>debt avalanche</strong> (highest-interest-first) as the mathematically optimal alternative — but say snowball wins in practice because of momentum.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ramsey feature</th><th>Alignment</th></tr></thead>
+        <tbody>
+          <tr><td>Custom spending reports, trends over time</td><td><span class="chip ready">Direct match</span></td></tr>
+          <tr><td>Debt snowball tracker with payoff projection</td><td><span class="chip ready">Upgrade for Loans tab</span></td></tr>
+          <tr><td>Net worth tracking / projection</td><td><span class="chip ready">New idea, worth adopting</span></td></tr>
+          <tr><td>Sinking funds</td><td><span class="chip ready">Already = our Goals tab</span></td></tr>
+          <tr><td>Bank account auto-sync (Plaid / Mastercard Connect)</td><td><span class="chip blocked">Out of scope</span></td></tr>
+          <tr><td>Live coaching / webinars</td><td><span class="chip blocked">Human service, N/A</span></td></tr>
+          <tr><td>Subscription paywall</td><td><span class="chip blocked">Not relevant</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout ref">
+      <span class="callout-label">Why bank sync stays out</span>
+      <p>It needs a paid third-party data aggregator plus a real backend to hold bank credentials/tokens — and it means handling real financial credentials, which this project shouldn't do without a much bigger security review than a personal-project scope warrants.</p>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="section-label"><span class="letter">B</span><h2>Pro feature list — reviewed</h2></div>
+    <p class="lede">The spec originally gated cloud sync, insights, ETAs, and Excel/CSV export behind Pro. Reviewed against Ramsey's set and against what's actually buildable without a backend, since this app stays local-only.</p>
+
+    <h3>B1 — Buildable now, no backend</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="num">#</th><th>Feature</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Reports &amp; trends module</td><td>Summary dashboard + on-demand trend charts. The main ask — see Part D.</td></tr>
+          <tr><td class="num">2</td><td>Net worth tracker</td><td><code class="fn">investments + goals.saved − loans.outstanding</code>, snapshotted monthly so it can be charted</td></tr>
+          <tr><td class="num">3</td><td>Debt payoff planner</td><td>Snowball or avalanche ordering (user's choice), projected payoff date, "what if I add ₹X/mo"</td></tr>
+          <tr><td class="num">4</td><td>Goal ETA projection</td><td>Completion date from trailing 3-month average savings rate</td></tr>
+          <tr><td class="num">5</td><td>Spending insights</td><td>Month-over-month % change per category, fastest-growing category callout</td></tr>
+          <tr><td class="num">6</td><td>CSV export</td><td>Client-side <span class="mono">.csv</span> via <code class="fn">expo-file-system</code> + <code class="fn">expo-sharing</code> — no server needed</td></tr>
+          <tr><td class="num">7</td><td>App lock</td><td>PIN/biometric re-entry after inactivity, via <code class="fn">expo-local-authentication</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>B2 — Needs a backend, stays locked for now</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="num">#</th><th>Feature</th><th>Why it needs a server</th></tr></thead>
+        <tbody>
+          <tr><td class="num">8</td><td>Multi-device cloud sync</td><td>Requires an account that exists outside one device</td></tr>
+          <tr><td class="num">9</td><td>Bank account auto-import</td><td>Plaid/aggregator + secure server-side credential storage</td></tr>
+          <tr><td class="num">10</td><td>Server-computed budget class</td><td>Spec requires server-side; currently a local estimate</td></tr>
+          <tr><td class="num">11</td><td>Excel (.xlsx) export</td><td>Spec runs <code class="fn">exceljs</code> server-side — CSV (B1.6) covers the need without one</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Recommendation:</strong> build all of B1. That's a complete, coherent Pro tier that works fully offline and never touches the backend problem.</p>
+  </section>
+
+  <section id="data">
+    <div class="section-label"><span class="letter">C</span><h2>User data &amp; session design</h2></div>
+    <p class="lede">With no backend, there's no administrator overseeing multiple people — each device/browser holds its own isolated data. "Administer users" here means local account &amp; data management, not a multi-tenant admin portal.</p>
+
+    <figure class="diagram">
+      <svg viewBox="0 0 680 210" role="img" aria-label="Account lifecycle: register creates a user_profile row, login writes a session pointer to AsyncStorage, logout clears only that pointer while local data stays untouched, and delete account is a separate explicit action that wipes both.">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+          </marker>
+        </defs>
+
+        <!-- lane labels -->
+        <text x="12" y="24" font-size="11" letter-spacing="0.06em" opacity="0.7">USER ACTION</text>
+        <text x="12" y="120" font-size="11" letter-spacing="0.06em" opacity="0.7">ON-DEVICE STATE</text>
+
+        <!-- actions -->
+        <text x="70" y="55" font-size="13" text-anchor="middle">Register</text>
+        <text x="235" y="55" font-size="13" text-anchor="middle">Login</text>
+        <text x="400" y="55" font-size="13" text-anchor="middle">Logout</text>
+        <text x="575" y="55" font-size="13" text-anchor="middle" class="flow-accent">Delete account</text>
+
+        <!-- state boxes -->
+        <rect x="20" y="140" width="140" height="46" rx="8" fill="none" stroke="currentColor" />
+        <text x="90" y="159" font-size="11.5" text-anchor="middle">user_profile</text>
+        <text x="90" y="174" font-size="11.5" text-anchor="middle">row created</text>
+
+        <rect x="200" y="140" width="150" height="46" rx="8" fill="none" stroke="currentColor" />
+        <text x="275" y="159" font-size="11.5" text-anchor="middle">session pointer</text>
+        <text x="275" y="174" font-size="11.5" text-anchor="middle">written to AsyncStorage</text>
+
+        <rect x="380" y="140" width="150" height="46" rx="8" fill="none" stroke="currentColor" stroke-dasharray="4 3">
+          <title>cleared</title>
+        </rect>
+        <text x="455" y="159" font-size="11.5" text-anchor="middle">session pointer</text>
+        <text x="455" y="174" font-size="11.5" text-anchor="middle">cleared · data untouched</text>
+
+        <rect x="560" y="140" width="110" height="46" rx="8" fill="none" stroke="currentColor" class="flow-accent" stroke-width="1.6" />
+        <text x="615" y="159" font-size="11.5" text-anchor="middle" class="flow-accent">profile + data</text>
+        <text x="615" y="174" font-size="11.5" text-anchor="middle" class="flow-accent">wiped</text>
+
+        <!-- connectors: action -> state -->
+        <line x1="70" y1="65" x2="80" y2="138" stroke="currentColor" marker-end="url(#arrow)" />
+        <line x1="235" y1="65" x2="260" y2="138" stroke="currentColor" marker-end="url(#arrow)" />
+        <line x1="400" y1="65" x2="440" y2="138" stroke="currentColor" marker-end="url(#arrow)" />
+        <line x1="575" y1="65" x2="600" y2="138" stroke="currentColor" marker-end="url(#arrow)" class="flow-accent" />
+
+        <!-- horizontal flow between states -->
+        <line x1="160" y1="163" x2="198" y2="163" stroke="currentColor" marker-end="url(#arrow)" />
+        <line x1="350" y1="163" x2="378" y2="163" stroke="currentColor" marker-end="url(#arrow)" />
+        <line x1="530" y1="163" x2="558" y2="163" stroke="currentColor" marker-end="url(#arrow)" class="flow-accent" />
+      </svg>
+      <figcaption>Only "delete account" is destructive. Logout, per the spec's offline-first rule, never touches local data — it just clears the pointer to the active session.</figcaption>
+    </figure>
+
+    <div class="callout gap">
+      <span class="callout-label">Gap found while designing this</span>
+      <p>The current schema's <code class="fn">transactions</code>, <code class="fn">loans</code>, <code class="fn">investments</code>, and <code class="fn">savings_goals</code> tables have <strong>no <span class="mono">user_id</span> column</strong> — they're global to the device, not per-account. Fine for a single tester, but a second local account on the same device would see the first account's data today. Needs fixing before Pro features (especially net worth history and reports) get built on top of it.</p>
+    </div>
+
+    <h3>Proposed "Account &amp; Data" screen <span style="font-weight:400;color:var(--text-faint);font-size:14px;">— not built yet</span></h3>
+    <ul class="plain">
+      <li><strong>Profile</strong> — edit name/email</li>
+      <li><strong>Switch account</strong> — pick between local accounts on this device (still requires the password)</li>
+      <li><strong>Export all data</strong> — full JSON backup for this account</li>
+      <li><strong>Import / restore</strong> — load a previous backup</li>
+      <li><strong>Reset app data</strong> — wipe this account's data, with confirmation</li>
+      <li><strong>Delete account</strong> — removes the account row and all associated data</li>
+      <li><strong>App lock</strong> — toggle PIN/biometric requirement</li>
+    </ul>
+
+    <h3>Session design</h3>
+    <p>Today a session is just <code class="fn">{"{ userId }"}</code> in AsyncStorage — checked on launch, cleared on logout, no expiry. Proposal: keep it that way by default (this isn't a shared-device use case), and let <strong>App lock</strong> be the real security boundary — Face ID / fingerprint / PIN after N minutes backgrounded, independent of the session itself. That's how most personal finance apps (including EveryDollar) actually handle it: you stay logged in, the app re-locks itself. Real JWT expiry/refresh, per the original spec, only becomes necessary once cloud sync (B2.8) exists and a session represents trust with a remote server.</p>
+  </section>
+
+  <section id="reports">
+    <div class="section-label"><span class="letter">D</span><h2>Reporting module</h2></div>
+    <p class="lede">The direct answer to "summary dashboard and data trends on demand." A new <strong>Reports</strong> tab, Pro-gated, separate from the existing Dashboard (which stays as the free, current-month-only snapshot).</p>
+
+    <ul class="plain">
+      <li><strong>Time range picker</strong> — this month / last 3 / last 6 / this year / all time / custom</li>
+      <li><strong>Summary row</strong> — income, expense, net savings, savings rate %, net worth for the range</li>
+      <li><strong>Trend chart</strong> — line chart, selectable metric, per month across the range — where <code class="fn">react-native-chart-kit</code> (already installed, currently unused) finally earns its place</li>
+      <li><strong>Category breakdown</strong> — donut + ranked list with month-over-month delta arrows</li>
+      <li><strong>Debt payoff progress</strong> — outstanding balance trending down per loan</li>
+      <li><strong>Goal progress overview</strong> — all goals' % complete, side by side</li>
+      <li><strong>Export</strong> — "download this report as CSV" (ties into B1.6)</li>
+    </ul>
+
+    <h3>New data-layer functions needed</h3>
+    <p>All computed live from local data on demand — nothing pre-materialized except the net worth snapshot, which is a point-in-time figure that can't be derived retroactively once loan/investment values change.</p>
+    <ul class="plain">
+      <li><code class="fn">getRangeSummary(startMonth, startYear, endMonth, endYear)</code></li>
+      <li><code class="fn">getMonthlySeriesForRange(...)</code> — one row per month, for charting</li>
+      <li><code class="fn">getCategoryBreakdownForRange(...)</code> — range version of the existing month-only query</li>
+      <li><code class="fn">recordNetWorthSnapshot()</code> — called on Dashboard/Reports focus, writes one row/month to a new <code class="fn">net_worth_snapshots</code> table</li>
+    </ul>
+  </section>
+
+  <section id="order">
+    <div class="section-label"><span class="letter">E</span><h2>Suggested build order</h2></div>
+    <ol class="build-order">
+      <li>Fix the <code class="fn">user_id</code> scoping gap (Part C) — small, but blocks everything else being trustworthy</li>
+      <li>Reports module data layer + Reports tab (Part D) — the most-requested piece</li>
+      <li>Net worth tracker (B1.2) — needed by Reports anyway</li>
+      <li>Debt payoff planner (B1.3) + Goal ETA (B1.4) + Spending insights (B1.5) — fill in the remaining ProGate placeholders</li>
+      <li>CSV export (B1.6)</li>
+      <li>Account &amp; Data settings screen + App lock (B1.7)</li>
+    </ol>
+  </section>
+
+  <div class="sources">
+    Sources
+    <ul>
+      <li><a class="src" href="https://www.ramseysolutions.com/money/everydollar/budget">EveryDollar Budget — ramseysolutions.com</a></li>
+      <li><a class="src" href="https://www.ramseysolutions.com/budgeting/budgeting-apps-comparison">Budgeting App Comparison — ramseysolutions.com</a></li>
+      <li><a class="src" href="https://www.ramseysolutions.com/debt/how-the-debt-snowball-method-works">How the Debt Snowball Method Works — ramseysolutions.com</a></li>
+      <li><a class="src" href="https://www.ramseysolutions.com/debt/debt-snowball-vs-debt-avalanche">Debt Snowball vs. Debt Avalanche — ramseysolutions.com</a></li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

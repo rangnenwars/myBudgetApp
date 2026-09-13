@@ -1,0 +1,46 @@
+services:
+  mybudget-web:
+    build: .
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      - server
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mybudget
+      POSTGRES_PASSWORD: mybudget_dev
+      POSTGRES_DB: mybudget
+    ports:
+      # host 5433, not 5432 — this machine already runs a native Postgres
+      # service on 5432; the server container still talks to this service
+      # on the internal Docker network at "postgres:5432" regardless.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mybudget"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mybudget:mybudget_dev@postgres:5432/mybudget
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
