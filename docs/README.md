@@ -16,6 +16,7 @@ Personal budgeting app, built from `DESIGN_SPEC_v2.md` / `MASTER_BUILD_PROMPT_v2
 | [FAQ.md](FAQ.md) | Answers to specific questions asked about the running system (admin access, scalability, deployment, test accounts, etc.) — add new ones here rather than re-asking |
 | [PRO_FEATURES_DESIGN.md](PRO_FEATURES_DESIGN.md) | Pro feature roadmap, Ramsey Solutions research, data/session design |
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | PostgreSQL schema design — implemented, matches `server/src/db/schema.ts` |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Step-by-step guide to deploying this app on a cloud Linux server — provisioning, Docker, TLS, hardening, backups |
 | [MASTER_BUILD_PROMPT_v3_BACKEND.md](MASTER_BUILD_PROMPT_v3_BACKEND.md) | Server structure, API endpoints, auth flow, Docker changes, client integration — implemented and verified |
 | [pro-roadmap.html](pro-roadmap.html) · [live](https://claude.ai/code/artifact/80837269-945e-4a79-b5da-678c946641a1) | Rendered version of the Pro roadmap |
 | [architecture-flows.html](architecture-flows.html) · [live](https://claude.ai/code/artifact/3787e434-ead3-4e0a-881d-119411b2a53d) | Layered architecture, debt-payoff simulation, bulk-entry/bucketing, Docker deployment, test coverage map |

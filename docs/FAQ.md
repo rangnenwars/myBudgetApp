@@ -81,6 +81,8 @@ All three services (Postgres, the Express API, the static web build behind nginx
 
 ### 8. Steps to deploy this on a Linux system? Do the server and database need separate deployment, or does it run under one Docker setup?
 
+> Full walkthrough with copy-pasteable commands (provisioning, TLS, hardening, backups): [DEPLOYMENT.md](DEPLOYMENT.md). This answer is the short version.
+
 **One Docker Compose stack, three containers, one command** — `postgres`, `server` (Express API), and `mybudget-web` (static build behind nginx) all come up together via `docker-compose.yml`. This works identically on Linux (Docker Engine + Compose are cross-platform); nothing here is Windows-specific.
 
 Steps on a fresh Linux host:
