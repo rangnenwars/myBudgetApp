@@ -11,7 +11,7 @@
 // from the JWT) so screen call sites needed minimal changes.
 
 import { api } from './api';
-import { TxnType, Transaction, Loan, Investment, SavingsGoal, MonthSummary, CategoryTotal } from './types';
+import { TxnType, Transaction, Loan, Investment, SavingsGoal, GoalContribution, MonthSummary, CategoryTotal } from './types';
 import { Category, CategoryType } from '../constants/categories';
 
 export * from './types';
@@ -159,13 +159,13 @@ export const getInvestments = async (): Promise<Investment[]> => {
 // ---------- Savings goals ----------
 
 export const addGoal = async (g: Omit<SavingsGoal, 'id'>): Promise<SavingsGoal> => {
-  const { data } = await api.post('/goals', { name: g.name, target_amount: g.target_amount });
+  const { data } = await api.post('/goals', { name: g.name, target_amount: g.target_amount, deadline: g.deadline });
   return data;
 };
 
 export const updateGoal = async (
   id: number,
-  patch: Partial<{ name: string; target_amount: number; saved_amount: number }>
+  patch: Partial<{ name: string; target_amount: number; saved_amount: number; deadline: string | null }>
 ): Promise<SavingsGoal> => {
   const { data } = await api.patch(`/goals/${id}`, patch);
   return data;
@@ -177,6 +177,17 @@ export const deleteGoal = async (id: number): Promise<void> => {
 
 export const getGoals = async (): Promise<SavingsGoal[]> => {
   const { data } = await api.get('/goals');
+  return data;
+};
+
+/** Adds or removes funds from a goal. Server enforces saved_amount can't go negative (can't remove more than is saved) and records the action. */
+export const contributeToGoal = async (id: number, amount: number, type: 'add' | 'remove'): Promise<{ goal: SavingsGoal; contribution: GoalContribution }> => {
+  const { data } = await api.post(`/goals/${id}/contributions`, { amount, type });
+  return data;
+};
+
+export const getGoalContributions = async (id: number): Promise<GoalContribution[]> => {
+  const { data } = await api.get(`/goals/${id}/contributions`);
   return data;
 };
 

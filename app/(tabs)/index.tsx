@@ -95,11 +95,6 @@ export default function DashboardScreen() {
         </Pressable>
       </View>
 
-      <Pressable style={styles.inputExpensesBtn} onPress={() => router.push('/input-expenses')}>
-        <Ionicons name="list" size={18} color="#04140D" />
-        <Text style={styles.inputExpensesBtnText}>Input expenses</Text>
-      </Pressable>
-
       <Card style={styles.summaryCard}>
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
@@ -128,7 +123,7 @@ export default function DashboardScreen() {
       <Text style={styles.sectionTitle}>This month's breakdown</Text>
       <Card>
         {breakdown.expense + breakdown.loan + breakdown.investment === 0 ? (
-          <Text style={styles.emptyText}>Nothing logged yet — try "Input expenses" above.</Text>
+          <Text style={styles.emptyText}>Nothing logged yet — try adding a transaction.</Text>
         ) : (
           (['expense', 'loan', 'investment'] as CategoryBucket[]).map((bucket, idx) => (
             <View key={bucket} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
@@ -210,16 +205,6 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   tierChip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 4 },
   tierChipText: { color: COLORS.textMuted, fontSize: 11 },
-  inputExpensesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.accent,
-    borderRadius: RADIUS.md,
-    paddingVertical: 12,
-  },
-  inputExpensesBtnText: { color: '#04140D', fontWeight: '700', fontSize: 14 },
   summaryCard: { marginTop: SPACING.sm },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryItem: { flex: 1 },

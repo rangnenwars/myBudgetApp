@@ -16,7 +16,17 @@ import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme'
 import { MiniBar } from '../../components/MiniBar';
 import { ProGate } from '../../components/ProGate';
 import { useAuth } from '../../context/AuthContext';
-import { addGoal, updateGoal, deleteGoal, getGoals, getMonthlySeriesForRange, SavingsGoal } from '../../utils/database';
+import {
+  addGoal,
+  updateGoal,
+  deleteGoal,
+  getGoals,
+  getMonthlySeriesForRange,
+  contributeToGoal,
+  getGoalContributions,
+  SavingsGoal,
+  GoalContribution,
+} from '../../utils/database';
 import { computeGoalETA } from '../../utils/calculations';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
@@ -30,10 +40,16 @@ export default function GoalsScreen() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
+  const [deadline, setDeadline] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [contributeFor, setContributeFor] = useState<SavingsGoal | null>(null);
   const [contributeAmount, setContributeAmount] = useState('');
+  const [contributeMode, setContributeMode] = useState<'add' | 'remove'>('add');
+  const [contributeError, setContributeError] = useState<string | null>(null);
+  const [contributeSaving, setContributeSaving] = useState(false);
+  const [history, setHistory] = useState<GoalContribution[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [avgMonthlySavings, setAvgMonthlySavings] = useState(0);
 
   const load = useCallback(async () => {
@@ -46,7 +62,7 @@ export default function GoalsScreen() {
   }, [user]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const resetForm = () => { setEditingId(null); setName(''); setTarget(''); setError(null); };
+  const resetForm = () => { setEditingId(null); setName(''); setTarget(''); setDeadline(''); setError(null); };
 
   const openAdd = () => {
     resetForm();
@@ -57,6 +73,7 @@ export default function GoalsScreen() {
     setEditingId(goal.id);
     setName(goal.name);
     setTarget(String(goal.target_amount));
+    setDeadline(goal.deadline ?? '');
     setError(null);
     setModalOpen(true);
   };
@@ -64,19 +81,24 @@ export default function GoalsScreen() {
   const onSave = async () => {
     if (!user) return;
     const t = parseFloat(target);
+    const deadlineTrimmed = deadline.trim();
     if (!name.trim()) { setError('Enter a goal name.'); return; }
     if (!t || t <= 0) { setError('Enter a valid target amount.'); return; }
+    if (deadlineTrimmed && (!/^\d{4}-\d{2}-\d{2}$/.test(deadlineTrimmed) || Number.isNaN(new Date(deadlineTrimmed).getTime()))) {
+      setError('Enter the target date as YYYY-MM-DD, or leave it blank.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       if (editingId != null) {
-        await updateGoal(editingId, { name: name.trim(), target_amount: t });
+        await updateGoal(editingId, { name: name.trim(), target_amount: t, deadline: deadlineTrimmed || null });
       } else {
         await addGoal({
           name: name.trim(),
           target_amount: t,
           saved_amount: 0,
-          deadline: null,
+          deadline: deadlineTrimmed || null,
           color: '',
           icon: 'star',
           note: null,
@@ -92,14 +114,40 @@ export default function GoalsScreen() {
     }
   };
 
+  const openContribute = (goal: SavingsGoal) => {
+    setContributeFor(goal);
+    setContributeAmount('');
+    setContributeMode('add');
+    setContributeError(null);
+    setHistory([]);
+    setHistoryLoading(true);
+    getGoalContributions(goal.id)
+      .then(setHistory)
+      .catch(() => setHistory([]))
+      .finally(() => setHistoryLoading(false));
+  };
+
   const onContribute = async () => {
     if (!contributeFor || !user) return;
     const amt = parseFloat(contributeAmount);
-    if (!amt || amt <= 0) return;
-    await updateGoal(contributeFor.id, { saved_amount: contributeFor.saved_amount + amt });
-    setContributeFor(null);
-    setContributeAmount('');
-    await load();
+    if (!amt || amt <= 0) { setContributeError('Enter a valid amount.'); return; }
+    if (contributeMode === 'remove' && amt > contributeFor.saved_amount) {
+      setContributeError(`You can remove at most ${fmt(contributeFor.saved_amount)}.`);
+      return;
+    }
+    setContributeSaving(true);
+    setContributeError(null);
+    try {
+      const { goal, contribution } = await contributeToGoal(contributeFor.id, amt, contributeMode);
+      setContributeFor(goal);
+      setContributeAmount('');
+      setHistory((h) => [contribution, ...h]);
+      setItems((prev) => prev.map((g) => (g.id === goal.id ? goal : g)));
+    } catch (err) {
+      setContributeError(apiErrorMessage(err, 'Could not update the goal.'));
+    } finally {
+      setContributeSaving(false);
+    }
   };
 
   const onDelete = (id: number) => {
@@ -108,6 +156,8 @@ export default function GoalsScreen() {
       await load();
     });
   };
+
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
     <View style={styles.flex}>
@@ -156,6 +206,8 @@ export default function GoalsScreen() {
         }
         renderItem={({ item }) => {
           const pct = item.target_amount > 0 ? (item.saved_amount / item.target_amount) * 100 : 0;
+          const achieved = item.target_amount > 0 && item.saved_amount >= item.target_amount;
+          const overdue = !achieved && !!item.deadline && item.deadline < todayIso;
           return (
             <Pressable style={styles.card} onPress={() => openEdit(item)}>
               <View style={styles.cardHeader}>
@@ -174,6 +226,27 @@ export default function GoalsScreen() {
                   </Pressable>
                 </View>
               </View>
+              {(item.deadline || achieved || overdue) && (
+                <View style={styles.metaRow}>
+                  <Text style={styles.cardMuted}>
+                    {item.deadline
+                      ? `Target date: ${new Date(item.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                      : ''}
+                  </Text>
+                  {achieved && (
+                    <View style={styles.badge}>
+                      <Ionicons name="checkmark-circle" size={12} color={COLORS.accent} />
+                      <Text style={[styles.badgeText, { color: COLORS.accent }]}>Goal met</Text>
+                    </View>
+                  )}
+                  {overdue && (
+                    <View style={styles.badge}>
+                      <Ionicons name="alert-circle" size={12} color={COLORS.red} />
+                      <Text style={[styles.badgeText, { color: COLORS.red }]}>Overdue</Text>
+                    </View>
+                  )}
+                </View>
+              )}
               <MiniBar percent={pct} color={item.color} />
               <View style={styles.cardFooter}>
                 <Text style={styles.cardMuted}>{fmt(item.saved_amount)} of {fmt(item.target_amount)}</Text>
@@ -181,11 +254,10 @@ export default function GoalsScreen() {
                   style={styles.contributeBtn}
                   onPress={(e) => {
                     e.stopPropagation();
-                    setContributeFor(item);
-                    setContributeAmount('');
+                    openContribute(item);
                   }}
                 >
-                  <Text style={styles.contributeBtnText}>Add funds</Text>
+                  <Text style={styles.contributeBtnText}>Manage funds</Text>
                 </Pressable>
               </View>
             </Pressable>
@@ -209,6 +281,9 @@ export default function GoalsScreen() {
             <Text style={styles.label}>Target amount</Text>
             <TextInput style={styles.input} value={target} onChangeText={setTarget} placeholder="0" placeholderTextColor={COLORS.textDim} keyboardType="numeric" />
 
+            <Text style={styles.label}>Target date (optional)</Text>
+            <TextInput style={styles.input} value={deadline} onChangeText={setDeadline} placeholder="YYYY-MM-DD" placeholderTextColor={COLORS.textDim} />
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
@@ -222,23 +297,80 @@ export default function GoalsScreen() {
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalSheet, { borderRadius: RADIUS.lg }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add funds — {contributeFor?.name}</Text>
+              <Text style={styles.modalTitle}>{contributeFor?.name}</Text>
               <Pressable onPress={() => setContributeFor(null)}>
                 <Ionicons name="close" size={22} color={COLORS.text} />
               </Pressable>
             </View>
+
+            <View style={styles.modeToggle}>
+              <Pressable
+                style={[styles.modeBtn, contributeMode === 'add' && styles.modeBtnActiveAdd]}
+                onPress={() => { setContributeMode('add'); setContributeError(null); }}
+              >
+                <Text style={[styles.modeBtnText, contributeMode === 'add' && styles.modeBtnTextActive]}>Add funds</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modeBtn, contributeMode === 'remove' && styles.modeBtnActiveRemove]}
+                onPress={() => { setContributeMode('remove'); setContributeError(null); }}
+              >
+                <Text style={[styles.modeBtnText, contributeMode === 'remove' && styles.modeBtnTextActive]}>Remove funds</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.cardMuted}>
+              {contributeMode === 'add'
+                ? `Currently saved: ${fmt(contributeFor?.saved_amount ?? 0)}`
+                : `You can remove up to ${fmt(contributeFor?.saved_amount ?? 0)}`}
+            </Text>
+
             <TextInput
               style={styles.input}
               value={contributeAmount}
-              onChangeText={setContributeAmount}
+              onChangeText={(t) => { setContributeAmount(t); setContributeError(null); }}
               placeholder="Amount"
               placeholderTextColor={COLORS.textDim}
               keyboardType="numeric"
               autoFocus
             />
-            <Pressable style={styles.saveBtn} onPress={onContribute}>
-              <Text style={styles.saveBtnText}>Add</Text>
+
+            {contributeError && <Text style={styles.error}>{contributeError}</Text>}
+
+            <Pressable
+              style={[styles.saveBtn, contributeMode === 'remove' && styles.saveBtnRemove]}
+              onPress={onContribute}
+              disabled={contributeSaving}
+            >
+              <Text style={styles.saveBtnText}>
+                {contributeSaving ? 'Saving…' : contributeMode === 'add' ? 'Add funds' : 'Remove funds'}
+              </Text>
             </Pressable>
+
+            <Text style={styles.sectionTitleStandalone}>Recent activity</Text>
+            {historyLoading ? (
+              <Text style={styles.cardMuted}>Loading…</Text>
+            ) : history.length === 0 ? (
+              <Text style={styles.cardMuted}>No activity yet.</Text>
+            ) : (
+              <FlatList
+                style={styles.historyList}
+                data={history}
+                keyExtractor={(h) => String(h.id)}
+                renderItem={({ item: h }) => (
+                  <View style={styles.historyRow}>
+                    <Ionicons
+                      name={h.type === 'add' ? 'arrow-up-circle' : 'arrow-down-circle'}
+                      size={16}
+                      color={h.type === 'add' ? COLORS.accent : COLORS.red}
+                    />
+                    <Text style={styles.cardLabel}>{h.type === 'add' ? '+' : '−'}{fmt(h.amount)}</Text>
+                    <Text style={styles.cardMuted}>
+                      {new Date(h.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
+                )}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -261,6 +393,9 @@ const styles = StyleSheet.create({
   cardPct: { color: COLORS.accent, fontSize: 13, fontWeight: '700' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardMuted: { color: COLORS.textMuted, fontSize: 12 },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
   contributeBtn: { backgroundColor: `${COLORS.accent}22`, borderRadius: RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
   contributeBtnText: { color: COLORS.accent, fontWeight: '600', fontSize: 12 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
@@ -276,5 +411,14 @@ const styles = StyleSheet.create({
   input: { backgroundColor: COLORS.input, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12, color: COLORS.text, fontSize: 15 },
   error: { color: COLORS.red, fontSize: 13 },
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.sm },
+  saveBtnRemove: { backgroundColor: COLORS.red },
   saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },
+  modeToggle: { flexDirection: 'row', backgroundColor: COLORS.input, borderRadius: RADIUS.md, padding: 4, gap: 4 },
+  modeBtn: { flex: 1, borderRadius: RADIUS.sm, paddingVertical: 10, alignItems: 'center' },
+  modeBtnActiveAdd: { backgroundColor: `${COLORS.accent}33` },
+  modeBtnActiveRemove: { backgroundColor: `${COLORS.red}33` },
+  modeBtnText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 13 },
+  modeBtnTextActive: { color: COLORS.text },
+  historyList: { maxHeight: 160 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
 });

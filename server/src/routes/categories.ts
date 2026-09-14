@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { z } from 'zod';
-import { eq, isNull, or } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { categories } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
@@ -51,6 +51,19 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const body = createSchema.parse(req.body);
+
+    const [existing] = await db
+      .select({ key: categories.key })
+      .from(categories)
+      .where(
+        and(
+          or(isNull(categories.userId), eq(categories.userId, req.userId!)),
+          eq(categories.type, body.type),
+          sql`lower(${categories.label}) = lower(${body.name})`
+        )
+      );
+    if (existing) throw conflict(`"${body.name}" already exists.`);
+
     const key = `custom_${crypto.randomBytes(4).toString('hex')}`;
     const color = CUSTOM_PALETTE[Math.floor(Math.random() * CUSTOM_PALETTE.length)];
 

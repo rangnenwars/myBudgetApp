@@ -30,6 +30,7 @@ users ──┬─< transactions >── categories
         ├─< loans
         ├─< investments
         ├─< savings_goals
+        ├─< goal_contributions >── savings_goals
         ├─< net_worth_snapshots
         ├─< budgets >── categories
         ├─< refresh_tokens
@@ -45,7 +46,7 @@ users ──┬─< transactions >── categories
 
 ## 3. Schema (DDL)
 
-This DDL matches what's actually running (`server/src/db/schema.ts` + `server/drizzle/*`), with one Drizzle-side deviation: the `transactions`, `loans`, `investments`, and `savings_goals` tables use **snake_case JS property names** in Drizzle (instead of Drizzle's normal camelCase convention) so rows returned by a query structurally match `utils/types.ts`'s shared interfaces and flow straight into `utils/calculations.ts` with no mapping layer. The underlying SQL column names below are unaffected — this is purely a TypeScript-side naming choice. `users`, `refresh_tokens`, `net_worth_snapshots`, and `budgets` kept normal camelCase since nothing in `calculations.ts` consumes them directly. 61 categories are currently seeded (not 63, per an earlier estimate).
+This DDL matches what's actually running (`server/src/db/schema.ts` + `server/drizzle/*`), with one Drizzle-side deviation: the `transactions`, `loans`, `investments`, `savings_goals`, and `goal_contributions` tables use **snake_case JS property names** in Drizzle (instead of Drizzle's normal camelCase convention) so rows returned by a query structurally match `utils/types.ts`'s shared interfaces and flow straight into `utils/calculations.ts` with no mapping layer. The underlying SQL column names below are unaffected — this is purely a TypeScript-side naming choice. `users`, `refresh_tokens`, `net_worth_snapshots`, and `budgets` kept normal camelCase since nothing in `calculations.ts` consumes them directly. 61 categories are currently seeded (not 63, per an earlier estimate).
 
 `categories.user_id` and `users.role`/`users.isActive` were added after the initial migration (see `server/drizzle/0001_last_gamma_corps.sql`) to support user-created custom categories and admin-managed access control — both are covered below in place, not as a separate changelog, since this doc always describes the current shape.
 
@@ -179,6 +180,22 @@ CREATE TABLE savings_goals (
 CREATE INDEX idx_goals_user ON savings_goals(user_id);
 
 -- ============================================================
+-- goal_contributions — history of add/remove funds actions against a
+-- savings goal, purely so the user can see how saved_amount got where it
+-- is. savings_goals.saved_amount stays the source of truth for progress;
+-- this table never needs to be summed to recompute it.
+-- ============================================================
+CREATE TABLE goal_contributions (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  goal_id    BIGINT NOT NULL REFERENCES savings_goals(id) ON DELETE CASCADE,
+  amount     NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  type       TEXT NOT NULL CHECK (type IN ('add', 'remove')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_goal_contributions_goal ON goal_contributions(goal_id, created_at);
+
+-- ============================================================
 -- net_worth_snapshots
 -- ============================================================
 CREATE TABLE net_worth_snapshots (
@@ -246,4 +263,4 @@ CREATE TABLE budgets (
 
 ## Status
 
-Fully implemented and verified: 125 server-side integration/e2e tests (Supertest against real Postgres, no mocking, coverage-enforced — see `docs/API_REFERENCE.md`) plus 47 client-side unit tests, all passing, run automatically before every commit via a Husky pre-commit hook. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.
+Fully implemented and verified: 134 server-side integration/e2e tests (Supertest against real Postgres, no mocking, coverage-enforced — see `docs/API_REFERENCE.md`) plus 47 client-side unit tests, all passing, run automatically before every commit via a Husky pre-commit hook. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.

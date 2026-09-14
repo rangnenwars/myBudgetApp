@@ -40,6 +40,7 @@ export default function TransactionsScreen() {
   const { user } = useAuth();
   const { getCategory } = useCategories();
   const [items, setItems] = useState<Transaction[]>([]);
+  const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [type, setType] = useState<TxnType>('expense');
@@ -141,6 +142,19 @@ export default function TransactionsScreen() {
     });
   };
 
+  const query = search.trim().toLowerCase();
+  const filteredItems = query
+    ? items.filter((item) => {
+        const cat = getCategory(item.category);
+        return (
+          (cat?.label ?? item.category).toLowerCase().includes(query) ||
+          (item.note ?? '').toLowerCase().includes(query) ||
+          item.date.includes(query) ||
+          String(item.amount).includes(query)
+        );
+      })
+    : items;
+
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
@@ -150,11 +164,31 @@ export default function TransactionsScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={16} color={COLORS.textDim} />
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search transactions"
+          placeholderTextColor={COLORS.textDim}
+        />
+        {search.length > 0 && (
+          <Pressable hitSlop={8} onPress={() => setSearch('')}>
+            <Ionicons name="close-circle" size={16} color={COLORS.textDim} />
+          </Pressable>
+        )}
+      </View>
+
       <FlatList
-        data={items}
+        data={filteredItems}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<Text style={styles.emptyText}>No transactions yet. Tap + to add one.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {query ? `No transactions match "${search.trim()}"` : 'No transactions yet. Tap + to add one.'}
+          </Text>
+        }
         renderItem={({ item }) => {
           const cat = getCategory(item.category);
           return (
@@ -283,6 +317,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginHorizontal: SPACING.lg,
+    backgroundColor: COLORS.input,
+    borderColor: COLORS.cardBorder,
+    borderWidth: 1,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+  },
+  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 9 },
   listContent: { padding: SPACING.lg, paddingTop: SPACING.sm, gap: SPACING.xs },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', marginTop: SPACING.xl },
   row: {

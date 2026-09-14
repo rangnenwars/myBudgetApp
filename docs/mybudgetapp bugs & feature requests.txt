@@ -2,5 +2,9 @@ resolved 1. while adding transactions it is not knwone whetehr momnthly/ quarter
 resolved 2. after adding the trasnaction its not editable if any manual mistakes been amde
 resolved 3. sames goes for all other tabs data
 resolved 4. there should be a delete option too on transaction, loan, investment & goals tab to delete any row dded by mistake or not relevant anymore
-Open 5. on transsactions tab > old data migradtion to period is not done
-Open 5. goals tab > add funds are not visible for updating -> they should be updatable for any corrections
+Differred-not fixed yet  5. on transsactions tab > old data migradtion to period is not done
+resolved 6. goals tab > add funds are not visible for updating -> they should be updatable for any corrections
+resolved 7. goals tab > added a Remove funds option next to Add funds (toggle in the same modal) so contributions can be corrected downward too, restricted to never remove more than is currently saved, with a recent-activity history list of every add/remove
+resolved 8. goals tab > added an optional target date field (add/edit goal form + shown on the card), and a "Goal met" / "Overdue" flag on each goal card based on saved vs target amount and the target date
+resolved 9. removed the "Input expenses" shortcut from the home screen — same bulk-entry functionality is already covered by the Transactions tab
+resolved 10. removed the weekly custom-category "promotion to Community" batch — it was leaking test-generated junk categories (e.g. "Pet grooming fa5b23d4", "Idempotent test ...") into everyone's category picker; deleted the batch/cron/tests, and cleaned up the 42 leftover junk rows from the database

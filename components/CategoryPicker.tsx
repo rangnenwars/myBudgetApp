@@ -13,10 +13,11 @@ interface Props {
 }
 
 export const CategoryPicker: React.FC<Props> = ({ type, value, onChange }) => {
-  const { getCategory, groupCategories, addCategory, renameCategory, deleteCategory } = useCategories();
+  const { categories, getCategory, groupCategories, addCategory, renameCategory, deleteCategory } = useCategories();
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -43,13 +44,23 @@ export const CategoryPicker: React.FC<Props> = ({ type, value, onChange }) => {
   const closeAddForm = () => {
     setAdding(false);
     setNewName('');
+    setAddError(null);
   };
 
   const onSaveNew = async () => {
-    if (!newName.trim()) return;
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const isDuplicate = categories.some(
+      (c) => c.type === type && c.label.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      setAddError(`"${trimmed}" already exists.`);
+      return;
+    }
+    setAddError(null);
     setSaving(true);
     try {
-      const created = await addCategory({ name: newName.trim(), type });
+      const created = await addCategory({ name: trimmed, type });
       closeAddForm();
       onChange(created.key);
       closeModal();
@@ -142,11 +153,15 @@ export const CategoryPicker: React.FC<Props> = ({ type, value, onChange }) => {
                 <TextInput
                   style={styles.addInput}
                   value={newName}
-                  onChangeText={setNewName}
+                  onChangeText={(text) => {
+                    setNewName(text);
+                    if (addError) setAddError(null);
+                  }}
                   placeholder="e.g. Pet supplies"
                   placeholderTextColor={COLORS.textDim}
                   autoFocus
                 />
+                {addError && <Text style={styles.addError}>{addError}</Text>}
                 <View style={styles.addFormButtons}>
                   <Pressable style={styles.addCancelBtn} onPress={closeAddForm} disabled={saving}>
                     <Text style={styles.addCancelBtnText}>Cancel</Text>
@@ -315,6 +330,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.cardBorder,
   },
   addLabel: { color: COLORS.textMuted, fontSize: 12 },
+  addError: { color: COLORS.red, fontSize: 12 },
   addInput: {
     backgroundColor: COLORS.input,
     borderColor: COLORS.cardBorder,

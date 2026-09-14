@@ -11,7 +11,6 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed-categories.ts",
     "db:seed:accounts": "tsx src/db/seed-accounts.ts",
-    "batch:promote-categories": "tsx src/db/batch-promote-categories.ts",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "quality": "npm run typecheck && npm test"
@@ -23,7 +22,6 @@
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
-    "node-cron": "^4.6.0",
     "pg": "^8.13.1",
     "zod": "^3.23.8"
   },

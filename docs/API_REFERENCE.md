@@ -97,18 +97,6 @@ Errors: 403 `:key` is a system category (`user_id` is null) · 404 `:key` doesn'
 { "key": "groceries_milk", "label": "Groceries & milk", "icon": "🛒", "color": "#34D399", "group": "Food & dining", "type": "expense", "isCustom": false }
 ```
 
-### The weekly "common category" batch — how a personal category becomes shared
-
-Every category a user creates is *theirs alone* at first (`user_id` set, `group: 'Custom'`) — nothing here is a real-time API endpoint, it's a background process, but it changes what `GET /categories` returns over time, so it's documented here rather than in a route.
-
-Once a week (`node-cron`, `0 3 * * 0`, wired up in `server/src/index.ts`; also runnable on demand via `cd server && npm run batch:promote-categories`), `server/src/lib/categoryPromotion.ts`'s `promoteCommonCategories()` scans every custom category across every account, and for each **distinct name + type** combination that **3 or more different users** have each independently created (case-insensitive, and only if no system category already covers it), promotes exactly one of those rows to a system category — flips its `user_id` to `NULL` and its `group` to `'Community'`. Nothing else changes: the row's `key` is untouched, so any transaction already pointing at it (including the original creator's own) keeps working exactly as before.
-
-**Deliberately additive, never destructive** — this was an explicit design requirement ("improve the common list while keeping the user list intact"):
-- Every *other* user who separately created the same-named category keeps their own row exactly as it was — still theirs, still editable, still deletable, still referenced by their own transactions. It is never deleted, merged, or repointed.
-- Only category **labels** are ever read by this process — it never touches, joins against, or has any visibility into transactions, loans, investments, or goals. The same per-user financial-data isolation applies here as everywhere else.
-- The threshold (`PROMOTION_THRESHOLD = 3`) and the promoted group name (`PROMOTED_GROUP = 'Community'`) are both named constants in `categoryPromotion.ts` — change them there, not by editing the batch script.
-- Fully idempotent — re-running it (by hand, or next week) never re-promotes or duplicates anything already promoted.
-
 ---
 
 ## Transactions — `/api/v1/transactions`
@@ -190,14 +178,23 @@ Errors: 404 not found / not yours
 → **200** `SavingsGoal[]`, newest first
 
 ### `POST /goals` 🔒
-Body: `{ name: string, target_amount: number (>0) }`
+Body: `{ name: string, target_amount: number (>0), deadline?: string | null }` — `deadline` is `YYYY-MM-DD`, optional, defaults to `null`
 → **201** `SavingsGoal` (`saved_amount: 0`) — `color` is assigned round-robin from a fixed palette based on the caller's existing goal count
-Errors: 400 invalid body
+Errors: 400 invalid body (including a malformed `deadline`)
 
 ### `PATCH /goals/:id` 🔒
-Body: any non-empty subset of `{ name, target_amount, saved_amount }` — the "Add funds" action sends just `{ saved_amount: current + contribution }` (the new cumulative total, not a delta); the goal's own edit form can send `name`/`target_amount` too
+Body: any non-empty subset of `{ name, target_amount, saved_amount, deadline }` — used by the goal's own edit form (`name`/`target_amount`/`deadline`); `saved_amount` can still be set directly here, but the "Add/Remove funds" UI uses `POST /goals/:id/contributions` below instead, since that endpoint enforces the remove-more-than-saved rule and keeps history. Send `deadline: null` to clear it.
 → **200** `SavingsGoal`
-Errors: 400 empty body, non-positive `target_amount`, or negative `saved_amount` · 404 not found / not yours
+Errors: 400 empty body, non-positive `target_amount`, negative `saved_amount`, or malformed `deadline` · 404 not found / not yours
+
+### `POST /goals/:id/contributions` 🔒
+Body: `{ amount: number (>0), type: 'add' | 'remove' }` — adds to or subtracts from `saved_amount` and records the action, atomically
+→ **201** `{ goal: SavingsGoal, contribution: GoalContribution }`
+Errors: 400 invalid body, or a `'remove'` whose `amount` exceeds the goal's current `saved_amount` · 404 not found / not yours
+
+### `GET /goals/:id/contributions` 🔒
+→ **200** `GoalContribution[]`, newest first — `{ id, amount, type: 'add' | 'remove', created_at }`
+Errors: 404 not found / not yours
 
 ### `DELETE /goals/:id` 🔒
 → **204**
@@ -271,4 +268,4 @@ Errors: 400 `:id` is the caller's own account · 404 not found
 
 This document is authoritative for what's *implemented*, not what's *planned* — if a route here doesn't exist in `server/src/routes/`, or a route exists that isn't listed here, one of the two is wrong and needs fixing in the same change that caused the drift.
 
-**Every route above has at least one test** in `server/src/__tests__/` (one file per resource, named to match — the weekly batch has its own `categoryPromotion.test.ts`) — 125 tests total, run against a real Postgres instance, no mocking. `server/jest.config.js` enforces a coverage floor (80% branches, 90% functions/lines/statements) over `src/routes/`, `src/middleware/`, and `src/lib/`, so a new endpoint or background process shipped without a test fails `npm run test:coverage` — see [README.md §6](README.md#6-testing--quality) for the exact commands, and the repo's git pre-commit hook (`.husky/pre-commit` — see §"Enforcement") which runs the full quality gate automatically before every commit.
+**Every route above has at least one test** in `server/src/__tests__/` (one file per resource, named to match) — 128 tests total, run against a real Postgres instance, no mocking. `server/jest.config.js` enforces a coverage floor (80% branches, 90% functions/lines/statements) over `src/routes/`, `src/middleware/`, and `src/lib/`, so a new endpoint or background process shipped without a test fails `npm run test:coverage` — see [README.md §6](README.md#6-testing--quality) for the exact commands, and the repo's git pre-commit hook (`.husky/pre-commit` — see §"Enforcement") which runs the full quality gate automatically before every commit.

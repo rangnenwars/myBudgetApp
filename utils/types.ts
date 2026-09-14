@@ -54,6 +54,13 @@ export interface SavingsGoal {
   note: string | null;
 }
 
+export interface GoalContribution {
+  id: number;
+  amount: number;
+  type: 'add' | 'remove';
+  created_at: string;
+}
+
 export interface UserProfile {
   id: number;
   name: string;

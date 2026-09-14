@@ -12,9 +12,9 @@
 - **Postgres runs on host port 5433, not 5432** — this dev machine already has a native Windows PostgreSQL service on 5432, so `docker-compose.yml` and `server/.env` map the container's 5432 to host 5433 instead. Internal container-to-container traffic (`server` → `postgres`) is unaffected, still port 5432 on the Docker network.
 - **61 categories are seeded, not 63** — the actual count in `constants/categories.ts` after dedup.
 
-Verified: 125 server-side integration/e2e tests (Supertest against real Postgres, no mocking, enforced by a coverage floor — see `docs/API_REFERENCE.md`) + 47 client-side unit tests, all passing; a full `docker compose up --build` of all three services (`mybudget-web` + `postgres` + `server`) with a real browser click-through — register, login, bulk "Input expenses" entry, add a loan/goal, Reports tab (trend chart, category breakdown, debt payoff simulator, net worth), CSV export, custom-category create/rename/search, and admin user management (deactivate → login blocked → reactivate → login restored) all confirmed working against the live containers. Both suites now also run automatically on every `git commit` via a Husky pre-commit hook (`.husky/pre-commit`).
+Verified: 128 server-side integration/e2e tests (Supertest against real Postgres, no mocking, enforced by a coverage floor — see `docs/API_REFERENCE.md`) + 47 client-side unit tests, all passing; a full `docker compose up --build` of all three services (`mybudget-web` + `postgres` + `server`) with a real browser click-through — register, login, bulk "Input expenses" entry, add a loan/goal, Reports tab (trend chart, category breakdown, debt payoff simulator, net worth), CSV export, custom-category create/rename/search, and admin user management (deactivate → login blocked → reactivate → login restored) all confirmed working against the live containers. Both suites now also run automatically on every `git commit` via a Husky pre-commit hook (`.husky/pre-commit`).
 
-**Added after the initial build, per explicit user request:** custom categories (add/rename/delete your own, `POST`/`PATCH`/`DELETE /api/v1/categories`, plus a search box in the picker), a role-based access control system (`users.role`/`users.isActive`, `/api/v1/admin/users/*`, an in-app Admin screen), and a weekly batch (`server/src/lib/categoryPromotion.ts`, scheduled via `node-cron` in `server/src/index.ts`) that folds a custom category into the shared system list once 3+ different users have independently created it, without ever touching any other user's own copy. See `docs/README.md` §3/§3a for the full behavior and `docs/DATABASE_DESIGN.md` for the schema. The endpoint surface and phase plan below have been updated in place to match, not left as a stale historical snapshot.
+**Added after the initial build, per explicit user request:** custom categories (add/rename/delete your own, `POST`/`PATCH`/`DELETE /api/v1/categories`, plus a search box in the picker) and a role-based access control system (`users.role`/`users.isActive`, `/api/v1/admin/users/*`, an in-app Admin screen). See `docs/README.md` §3/§3a for the full behavior and `docs/DATABASE_DESIGN.md` for the schema. The endpoint surface and phase plan below have been updated in place to match, not left as a stale historical snapshot.
 
 ---
 
@@ -51,15 +51,12 @@ No ORM alternatives, no GraphQL, no separate auth-as-a-service — matches the "
 ```
 server/
 ├── src/
-│   ├── index.ts                 ← Express app entry, mounts routes, schedules the weekly category-promotion cron
+│   ├── index.ts                 ← Express app entry, mounts routes
 │   ├── db/
 │   │   ├── client.ts             ← Drizzle client + pg Pool
 │   │   ├── schema.ts             ← Drizzle table definitions (mirrors docs/DATABASE_DESIGN.md DDL exactly)
 │   │   ├── seed-categories.ts    ← generates categories seed from ../../constants/categories.ts — do not hand-type it twice
-│   │   ├── seed-accounts.ts      ← seeds one demo user + one super-admin account (docs/README.md §7 has the credentials)
-│   │   └── batch-promote-categories.ts  ← CLI entrypoint for the same batch index.ts schedules — `npm run batch:promote-categories`
-│   ├── lib/
-│   │   └── categoryPromotion.ts  ← promoteCommonCategories() — the actual "improve the common list" algorithm, unit-testable apart from the CLI/cron wrappers
+│   │   └── seed-accounts.ts      ← seeds one demo user + one super-admin account (docs/README.md §7 has the credentials)
 │   ├── middleware/
 │   │   ├── auth.ts               ← verifies access token, attaches req.userId
 │   │   ├── requireAdmin.ts       ← runs after auth.ts; checks role fresh from the DB, attaches req.role
@@ -171,10 +168,6 @@ POST   /api/v1/categories     { name, type }    → create a custom category own
 PATCH  /api/v1/categories/:key { name }         → rename the caller's own custom category (key stays stable) · 403 system category · 404 not yours
 DELETE /api/v1/categories/:key                  → 403 system category · 404 not yours · 409 still in use by a transaction
 
-(weekly, not an HTTP route: server/src/lib/categoryPromotion.ts promotes a
- custom category to a system one once 3+ distinct users have each created
- it independently — see docs/README.md §3a)
-
 GET    /api/v1/admin/users                      → every account (role: 'admin' only) — account fields only, never financial data
 PATCH  /api/v1/admin/users/:id  { role?, isActive?, tier? }  → 400 if :id is the caller's own account
 DELETE /api/v1/admin/users/:id                  → cascades to everything that account owns · 400 if :id is the caller's own account
@@ -196,8 +189,10 @@ PATCH  /api/v1/investments/:id       any non-empty subset of { name, type, amoun
 DELETE /api/v1/investments/:id
 
 GET    /api/v1/goals
-POST   /api/v1/goals                 { name, target_amount }
-PATCH  /api/v1/goals/:id             any non-empty subset of { name, target_amount, saved_amount }
+POST   /api/v1/goals                 { name, target_amount, deadline? } — deadline is YYYY-MM-DD, optional
+PATCH  /api/v1/goals/:id             any non-empty subset of { name, target_amount, saved_amount, deadline } — goal edit form only
+POST   /api/v1/goals/:id/contributions  { amount (>0), type: 'add'|'remove' } — the Add/Remove funds toggle; rejects a remove past 0, records history
+GET    /api/v1/goals/:id/contributions  → history for that goal, newest first
 DELETE /api/v1/goals/:id
 
 GET    /api/v1/reports/summary?startMonth=&startYear=&endMonth=&endYear=

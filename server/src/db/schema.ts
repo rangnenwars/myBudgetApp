@@ -184,6 +184,25 @@ export const savingsGoals = pgTable('savings_goals', {
 ]);
 
 // ============================================================
+// goal_contributions — history of add/remove funds actions against a
+// savings goal, purely so the user can see how saved_amount got where it
+// is. savings_goals.saved_amount stays the source of truth for progress;
+// this table never needs to be summed to recompute it.
+// ============================================================
+export const goalContributions = pgTable('goal_contributions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  goal_id: bigint('goal_id', { mode: 'number' }).notNull().references(() => savingsGoals.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  type: text('type', { enum: ['add', 'remove'] }).notNull(),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_goal_contributions_goal').on(table.goal_id, table.created_at),
+  check('goal_contributions_amount_check', sql`${table.amount} > 0`),
+  check('goal_contributions_type_check', sql`${table.type} IN ('add', 'remove')`),
+]);
+
+// ============================================================
 // net_worth_snapshots
 // ============================================================
 export const netWorthSnapshots = pgTable('net_worth_snapshots', {

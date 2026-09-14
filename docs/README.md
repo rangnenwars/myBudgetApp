@@ -87,7 +87,7 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 - **Dashboard** — current-month income/expense/net savings, top-5 expense categories, budget-class badge, Expense/Loan/Investment breakdown
 - **Input expenses** — bulk entry screen: pick Monthly/Quarterly/Yearly, add one row per category+amount, save all at once (mirrors the original Excel workflow)
 - **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, optional Monthly/Quarterly/Yearly period on new entries (converted to a monthly-equivalent amount, same as Input Expenses) — tap a row to edit it, tap the trash icon to delete it
-- **Custom categories** — add, rename, and delete your own category (name + income/expense) from any category picker, with a search box to find items once the list grows — see §3a. Widely-adopted custom categories are folded into the shared list automatically by a weekly batch, without ever touching anyone's own list or data
+- **Custom categories** — add, rename, and delete your own category (name + income/expense) from any category picker, with a search box to find items once the list grows — see §3a
 - **Loans** — add/edit/delete, track principal/outstanding/EMI/interest rate, "mark EMI paid" button — tap a card to edit any field, trash icon to delete
 - **Investments** — add/edit/delete, invested vs. current value, auto-computed gain % (recomputed server-side on every edit), portfolio summary — tap a card to edit, trash icon to delete
 - **Goals** — add/edit/delete, contribute funds, progress bar toward target — tap a card to edit name/target, trash icon to delete
@@ -110,8 +110,6 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 ## 3a. Custom categories & access control — how they actually work
 
 **Custom categories.** Every category is a row in the server's `categories` table. System categories (seeded from `constants/categories.ts`, `user_id NULL`) are shared by everyone and can't be deleted or renamed. `POST /api/v1/categories { name, type }` creates a new one owned by the caller (`group: 'Custom'`, a rotating icon/color, a generated `custom_xxxxxxxx` key) — `GET /api/v1/categories` returns system categories plus only the caller's own, and the `CategoryPicker` component's search box filters that combined list client-side once it grows. `PATCH /api/v1/categories/:key { name }` renames the caller's own custom category (the `key` never changes, so nothing referencing it breaks). `DELETE /api/v1/categories/:key` is rejected with 403 for a system category, 404 for another user's custom category (existence isn't leaked), and 409 if it's still referenced by one of the user's own transactions (the database's foreign key is what actually enforces this — the route just turns the constraint violation into a friendly message). `POST /transactions` independently re-validates that a submitted category is a system category or belongs to the caller, so a guessed/leaked custom category key from another account can't be used to log a transaction against it.
-
-**The common list improves itself, without ever touching anyone's own list.** A weekly batch (`node-cron`, Sundays 03:00, `server/src/index.ts`; also runnable by hand via `cd server && npm run batch:promote-categories`) scans every custom category across every account (`server/src/lib/categoryPromotion.ts`). Whenever 3 or more *different* users have each independently created a custom category with the same name and type — and no system category already covers it — one of those rows is promoted: its `user_id` flips to `NULL` and its `group` to `'Community'`, so it now shows up in *everyone's* list, including brand-new users who've never touched it. Its `key` never changes, so existing transactions keep working. Critically, every *other* user's identically-named row is left completely alone — still theirs, still in `'Custom'`, still separately editable/deletable — the mechanism only ever adds to the shared list, it never merges, deletes, or repoints anyone's data. It also never reads anything but category labels, so it carries none of the cross-user financial-data exposure the rest of this doc is careful to rule out. See [API_REFERENCE.md](API_REFERENCE.md#the-weekly-common-category-batch--how-a-personal-category-becomes-shared) for the exact algorithm and [categoryPromotion.test.ts](../server/src/__tests__/categoryPromotion.test.ts) for what's verified.
 
 **Access control.** `users.role` (`'user' | 'admin'`) and `users.isActive` gate everything:
 - `POST /api/v1/auth/login` rejects a correct password with 403 if `isActive` is false (checked only after the password is verified, so it can't be used to enumerate accounts).
@@ -212,11 +210,10 @@ npm run quality       # typecheck + coverage — the single gate to run before a
 **Server** (`server/`):
 ```bash
 npm run typecheck     # tsc --noEmit
-npm test               # 125 tests — one file per resource (auth, categories,
+npm test               # 128 tests — one file per resource (auth, categories,
                         # transactions, loans, investments, goals, reports,
-                        # net worth, admin), the weekly category-promotion
-                        # batch, a health/404 smoke test, and one full e2e
-                        # lifecycle test
+                        # net worth, admin), a health/404 smoke test, and
+                        # one full e2e lifecycle test
 npm run test:coverage  # same, plus a coverage report + enforced floor (see below)
 npm run quality        # typecheck && test
 ```

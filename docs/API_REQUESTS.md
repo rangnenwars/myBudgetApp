@@ -192,9 +192,6 @@ Every response body is JSON (except CSV export, noted below). Every error respon
 - **Response — 204 No Content** (empty body)
 - **Errors**: `403 { "error": "System categories cannot be deleted." }` · `404 { "error": "Category not found." }` (doesn't exist, or belongs to another user) · `409 { "error": "This category is used by existing transactions and cannot be deleted." }`
 
-### The weekly "common category" batch (not an HTTP endpoint)
-No request to make — this runs automatically inside the server process (`node-cron`, Sundays 03:00) or on demand via `cd server && npm run batch:promote-categories`. See [API_REFERENCE.md](API_REFERENCE.md#the-weekly-common-category-batch--how-a-personal-category-becomes-shared) for what it does: once 3+ different users have each independently created a custom category with the same name and type, one of those rows is promoted to a system category (`user_id → NULL`, `group → "Community"`) — every other matching row is left completely untouched.
-
 ---
 
 ## Transactions
@@ -401,26 +398,56 @@ The "mark EMI paid" quick action just sends `{ "outstanding": outstanding - emi 
 - **Headers**: `Content-Type: application/json`, `Authorization: Bearer <accessToken>`
 - **Body**:
 ```json
-{ "name": "Test goal", "target_amount": 50000 }
+{ "name": "Test goal", "target_amount": 50000, "deadline": "2027-01-15" }
 ```
-(`target_amount` > 0. `color` is assigned server-side, round-robin from a fixed palette — don't send it.)
+(`target_amount` > 0. `deadline` is `YYYY-MM-DD`, optional — omit or send `null` for no target date. `color` is assigned server-side, round-robin from a fixed palette — don't send it.)
 - **Response — 201 Created**: same shape as one item of `GET /goals` above, with `saved_amount: 0`.
-- **Errors**: `400` invalid body
+- **Errors**: `400` invalid body (including a malformed `deadline`)
 
 ### `PATCH /api/v1/goals/:id` 🔒
 - **Method**: PATCH · **Port**: 4000 · **Path**: `/api/v1/goals/:id` — e.g. `/api/v1/goals/243`
 - **Full URL**: `http://localhost:4000/api/v1/goals/243`
 - **Headers**: `Content-Type: application/json`, `Authorization: Bearer <accessToken>`
-- **Body** (any non-empty subset of `{ name, target_amount, saved_amount }`):
+- **Body** (any non-empty subset of `{ name, target_amount, saved_amount, deadline }`):
 ```json
-{ "name": "Emergency fund (6mo)", "target_amount": 150000 }
+{ "name": "Emergency fund (6mo)", "target_amount": 150000, "deadline": "2027-06-30" }
 ```
-The "Add funds" action sends just `{ "saved_amount": current.saved_amount + contribution }` — the new **cumulative total**, not a delta.
+Used by the goal's own edit form (`name`/`target_amount`/`deadline`). The "Add/Remove funds" UI no longer sends `saved_amount` here — see `POST /goals/:id/contributions` below. Send `"deadline": null` to clear a previously set target date.
 - **Response — 200 OK**:
 ```json
-{ "id": 243, "userId": 464, "name": "Emergency fund (6mo)", "target_amount": 150000, "saved_amount": 0, "deadline": null, "color": "#10B981", "icon": "star", "note": null, "created_at": "2026-09-13T11:07:43.088Z", "updated_at": "2026-09-13T11:07:43.294Z" }
+{ "id": 243, "userId": 464, "name": "Emergency fund (6mo)", "target_amount": 150000, "saved_amount": 0, "deadline": "2027-06-30", "color": "#10B981", "icon": "star", "note": null, "created_at": "2026-09-13T11:07:43.088Z", "updated_at": "2026-09-13T11:07:43.294Z" }
 ```
-- **Errors**: `400` empty body, non-positive `target_amount`, or negative `saved_amount` · `404` not found / not yours
+- **Errors**: `400` empty body, non-positive `target_amount`, negative `saved_amount`, or malformed `deadline` · `404` not found / not yours
+
+### `POST /api/v1/goals/:id/contributions` 🔒
+- **Method**: POST · **Port**: 4000 · **Path**: `/api/v1/goals/:id/contributions` — e.g. `/api/v1/goals/243/contributions`
+- **Full URL**: `http://localhost:4000/api/v1/goals/243/contributions`
+- **Headers**: `Content-Type: application/json`, `Authorization: Bearer <accessToken>`
+- **Body**:
+```json
+{ "amount": 500, "type": "add" }
+```
+`type` is `"add"` or `"remove"`. Adds to or subtracts from `saved_amount` and records the action as one atomic operation — this is what the "Add funds" / "Remove funds" toggle in the app calls.
+- **Response — 201 Created**:
+```json
+{
+  "goal": { "id": 243, "userId": 464, "name": "Emergency fund (6mo)", "target_amount": 150000, "saved_amount": 500, "deadline": null, "color": "#10B981", "icon": "star", "note": null, "created_at": "2026-09-13T11:07:43.088Z", "updated_at": "2026-09-14T09:00:00.000Z" },
+  "contribution": { "id": 12, "userId": 464, "goal_id": 243, "amount": 500, "type": "add", "created_at": "2026-09-14T09:00:00.000Z" }
+}
+```
+- **Errors**: `400` invalid body, or `type: "remove"` with `amount` greater than the goal's current `saved_amount` · `404` not found / not yours
+
+### `GET /api/v1/goals/:id/contributions` 🔒
+- **Method**: GET · **Port**: 4000 · **Path**: `/api/v1/goals/:id/contributions` — e.g. `/api/v1/goals/243/contributions`
+- **Full URL**: `http://localhost:4000/api/v1/goals/243/contributions`
+- **Headers**: `Authorization: Bearer <accessToken>` · **Body**: none
+- **Response — 200 OK**, newest first:
+```json
+[
+  { "id": 12, "userId": 464, "goal_id": 243, "amount": 500, "type": "add", "created_at": "2026-09-14T09:00:00.000Z" }
+]
+```
+- **Errors**: `404` not found / not yours
 
 ### `DELETE /api/v1/goals/:id` 🔒
 - **Method**: DELETE · **Port**: 4000 · **Path**: `/api/v1/goals/:id` — e.g. `/api/v1/goals/171`
