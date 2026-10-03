@@ -1,0 +1,1 @@
+ALTER TABLE "loans" ADD COLUMN "counts_as_expense" boolean DEFAULT true NOT NULL;

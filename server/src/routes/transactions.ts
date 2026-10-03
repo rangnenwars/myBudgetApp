@@ -2,15 +2,17 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, desc, isNull, or } from 'drizzle-orm';
 import { db } from '../db/client';
-import { transactions, categories } from '../db/schema';
+import { transactions, categories, recurringTransactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
+import { loanEmiMiddleware, monthStart } from '../lib/loanEmiExpenses';
+import { recurringMiddleware } from '../lib/recurringTransactions';
 import { badRequest, notFound } from '../lib/errors';
 import { recomputeBudgetClass } from '../lib/budgetClass';
 import { getTransactionsInRange } from '../lib/queries';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, loanEmiMiddleware, recurringMiddleware);
 
 const monthYearQuery = z.object({
   month: z.coerce.number().int().min(1).max(12).optional(),
@@ -24,7 +26,7 @@ const rangeQuery = z.object({
   endYear: z.coerce.number().int().min(2000).max(2100),
 });
 
-const createSchema = z.object({
+const baseSchema = z.object({
   amount: z.coerce.number().positive(),
   type: z.enum(['income', 'expense']),
   category_key: z.string().min(1),
@@ -33,7 +35,11 @@ const createSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
 });
 
-const updateSchema = createSchema
+// repeat_monthly is create-only: it also saves a rule that posts the same
+// entry on the 1st of every following month (lib/recurringTransactions.ts).
+const createSchema = baseSchema.extend({ repeat_monthly: z.boolean().optional() });
+
+const updateSchema = baseSchema
   .partial()
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update.' });
 
@@ -76,20 +82,34 @@ router.post(
 
     await assertValidCategory(body.category_key, req.userId!);
 
-    const [row] = await db
-      .insert(transactions)
-      .values({
-        userId: req.userId!,
-        category: body.category_key,
-        amount: body.amount,
-        type: body.type,
-        subcategory: body.subcategory ?? null,
-        note: body.note ?? null,
-        date: body.date,
-        month: m,
-        year: y,
-      })
-      .returning();
+    const row = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(transactions)
+        .values({
+          userId: req.userId!,
+          category: body.category_key,
+          amount: body.amount,
+          type: body.type,
+          subcategory: body.subcategory ?? null,
+          note: body.note ?? null,
+          date: body.date,
+          month: m,
+          year: y,
+        })
+        .returning();
+
+      if (body.repeat_monthly) {
+        await tx.insert(recurringTransactions).values({
+          userId: req.userId!,
+          category: body.category_key,
+          type: body.type,
+          amount: body.amount,
+          note: body.note?.trim() || null,
+          posted_through: monthStart(y, m),
+        });
+      }
+      return created;
+    });
 
     await recomputeBudgetClass(req.userId!);
     res.status(201).json(row);

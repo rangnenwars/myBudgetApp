@@ -1,0 +1,1 @@
+ALTER TABLE "loans" ADD COLUMN "emi_expensed_through" date;

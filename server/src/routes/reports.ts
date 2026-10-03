@@ -5,6 +5,8 @@ import { db } from '../db/client';
 import { loans, savingsGoals } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
+import { loanEmiMiddleware } from '../lib/loanEmiExpenses';
+import { recurringMiddleware } from '../lib/recurringTransactions';
 import { getTransactionsInRange } from '../lib/queries';
 import {
   computeMonthSummary,
@@ -17,7 +19,7 @@ import {
 } from '../calculations';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, loanEmiMiddleware, recurringMiddleware);
 
 const rangeQuery = z.object({
   startMonth: z.coerce.number().int().min(1).max(12),

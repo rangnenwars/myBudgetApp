@@ -11,6 +11,7 @@ import { useCategories } from '../../context/CategoriesContext';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 import { getMonthSummary, getCategoryBreakdown, getTransactions } from '../../utils/database';
 import { computeCategoryDeltas, computeSavingsRate, bucketForGroup, CategoryDelta, CategoryBucket } from '../../utils/calculations';
+import { shiftMonth } from '../../utils/dates';
 
 const BUCKET_LABEL: Record<CategoryBucket, string> = { expense: 'Expenses', loan: 'Loan payments', investment: 'Investments' };
 const BUCKET_COLOR: Record<CategoryBucket, string> = { expense: COLORS.red, loan: COLORS.blue, investment: COLORS.purple };
@@ -22,6 +23,10 @@ export default function DashboardScreen() {
   const { user, logout, refreshBudgetClass, isPro, isAdmin, setTier } = useAuth();
   const { categories, getCategory } = useCategories();
   const now = new Date();
+  const currentMonth = { month: now.getMonth() + 1, year: now.getFullYear() };
+  const [view, setView] = useState(currentMonth);
+  const isCurrentMonth = view.month === currentMonth.month && view.year === currentMonth.year;
+  const viewLabel = new Date(view.year, view.month - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, netSavings: 0 });
   const [topCategories, setTopCategories] = useState<{ category: string; total: number }[]>([]);
   const [deltas, setDeltas] = useState<CategoryDelta[]>([]);
@@ -30,17 +35,19 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
+      // Ignore a response that arrives after the user already moved to another month.
+      let active = true;
       (async () => {
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const { month, year } = view;
+        const prev = shiftMonth(view, -1);
 
         const [monthSummary, monthCategories, currentTxns, previousTxns] = await Promise.all([
           getMonthSummary(month, year),
           getCategoryBreakdown(month, year, 'expense'),
           getTransactions(month, year),
-          getTransactions(prev.getMonth() + 1, prev.getFullYear()),
+          getTransactions(prev.month, prev.year),
         ]);
+        if (!active) return;
 
         setSummary(monthSummary);
         setTopCategories(monthCategories.slice(0, 5));
@@ -56,12 +63,15 @@ export default function DashboardScreen() {
 
         refreshBudgetClass();
       })();
+      return () => {
+        active = false;
+      };
       // categories.length: re-run once CategoriesContext's initial fetch
       // resolves, so a focus that races ahead of it self-corrects instead
       // of leaving every category miscategorized as "expense" until the
       // next focus.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, categories.length])
+    }, [user?.id, categories.length, view.month, view.year])
   );
 
   const maxCategoryTotal = topCategories[0]?.total ?? 1;
@@ -72,9 +82,20 @@ export default function DashboardScreen() {
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.greeting}>Hi, {user?.name?.split(' ')[0] ?? 'there'}</Text>
-          <Text style={styles.monthLabel}>
-            {now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-          </Text>
+          <View style={styles.monthNav}>
+            <Pressable onPress={() => setView((v) => shiftMonth(v, -1))} hitSlop={8} style={styles.monthArrow}>
+              <Ionicons name="chevron-back" size={16} color={COLORS.textMuted} />
+            </Pressable>
+            <Text style={styles.monthLabel}>{viewLabel}</Text>
+            <Pressable
+              onPress={() => setView((v) => shiftMonth(v, 1))}
+              disabled={isCurrentMonth}
+              hitSlop={8}
+              style={[styles.monthArrow, isCurrentMonth && styles.monthArrowDisabled]}
+            >
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+            </Pressable>
+          </View>
         </View>
         <View style={styles.headerActions}>
           {isAdmin && (
@@ -120,10 +141,10 @@ export default function DashboardScreen() {
         </View>
       </Card>
 
-      <Text style={styles.sectionTitle}>This month's breakdown</Text>
+      <Text style={styles.sectionTitle}>{isCurrentMonth ? "This month's" : viewLabel} breakdown</Text>
       <Card>
         {breakdown.expense + breakdown.loan + breakdown.investment === 0 ? (
-          <Text style={styles.emptyText}>Nothing logged yet — try adding a transaction.</Text>
+          <Text style={styles.emptyText}>{isCurrentMonth ? 'Nothing logged yet — try adding a transaction.' : 'Nothing logged this month.'}</Text>
         ) : (
           (['expense', 'loan', 'investment'] as CategoryBucket[]).map((bucket, idx) => (
             <View key={bucket} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
@@ -199,7 +220,10 @@ const styles = StyleSheet.create({
   container: { padding: SPACING.lg, paddingBottom: SPACING.xl * 2, gap: SPACING.md },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   greeting: { color: COLORS.text, fontSize: 22, fontWeight: '700' },
-  monthLabel: { color: COLORS.textMuted, fontSize: 13, marginTop: 2 },
+  monthLabel: { color: COLORS.textMuted, fontSize: 13 },
+  monthNav: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginTop: 2 },
+  monthArrow: { padding: 2 },
+  monthArrowDisabled: { opacity: 0.3 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   logoutBtn: { padding: SPACING.xs },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },

@@ -34,7 +34,8 @@ users ──┬─< transactions >── categories
         ├─< net_worth_snapshots
         ├─< budgets >── categories
         ├─< refresh_tokens
-        └─< categories        (a user's own custom ones)
+        ├─< categories        (a user's own custom ones)
+        └─< admin_audit_log   (as actor and, separately, as target — see §3)
 
   ──<   = "one user has many"
   >──   = "many rows reference one"
@@ -74,16 +75,18 @@ CREATE INDEX idx_categories_user ON categories(user_id);
 -- users
 -- ============================================================
 CREATE TABLE users (
-  id            BIGSERIAL PRIMARY KEY,
-  name          TEXT NOT NULL,
-  email         TEXT NOT NULL,
-  password_hash TEXT NOT NULL,           -- bcrypt, server-side (see §5)
-  tier          TEXT NOT NULL DEFAULT 'standard' CHECK (tier IN ('standard', 'pro')),
-  budget_class  TEXT CHECK (budget_class IN ('low', 'middle', 'high', 'ultra_high', 'rich')),
-  role          TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
-  is_active     BOOLEAN NOT NULL DEFAULT true,  -- rejected at login/refresh when false — see §5
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id             BIGSERIAL PRIMARY KEY,
+  name           TEXT NOT NULL,
+  email          TEXT NOT NULL,
+  password_hash  TEXT NOT NULL,           -- bcrypt, server-side (see §5)
+  tier           TEXT NOT NULL DEFAULT 'standard' CHECK (tier IN ('standard', 'pro')),
+  budget_class   TEXT CHECK (budget_class IN ('low', 'middle', 'high', 'ultra_high', 'rich')),
+  role           TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'support', 'system_manager')),
+  is_active      BOOLEAN NOT NULL DEFAULT true,  -- rejected at login/refresh when false — see §5
+  deactivated_at TIMESTAMPTZ,             -- set/cleared alongside is_active by PATCH /admin/users/:id
+  last_login_at  TIMESTAMPTZ,             -- set on register/login, not on token refresh
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- case-insensitive uniqueness without needing the citext extension
 CREATE UNIQUE INDEX idx_users_email_lower ON users (lower(email));
@@ -121,6 +124,22 @@ CREATE INDEX idx_transactions_user_month ON transactions(user_id, year, month);
 CREATE INDEX idx_transactions_user_type_category ON transactions(user_id, type, category_key);
 
 -- ============================================================
+-- recurring_transactions  ("repeat every month" rules)
+-- ============================================================
+CREATE TABLE recurring_transactions (
+  id             BIGSERIAL PRIMARY KEY,
+  user_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category_key   TEXT NOT NULL REFERENCES categories(key),
+  type           TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  amount         NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  note           TEXT,
+  posted_through DATE NOT NULL,   -- first day of the latest month already posted; advanced as months are posted
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_recurring_user ON recurring_transactions(user_id);
+
+-- ============================================================
 -- loans
 -- ============================================================
 CREATE TABLE loans (
@@ -137,6 +156,8 @@ CREATE TABLE loans (
   lender        TEXT,
   note          TEXT,
   is_active     BOOLEAN NOT NULL DEFAULT true,
+  counts_as_expense BOOLEAN NOT NULL DEFAULT true,  -- false: no monthly EMI expense is auto-posted; the debt still counts as a liability
+  emi_expensed_through DATE,                        -- first day of the latest month whose EMI expense was auto-posted (NULL = none yet)
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -218,6 +239,26 @@ CREATE TABLE budgets (
   monthly_limit NUMERIC(12,2) NOT NULL CHECK (monthly_limit > 0),
   UNIQUE (user_id, category_key)
 );
+
+-- ============================================================
+-- admin_audit_log — one row per role/tier/active/delete change made
+-- through /api/v1/admin/users, by an admin or support account. Account
+-- metadata only (actor/target email, which field changed) — never touches
+-- transactions/loans/investments/goals, same invariant as the admin routes.
+-- ============================================================
+CREATE TABLE admin_audit_log (
+  id          BIGSERIAL PRIMARY KEY,
+  actor_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,  -- who made the change
+  actor_email TEXT NOT NULL,                                   -- snapshotted so the row stays readable if actor_id is later nulled
+  target_id   BIGINT REFERENCES users(id) ON DELETE SET NULL,  -- account that was changed
+  target_email TEXT NOT NULL,                                  -- snapshotted for the same reason, incl. after the account is deleted
+  action      TEXT NOT NULL,                                   -- 'account_updated' | 'account_deleted'
+  details     TEXT,                                            -- e.g. "role: user -> admin, tier: standard -> pro"
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_admin_audit_actor ON admin_audit_log(actor_id);
+CREATE INDEX idx_admin_audit_target ON admin_audit_log(target_id);
+CREATE INDEX idx_admin_audit_created ON admin_audit_log(created_at);
 ```
 
 ---
@@ -245,7 +286,12 @@ CREATE TABLE budgets (
 - Passwords hashed server-side with **bcrypt** (cost factor 12) — `AuthContext.tsx`'s old client-side SHA-256 (`expo-crypto`) is gone entirely; that was only ever a placeholder for a build with no server to hash against.
 - **JWT access token**, short-lived (15 min), sent as `Authorization: Bearer`.
 - **Refresh token**, long-lived (30d), stored hashed in `refresh_tokens`, rotated on every use (old one revoked, new one issued) — matches the original spec's token lifetimes.
-- **Access control**: `users.role` (`'user' | 'admin'`) and `users.isActive` gate every request. `requireAdmin` middleware (`server/src/middleware/requireAdmin.ts`) re-checks `role` against the database on every admin-route request rather than trusting a JWT claim, so an admin's access changes take effect immediately. Login and refresh both reject a deactivated (`isActive: false`) account — see `docs/README.md` §3a for the exact behavior.
+- **Access control**: `users.role` (`'user' | 'admin' | 'support' | 'system_manager'`) and `users.isActive` gate every request. Three role-gate middlewares, all re-checking the database on every request rather than trusting a JWT claim, so a role change or deactivation takes effect immediately instead of waiting for the access token to expire:
+  - `requireAdmin` (`server/src/middleware/requireAdmin.ts`) — `role: 'admin'` only. Gates `DELETE /admin/users/:id` and the audit log.
+  - `requireStaff` (`server/src/middleware/requireStaff.ts`) — `'admin' | 'support'`. Gates `GET`/`PATCH /admin/users`; `PATCH` further restricts `support` to the `isActive` field only (`routes/admin.ts` returns 403 if a support caller's body includes `role` or `tier`) — never role changes, never tier, never delete.
+  - `requireSystemManager` (`server/src/middleware/requireSystemManager.ts`) — `'admin' | 'system_manager'`. Gates `GET /api/v1/system/metrics` only; a `system_manager` account never reaches the per-account list or any account action.
+- Login and refresh both reject a deactivated (`isActive: false`) account — see `docs/README.md` §3a for the exact behavior. `deactivated_at` is set/cleared alongside `is_active` (not derived from `updated_at`, which every field change touches); `last_login_at` is set on register and login, not on refresh.
+- Every `PATCH`/`DELETE` on `/admin/users/:id` writes one row to `admin_audit_log` (actor, target, which fields changed) before the target row is touched — see the table DDL above. Readable via `GET /api/v1/admin/audit-log`, admin-only.
 
 ---
 
@@ -263,4 +309,4 @@ CREATE TABLE budgets (
 
 ## Status
 
-Fully implemented and verified: 134 server-side integration/e2e tests (Supertest against real Postgres, no mocking, coverage-enforced — see `docs/API_REFERENCE.md`) plus 47 client-side unit tests, all passing, run automatically before every commit via a Husky pre-commit hook. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.
+Fully implemented and verified: 142 server-side integration/e2e tests (Supertest against real Postgres, no mocking, coverage-enforced — see `docs/API_REFERENCE.md`) plus 47 client-side unit tests, all passing, run automatically before every commit via a Husky pre-commit hook. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.

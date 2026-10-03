@@ -17,6 +17,9 @@ const ACCOUNTS = [
 ];
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to seed demo accounts with published passwords in production. Use src/db/create-admin.ts instead.');
+  }
   for (const acc of ACCOUNTS) {
     const passwordHash = await bcrypt.hash(acc.password, BCRYPT_COST);
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, acc.email));

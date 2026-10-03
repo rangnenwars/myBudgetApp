@@ -17,6 +17,7 @@ Personal budgeting app, built from `DESIGN_SPEC_v2.md` / `MASTER_BUILD_PROMPT_v2
 | [PRO_FEATURES_DESIGN.md](PRO_FEATURES_DESIGN.md) | Pro feature roadmap, Ramsey Solutions research, data/session design |
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | PostgreSQL schema design — implemented, matches `server/src/db/schema.ts` |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Step-by-step guide to deploying this app on a cloud Linux server — provisioning, Docker, TLS, hardening, backups |
+| [DEPLOYMENT_DIGITALOCEAN.md](DEPLOYMENT_DIGITALOCEAN.md) | Production plan for prapanji.in on a DigitalOcean Droplet with GitHub Actions CI/CD — GHCR images, Caddy TLS, approval-gated deploys, rollback, backups |
 | [MASTER_BUILD_PROMPT_v3_BACKEND.md](MASTER_BUILD_PROMPT_v3_BACKEND.md) | Server structure, API endpoints, auth flow, Docker changes, client integration — implemented and verified |
 | [pro-roadmap.html](pro-roadmap.html) · [live](https://claude.ai/code/artifact/80837269-945e-4a79-b5da-678c946641a1) | Rendered version of the Pro roadmap |
 | [architecture-flows.html](architecture-flows.html) · [live](https://claude.ai/code/artifact/3787e434-ead3-4e0a-881d-119411b2a53d) | Layered architecture, debt-payoff simulation, bulk-entry/bucketing, Docker deployment, test coverage map |
@@ -84,11 +85,11 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 
 **Free (Standard tier)**
 - **Auth** — register/login with email + password, server-side bcrypt + JWT session, no guest mode
-- **Dashboard** — current-month income/expense/net savings, top-5 expense categories, budget-class badge, Expense/Loan/Investment breakdown
+- **Dashboard** — income/expense/net savings for the current month (‹ › arrows step back to earlier months), top-5 expense categories, budget-class badge, Expense/Loan/Investment breakdown
 - **Input expenses** — bulk entry screen: pick Monthly/Quarterly/Yearly, add one row per category+amount, save all at once (mirrors the original Excel workflow)
-- **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, optional Monthly/Quarterly/Yearly period on new entries (converted to a monthly-equivalent amount, same as Input Expenses) — tap a row to edit it, tap the trash icon to delete it
+- **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, a date for every entry (Today by default, or Yesterday / any past date via the date control; future dates are rejected; editing can change it too), and a Once/Monthly/Quarterly/Yearly period on new entries (Once logs the exact amount on the chosen date; Quarterly/Yearly are converted to a monthly-equivalent amount, same as Input Expenses), and a "Repeat every month" switch for salary, rent or any fixed monthly amount (income or expense) — the entry is added again on the 1st of each following month until stopped from the "Repeating" button (edit the amount or stop it) — tap a row to edit it, tap the trash icon to delete it
 - **Custom categories** — add, rename, and delete your own category (name + income/expense) from any category picker, with a search box to find items once the list grows — see §3a
-- **Loans** — add/edit/delete, track principal/outstanding/EMI/interest rate, "mark EMI paid" button — tap a card to edit any field, trash icon to delete
+- **Loans** — add/edit/delete, track principal/outstanding/EMI/interest rate, "mark EMI paid" button (lowers the balance only). A per-loan "Add monthly EMI to expenses" toggle (on by default) decides whether the loan's EMI is posted to expenses automatically every month as a `Loan EMI` transaction — see API_REFERENCE "Automatic monthly EMI expenses"; either way the outstanding debt shows under Reports → Liabilities and in net worth. "Part payment" button (prepayment): lowers the outstanding balance and scales the EMI down proportionally so the remaining tenure is unchanged, with a live before/after preview — tap a card to edit any field, trash icon to delete
 - **Investments** — add/edit/delete, invested vs. current value, auto-computed gain % (recomputed server-side on every edit), portfolio summary — tap a card to edit, trash icon to delete
 - **Goals** — add/edit/delete, contribute funds, progress bar toward target — tap a card to edit name/target, trash icon to delete
 
@@ -99,11 +100,14 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 - **Spending insights** (Dashboard) — month-over-month category deltas, savings rate
 - **Net worth tracking** — computed live (investments + goal savings − loan outstanding) and snapshotted monthly for trending in Reports
 
-**Admin (role: 'admin' accounts only)**
+**Admin (role: 'admin' accounts only, unless noted)**
 - **User management** (`/admin`, shield icon on the Dashboard) — list every account (name, email, role, tier, active status, budget class, join date), without visibility into anyone's financial data
-- **Access control** — activate/deactivate any account (deactivated accounts are rejected at login, and mid-session within one refresh cycle — see §3a), promote/demote between `user` and `admin`, override tier
+- **Access control** — activate/deactivate any account (deactivated accounts are rejected at login, and mid-session within one refresh cycle — see §3a), promote/demote between `user`/`admin`/`support`/`system_manager`, override tier
 - **Account deletion** — permanently remove an account and everything it owns (cascading delete)
 - An admin can never modify or delete their own account through this screen (self-lockout is structurally impossible, not just guarded) — use your own login to change your own settings
+- **Support role** (server-only today, no dedicated screen) — same `GET`/`PATCH /admin/users` surface as admin, but restricted to activating/deactivating an account; a `PATCH` body containing `role` or `tier` from a support account is rejected with 403. Can't delete accounts.
+- **System manager role** (server-only today, no dedicated screen) — read-only access to `GET /api/v1/system/metrics` only (user counts, active/inactive split, signup and login activity, aggregate usage counts, a cost/revenue estimate at ₹100/user/year). Never reaches the per-account list or any account action.
+- **Admin audit log** — every `PATCH`/`DELETE` on an account is recorded (actor, target, what changed) and readable via `GET /api/v1/admin/audit-log`, admin-only.
 
 ---
 
@@ -111,11 +115,13 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 
 **Custom categories.** Every category is a row in the server's `categories` table. System categories (seeded from `constants/categories.ts`, `user_id NULL`) are shared by everyone and can't be deleted or renamed. `POST /api/v1/categories { name, type }` creates a new one owned by the caller (`group: 'Custom'`, a rotating icon/color, a generated `custom_xxxxxxxx` key) — `GET /api/v1/categories` returns system categories plus only the caller's own, and the `CategoryPicker` component's search box filters that combined list client-side once it grows. `PATCH /api/v1/categories/:key { name }` renames the caller's own custom category (the `key` never changes, so nothing referencing it breaks). `DELETE /api/v1/categories/:key` is rejected with 403 for a system category, 404 for another user's custom category (existence isn't leaked), and 409 if it's still referenced by one of the user's own transactions (the database's foreign key is what actually enforces this — the route just turns the constraint violation into a friendly message). `POST /transactions` independently re-validates that a submitted category is a system category or belongs to the caller, so a guessed/leaked custom category key from another account can't be used to log a transaction against it.
 
-**Access control.** `users.role` (`'user' | 'admin'`) and `users.isActive` gate everything:
-- `POST /api/v1/auth/login` rejects a correct password with 403 if `isActive` is false (checked only after the password is verified, so it can't be used to enumerate accounts).
+**Access control.** `users.role` (`'user' | 'admin' | 'support' | 'system_manager'`) and `users.isActive` gate everything:
+- `POST /api/v1/auth/login` rejects a correct password with 403 if `isActive` is false (checked only after the password is verified, so it can't be used to enumerate accounts). A successful login (and register) also stamps `lastLoginAt`.
 - `POST /api/v1/auth/refresh` re-checks `isActive` on every refresh and revokes the refresh token if the account has since been deactivated — a deactivated user's session dies within one access-token lifetime (15 min), even if they were already logged in.
-- `/api/v1/admin/users/*` requires `requireAuth` then `requireAdmin` (`server/src/middleware/requireAdmin.ts`), which looks the caller's role up fresh from the database on every request rather than trusting a JWT claim, so a demotion takes effect immediately on this surface instead of waiting for token expiry.
+- `GET`/`PATCH /api/v1/admin/users/*` require `requireAuth` then `requireStaff` (`server/src/middleware/requireStaff.ts`, `'admin' | 'support'`); `DELETE` requires `requireAdmin` (`server/src/middleware/requireAdmin.ts`, `'admin'` only). `GET /api/v1/system/metrics` requires `requireSystemManager` (`'admin' | 'system_manager'`) instead. All three look the caller's role up fresh from the database on every request rather than trusting a JWT claim, so a demotion takes effect immediately instead of waiting for token expiry.
 - Every admin route refuses to act on the caller's own account (`id === req.userId` → 400) — since the acting admin is therefore always still a valid active admin after any operation the endpoint allows, there's no separate "don't demote the last admin" check needed; self-modification being blocked already makes that scenario unreachable.
+- `isActive: false` also stamps `deactivatedAt` (cleared on reactivation) — kept separate from `updatedAt`, which every field change touches, so "inactive since when" stays answerable.
+- Every `PATCH`/`DELETE` on an account writes a row to `admin_audit_log` (actor, target, which fields changed) — see [DATABASE_DESIGN.md](DATABASE_DESIGN.md) and [API_REFERENCE.md](API_REFERENCE.md#admin-audit-log--apiv1adminaudit-log-).
 
 ---
 
@@ -198,14 +204,14 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 
 **Client** (repo root):
 ```bash
-npm test              # run once — 47 tests, utils/calculations.ts only
+npm test              # run once — 64 tests (utils/calculations.ts + utils/dates.ts)
 npm run test:watch    # watch mode
 npm run test:coverage # with coverage report
 npm run typecheck     # tsc --noEmit
 npm run quality       # typecheck + coverage — the single gate to run before any build
 ```
 
-47 tests cover every function in `utils/calculations.ts` (100% line/function coverage, 98% branch), enforced by a coverage threshold in `package.json`. The root Jest config excludes `server/` (`testPathIgnorePatterns`), since the server has its own Jest config and needs a live Postgres connection.
+52 tests cover every function in `utils/calculations.ts` (100% line/function coverage, 98% branch), enforced by a coverage threshold in `package.json`. The root Jest config excludes `server/` (`testPathIgnorePatterns`), since the server has its own Jest config and needs a live Postgres connection.
 
 **Server** (`server/`):
 ```bash

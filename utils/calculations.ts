@@ -186,6 +186,32 @@ export const simulateDebtPayoff = (loans: Loan[], strategy: DebtStrategy, extraP
   return results;
 };
 
+// ---------- Loan part payment ----------
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+export interface PartPaymentResult {
+  outstanding: number;
+  emi: number;
+  /** Instalments left at the new EMI — the same figure the Loans screen shows as "N mo left". null when fully paid. */
+  monthsLeft: number | null;
+}
+
+/**
+ * Applies a part payment to a loan: the outstanding balance drops by `amount`
+ * and the EMI is scaled by the same ratio, which keeps the remaining number of
+ * instalments unchanged (for a fixed-rate loan the EMI is linear in the
+ * outstanding principal, so this is exact rather than an approximation). A
+ * payment that clears the balance leaves the EMI as-is — the stored EMI must
+ * stay positive. Callers validate 0 < amount <= outstanding.
+ */
+export const computePartPayment = (loan: Pick<Loan, 'outstanding' | 'emi'>, amount: number): PartPaymentResult => {
+  const outstanding = round2(loan.outstanding - amount);
+  if (outstanding <= 0) return { outstanding: 0, emi: loan.emi, monthsLeft: null };
+  const emi = Math.max(0.01, round2(loan.emi * (outstanding / loan.outstanding)));
+  return { outstanding, emi, monthsLeft: Math.ceil(outstanding / emi) };
+};
+
 // ---------- Goal ETA ----------
 
 export interface GoalETA {

@@ -10,6 +10,7 @@ import {
   computeNetWorth,
   computeDebtOrder,
   simulateDebtPayoff,
+  computePartPayment,
   computeGoalETA,
   transactionsToCsv,
   bucketForGroup,
@@ -48,6 +49,7 @@ const loan = (overrides: Partial<Loan>): Loan => ({
   lender: null,
   note: null,
   is_active: true,
+  counts_as_expense: true,
   ...overrides,
 });
 
@@ -323,6 +325,35 @@ describe('simulateDebtPayoff', () => {
 });
 
 // ---------- computeGoalETA ----------
+
+describe('computePartPayment', () => {
+  it('lowers the balance and scales the EMI by the same ratio', () => {
+    const result = computePartPayment({ outstanding: 100_000, emi: 10_000 }, 25_000);
+    expect(result).toEqual({ outstanding: 75_000, emi: 7_500, monthsLeft: 10 });
+  });
+
+  it('keeps the remaining number of instalments unchanged', () => {
+    const before = Math.ceil(240_000 / 12_000);
+    const after = computePartPayment({ outstanding: 240_000, emi: 12_000 }, 60_000);
+    expect(after.monthsLeft).toBe(before);
+  });
+
+  it('rounds to paise so repeated payments do not drift', () => {
+    const result = computePartPayment({ outstanding: 100_000, emi: 3_333 }, 1);
+    expect(result.outstanding).toBe(99_999);
+    expect(result.emi).toBe(3_332.97);
+  });
+
+  it('leaves the EMI untouched and reports no months left when the payment clears the loan', () => {
+    expect(computePartPayment({ outstanding: 5_000, emi: 1_000 }, 5_000)).toEqual({ outstanding: 0, emi: 1_000, monthsLeft: null });
+  });
+
+  it('never lets the EMI fall to zero', () => {
+    const result = computePartPayment({ outstanding: 1_000_000, emi: 1 }, 999_999);
+    expect(result.outstanding).toBe(1);
+    expect(result.emi).toBe(0.01);
+  });
+});
 
 describe('computeGoalETA', () => {
   it('reports already-reached goals as 0 months', () => {

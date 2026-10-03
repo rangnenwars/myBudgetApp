@@ -22,6 +22,34 @@
       "when": 1789385871222,
       "tag": "0002_light_spitfire",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789575129976,
+      "tag": "0003_noisy_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789787320261,
+      "tag": "0004_abnormal_lily_hollister",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789789013822,
+      "tag": "0005_adorable_doctor_doom",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790992839508,
+      "tag": "0006_daily_virginia_dare",
+      "breakpoints": true
     }
   ]
 }

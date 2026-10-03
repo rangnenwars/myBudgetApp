@@ -114,7 +114,7 @@ router.delete(
       // real pg error (with .code) inside a DrizzleQueryError's .cause.
       const pgCode = (err as { code?: string; cause?: { code?: string } }).cause?.code ?? (err as { code?: string }).code;
       if (pgCode === '23503') {
-        throw conflict('This category is used by existing transactions and cannot be deleted.');
+        throw conflict('This category is used by existing transactions or repeating entries and cannot be deleted.');
       }
       throw err;
     }

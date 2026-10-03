@@ -11,7 +11,7 @@
 // from the JWT) so screen call sites needed minimal changes.
 
 import { api } from './api';
-import { TxnType, Transaction, Loan, Investment, SavingsGoal, GoalContribution, MonthSummary, CategoryTotal } from './types';
+import { TxnType, Transaction, RecurringTransaction, Loan, Investment, SavingsGoal, GoalContribution, MonthSummary, CategoryTotal } from './types';
 import { Category, CategoryType } from '../constants/categories';
 
 export * from './types';
@@ -19,7 +19,8 @@ export * from './calculations';
 
 // ---------- Transactions ----------
 
-export const addTransaction = async (t: Omit<Transaction, 'id' | 'created_at'>): Promise<Transaction> => {
+/** `repeat_monthly` also saves a rule so the same entry posts again on the 1st of every following month. */
+export const addTransaction = async (t: Omit<Transaction, 'id' | 'created_at'> & { repeat_monthly?: boolean }): Promise<Transaction> => {
   const { data } = await api.post('/transactions', {
     amount: t.amount,
     type: t.type,
@@ -27,6 +28,7 @@ export const addTransaction = async (t: Omit<Transaction, 'id' | 'created_at'>):
     subcategory: t.subcategory,
     note: t.note,
     date: t.date,
+    repeat_monthly: t.repeat_monthly,
   });
   return data;
 };
@@ -97,24 +99,61 @@ export const getExportCsv = async (startMonth: number, startYear: number, endMon
   return data;
 };
 
+// ---------- Repeating (monthly) entries ----------
+
+export const getRecurring = async (): Promise<RecurringTransaction[]> => {
+  const { data } = await api.get('/recurring');
+  return data;
+};
+
+/** Makes an existing transaction repeat monthly (posting resumes from the month after it). */
+export const repeatTransactionMonthly = async (transactionId: number): Promise<RecurringTransaction> => {
+  const { data } = await api.post('/recurring', { transaction_id: transactionId });
+  return data;
+};
+
+/** A new amount applies to months not yet posted; already-posted transactions keep theirs. */
+export const updateRecurring = async (id: number, patch: Partial<{ amount: number; note: string | null }>): Promise<RecurringTransaction> => {
+  const { data } = await api.patch(`/recurring/${id}`, patch);
+  return data;
+};
+
+/** Stops the repeat. Transactions already posted stay. */
+export const deleteRecurring = async (id: number): Promise<void> => {
+  await api.delete(`/recurring/${id}`);
+};
+
 // ---------- Loans ----------
 
-export const addLoan = async (l: Omit<Loan, 'id' | 'is_active'>): Promise<Loan> => {
+export const addLoan = async (l: Omit<Loan, 'id' | 'is_active' | 'counts_as_expense'> & { counts_as_expense?: boolean }): Promise<Loan> => {
   const { data } = await api.post('/loans', {
     name: l.name,
     principal: l.principal,
     outstanding: l.outstanding,
     emi: l.emi,
     interest_rate: l.interest_rate,
+    counts_as_expense: l.counts_as_expense,
   });
   return data;
 };
 
 export const updateLoan = async (
   id: number,
-  patch: Partial<{ name: string; principal: number; outstanding: number; emi: number; interest_rate: number | null }>
+  patch: Partial<{ name: string; principal: number; outstanding: number; emi: number; interest_rate: number | null; counts_as_expense: boolean }>
 ): Promise<Loan> => {
   const { data } = await api.patch(`/loans/${id}`, patch);
+  return data;
+};
+
+/** Marks one EMI as paid: the server lowers `outstanding` only. It does not log an expense — a counted loan's monthly EMI is posted automatically by the server, and an excluded loan stays out of expenses. */
+export const payLoanEmi = async (id: number, date: string): Promise<{ loan: Loan }> => {
+  const { data } = await api.post(`/loans/${id}/pay-emi`, { date });
+  return data;
+};
+
+/** Part payment / prepayment: the server lowers `outstanding` by `amount` and scales `emi` down proportionally (see computePartPayment). Logs an expense transaction only if the loan counts as an expense. */
+export const payLoanPartial = async (id: number, amount: number, date: string): Promise<{ loan: Loan; transaction: Transaction | null }> => {
+  const { data } = await api.post(`/loans/${id}/part-payment`, { amount, date });
   return data;
 };
 
@@ -217,15 +256,19 @@ export const deleteCategory = async (key: string): Promise<void> => {
 
 // ---------- Admin (role: 'admin' only — see context/AuthContext.tsx isAdmin) ----------
 
+export type AdminRole = 'user' | 'admin' | 'support' | 'system_manager';
+
 export interface AdminUser {
   id: number;
   name: string;
   email: string;
-  role: 'user' | 'admin';
+  role: AdminRole;
   tier: 'standard' | 'pro';
   isActive: boolean;
   budgetClass: string | null;
   createdAt: string;
+  deactivatedAt: string | null;
+  lastLoginAt: string | null;
 }
 
 export const getAdminUsers = async (): Promise<AdminUser[]> => {
@@ -235,7 +278,7 @@ export const getAdminUsers = async (): Promise<AdminUser[]> => {
 
 export const updateAdminUser = async (
   id: number,
-  patch: Partial<{ role: 'user' | 'admin'; isActive: boolean; tier: 'standard' | 'pro' }>
+  patch: Partial<{ role: AdminRole; isActive: boolean; tier: 'standard' | 'pro' }>
 ): Promise<AdminUser> => {
   const { data } = await api.patch(`/admin/users/${id}`, patch);
   return data;

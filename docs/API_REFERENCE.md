@@ -111,6 +111,7 @@ Query (all required, all coerced ints): `startMonth`, `startYear`, `endMonth`, `
 
 ### `POST /transactions` 🔒
 Body: `{ amount: number (>0), type: 'income'|'expense', category_key: string, subcategory?: string|null, note?: string|null, date: string (YYYY-MM-DD) }`
+Optional `repeat_monthly: boolean` — also saves a repeating rule (see **Repeating entries** below): the same entry is added again on the 1st of every following month. Create-only; `PATCH` ignores it. The entry and its rule are written in one transaction.
 → **201** `Transaction` — also recomputes and persists `users.budgetClass` server-side as a side effect
 Errors: 400 invalid body, or `category_key` doesn't exist / isn't a system category / isn't the caller's own custom category
 
@@ -130,20 +131,60 @@ Errors: 404 not found, or belongs to another user
 
 ---
 
+## Repeating entries — `/api/v1/recurring`
+
+A rule created by `POST /transactions` with `repeat_monthly: true`. There is no scheduler: before any request to `/transactions`, `/reports` is served (`recurringMiddleware`, `server/src/lib/recurringTransactions.ts`), the server posts each missing month as an ordinary transaction (same type, category and the rule's current amount; dated the **1st** of the month; note = the rule's note, or `Repeats monthly`). The user's original entry keeps its own date; posting starts with the following month and runs up to the current month, oldest first, capped at the latest 24. `posted_through` on the rule records how far it has got, so posting is idempotent, safe under parallel requests (rows are locked), and a posted transaction the user deletes does not come back. Posted months are normal transactions — they appear in the Transactions list, Reports, trends and CSV export.
+
+### `GET /recurring` 🔒
+→ **200** `Recurring[]`, newest first — `{ id, type, category, amount, note, posted_through, created_at, updated_at }`
+
+### `POST /recurring` 🔒
+Body: `{ transaction_id: number }` — makes an **existing** transaction repeat monthly. The rule copies its type, category, amount and note, and posting resumes from the month after it (e.g. a September salary starts posting in October). A rule with the same type, category and amount is refused so a double tap can't post every month twice.
+→ **201** `Recurring`
+Errors: 400 missing/invalid `transaction_id` · 404 transaction not found / not yours · 409 an identical entry already repeats
+
+### `PATCH /recurring/:id` 🔒
+Body: at least one of `{ amount: number (>0), note: string|null }`. A new amount applies to months not yet posted; transactions already posted keep theirs.
+→ **200** `Recurring`
+Errors: 400 empty body or invalid field · 404 not found / not yours
+
+### `DELETE /recurring/:id` 🔒
+Stops the repeat. Transactions already posted stay.
+→ **204**
+Errors: 404 not found / not yours
+
+A category used by a rule cannot be deleted (409), same as one used by a transaction.
+
+---
+
 ## Loans — `/api/v1/loans`
+
+**Automatic monthly EMI expenses.** A loan with `counts_as_expense: true` (the default), a positive `emi` and `outstanding > 0` contributes its EMI to expenses every month. There is no scheduler: before any request to `/loans`, `/transactions` or `/reports` is served (`loanEmiMiddleware`, `server/src/lib/loanEmiExpenses.ts`), the server posts any missing months as `expense` transactions (category `loan_emi`, note `EMI - <loan name>`, dated the 1st of the month, amount = the loan's `emi` at posting time). A loan never posted before gets only the current month (its history isn't known); after a gap every missed month is posted, oldest first, capped at the latest 24. The loan's `emi_expensed_through` records how far posting has got, so it is idempotent, safe under parallel requests (rows are locked), and a posted transaction the user deletes does not come back. Switching a loan from off to on never back-fills the months it was off. Posted months are ordinary transactions: they appear in the Transactions list, Reports, trends and CSV export. Loans with `counts_as_expense: false` or `outstanding: 0` are skipped, but their `outstanding` still counts as a liability (net worth, Reports → Liabilities).
 
 ### `GET /loans` 🔒
 → **200** `Loan[]` — only rows where `is_active: true`, newest first
 
 ### `POST /loans` 🔒
-Body: `{ name: string, principal: number (>0), outstanding: number (>=0), emi: number (>0), interest_rate?: number|null }`
-→ **201** `Loan` (`is_active: true` by default)
+Body: `{ name: string, principal: number (>0), outstanding: number (>=0), emi: number (>0), interest_rate?: number|null, counts_as_expense?: boolean }`
+→ **201** `Loan` (`is_active: true` and `counts_as_expense: true` by default)
 Errors: 400 invalid body
 
 ### `PATCH /loans/:id` 🔒
-Body: any non-empty subset of `{ name, principal, outstanding, emi, interest_rate }` (same constraints as `POST`) — the "mark EMI paid" action sends just `{ outstanding: outstanding - emi }`; the Loans screen's edit form can send any/all of them
+Body: any non-empty subset of `{ name, principal, outstanding, emi, interest_rate, counts_as_expense }` (same constraints as `POST`) — the Loans screen's edit form can send any/all of them. ("Mark EMI paid" no longer uses this — see `POST /loans/:id/pay-emi`.)
 → **200** `Loan`
 Errors: 400 empty body or invalid field · 404 not found / not yours
+
+### `POST /loans/:id/pay-emi` 🔒
+Body: `{ date: 'YYYY-MM-DD' }`
+Marks one EMI as paid: lowers `outstanding` by `min(emi, outstanding)`. It never creates an expense transaction — a counted loan's EMI for the month is already posted automatically (see above), and an excluded loan must stay out of expenses. Deleting a transaction later does **not** restore the loan balance.
+→ **201** `{ loan: Loan }`
+Errors: 400 malformed date, or loan already fully paid (`outstanding` is 0) · 404 not found / not yours
+
+### `POST /loans/:id/part-payment` 🔒
+Body: `{ amount: number (>0), date: 'YYYY-MM-DD' }`
+Records a part payment (prepayment). `outstanding` drops by `amount` and `emi` is scaled by the same ratio (`new emi = emi × new outstanding ÷ old outstanding`, rounded to paise, never below 0.01), which keeps the number of instalments left unchanged. `principal` (the original amount) is untouched, so "% paid" counts the prepayment. A payment equal to `outstanding` closes the loan (`outstanding: 0`) and leaves `emi` as it was. An expense transaction (category `loan_part_payment`, note `Part payment - <loan name>`) is inserted only when the loan's `counts_as_expense` is true; otherwise only the loan changes. Balance and transaction are written atomically.
+→ **201** `{ loan: Loan, transaction: Transaction | null }`
+Errors: 400 amount ≤ 0 / not a number, amount greater than `outstanding`, malformed date, or loan already fully paid · 404 not found / not yours
 
 ### `DELETE /loans/:id` 🔒
 → **204**
@@ -243,24 +284,60 @@ Query: `strategy: 'snowball'|'avalanche'` (default `snowball`), `extraPerMonth: 
 
 ## Admin — `/api/v1/admin/users` 🔒🛡️
 
-Every route below requires `role: 'admin'`, re-checked from the database on every request (not from the JWT). None of them expose any user's financial data — account fields only.
+`GET`/`PATCH` require `role: 'admin'` or `role: 'support'` (`requireStaff`); `DELETE` requires `role: 'admin'` only (`requireAdmin`). Role is re-checked from the database on every request, never from the JWT. None of these routes expose any user's financial data — account fields only.
 
 ### `GET /admin/users`
 → **200** `AdminUser[]`, ordered by `createdAt`
 
 ### `PATCH /admin/users/:id`
-Body: at least one of `{ role: 'user'|'admin', isActive: boolean, tier: 'standard'|'pro' }`
+Body: at least one of `{ role: 'user'|'admin'|'support'|'system_manager', isActive: boolean, tier: 'standard'|'pro' }`
 → **200** `AdminUser`
-Errors: 400 empty body, or `:id` is the caller's own account (use your own login to change your own settings — this is also what makes a "last admin" lockout structurally impossible, see [README.md §3a](README.md#3a-custom-categories--access-control--how-they-actually-work)) · 404 not found
+Errors: 400 empty body, or `:id` is the caller's own account (use your own login to change your own settings — this is also what makes a "last admin" lockout structurally impossible, see [README.md §3a](README.md#3a-custom-categories--access-control--how-they-actually-work)) · 403 caller is `support` and the body includes `role` or `tier` (support may only flip `isActive`) · 404 not found
+
+Setting `isActive: false` also stamps `deactivatedAt`; setting it back to `true` clears it. Every successful `PATCH` writes one row to the admin audit log (see below).
 
 ### `DELETE /admin/users/:id`
 → **204** — cascades to everything that account owns (transactions, loans, investments, goals, categories, etc.)
-Errors: 400 `:id` is the caller's own account · 404 not found
+Errors: 400 `:id` is the caller's own account · 403 caller is `support`, not `admin` · 404 not found
+
+Writes one `account_deleted` row to the admin audit log before the account itself is removed.
 
 **`AdminUser` shape:**
 ```json
-{ "id": 2, "name": "Bob", "email": "bob@example.com", "role": "user", "tier": "standard", "isActive": true, "budgetClass": null, "createdAt": "2026-08-29T09:00:00.000Z" }
+{ "id": 2, "name": "Bob", "email": "bob@example.com", "role": "user", "tier": "standard", "isActive": true, "budgetClass": null, "createdAt": "2026-08-29T09:00:00.000Z", "deactivatedAt": null, "lastLoginAt": "2026-09-16T08:12:00.000Z" }
 ```
+
+---
+
+## Admin audit log — `/api/v1/admin/audit-log` 🔒🛡️
+
+Admin-only (`requireAdmin` — not `support`, since this is a record of what staff did, not an account-management action itself).
+
+### `GET /admin/audit-log`
+→ **200** `AdminAuditLogEntry[]`, up to the 100 most recent, newest first
+```json
+{ "id": 5, "actorId": 2, "actorEmail": "admin@mybudget.local", "targetId": 9, "targetEmail": "bob@example.com", "action": "account_updated", "details": "tier: standard -> pro", "createdAt": "2026-09-16T08:12:00.000Z" }
+```
+`action` is `account_updated` or `account_deleted`. `actorId`/`targetId` are `ON DELETE SET NULL` — if that account is later deleted, the id goes `null` but `actorEmail`/`targetEmail` (snapshotted at write time) keep the entry readable.
+
+---
+
+## System metrics — `/api/v1/system/metrics` 🔒🛡️
+
+Requires `role: 'admin'` or `role: 'system_manager'` (`requireSystemManager`). Every field is a count or a date — this route never selects a row from `transactions`/`loans`/`investments`/`savings_goals`, only how many exist.
+
+### `GET /system/metrics`
+→ **200**
+```json
+{
+  "users": { "total": 42, "active": 39, "inactive": 3, "byRole": { "user": 38, "admin": 1, "support": 2, "system_manager": 1 }, "byTier": { "standard": 30, "pro": 12 } },
+  "signups": { "last30Days": 5 },
+  "engagement": { "loggedInLast30Days": 20, "loggedInLast7Days": 8 },
+  "usage": { "transactions": 1204, "loans": 18, "investments": 25, "goals": 40, "customCategories": 11 },
+  "finance": { "costPerUserPerYearInr": 100, "estimatedAnnualCostInr": 3900, "proUsers": 12, "estimatedAnnualRevenueInr": 0, "estimatedAnnualMarginInr": -3900, "revenueNote": "No real billing wired up yet — Pro is a test-mode toggle (docs/README.md)." }
+}
+```
+`costPerUserPerYearInr` (₹100) is a planning assumption, not a billed rate. `estimatedAnnualRevenueInr` is always `0` today since there's no real payment processor (see README.md "Known deviations") — this route exists so that stays a visible number instead of a silent gap once real billing is added.
 
 ---
 
@@ -268,4 +345,4 @@ Errors: 400 `:id` is the caller's own account · 404 not found
 
 This document is authoritative for what's *implemented*, not what's *planned* — if a route here doesn't exist in `server/src/routes/`, or a route exists that isn't listed here, one of the two is wrong and needs fixing in the same change that caused the drift.
 
-**Every route above has at least one test** in `server/src/__tests__/` (one file per resource, named to match) — 128 tests total, run against a real Postgres instance, no mocking. `server/jest.config.js` enforces a coverage floor (80% branches, 90% functions/lines/statements) over `src/routes/`, `src/middleware/`, and `src/lib/`, so a new endpoint or background process shipped without a test fails `npm run test:coverage` — see [README.md §6](README.md#6-testing--quality) for the exact commands, and the repo's git pre-commit hook (`.husky/pre-commit` — see §"Enforcement") which runs the full quality gate automatically before every commit.
+**Every route above has at least one test** in `server/src/__tests__/` (one file per resource, named to match; the `support`/`system_manager` roles and the audit-log and system-metrics routes are covered in `roles.test.ts`) — 197 tests total, run against a real Postgres instance, no mocking. `server/jest.config.js` enforces a coverage floor (80% branches, 90% functions/lines/statements) over `src/routes/`, `src/middleware/`, and `src/lib/`, so a new endpoint or background process shipped without a test fails `npm run test:coverage` — see [README.md §6](README.md#6-testing--quality) for the exact commands, and the repo's git pre-commit hook (`.husky/pre-commit` — see §"Enforcement") which runs the full quality gate automatically before every commit.

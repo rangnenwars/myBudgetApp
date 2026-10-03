@@ -134,6 +134,9 @@ export default function ReportsScreen() {
   const onLayoutChart = (e: LayoutChangeEvent) => setChartWidth(e.nativeEvent.layout.width);
 
   const savingsRate = computeSavingsRate(summary);
+  const totalDebt = loans.reduce((sum, l) => sum + l.outstanding, 0);
+  const debtCountedInExpenses = loans.filter((l) => l.counts_as_expense).reduce((sum, l) => sum + l.outstanding, 0);
+  const debtNotInExpenses = totalDebt - debtCountedInExpenses;
   const maxCategoryTotal = categories[0]?.total ?? 1;
   const trendData = {
     labels: series.map((p) => p.label),
@@ -193,6 +196,32 @@ export default function ReportsScreen() {
             <Text style={[styles.summaryValue, { color: netWorth >= 0 ? COLORS.accent : COLORS.red }]}>{fmt(netWorth)}</Text>
           </Card>
         </View>
+
+        {loans.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Liabilities</Text>
+            <Card>
+              <View style={styles.catRow}>
+                <View style={styles.catHeader}>
+                  <Text style={styles.catLabel}>Total debt to repay</Text>
+                  <Text style={[styles.catValue, { color: COLORS.red }]}>{fmt(totalDebt)}</Text>
+                </View>
+              </View>
+              <View style={[styles.catRow, styles.catRowBorder]}>
+                <View style={styles.catHeader}>
+                  <Text style={styles.catLabel}>EMIs counted in expenses</Text>
+                  <Text style={styles.catValue}>{fmt(debtCountedInExpenses)}</Text>
+                </View>
+              </View>
+              <View style={[styles.catRow, styles.catRowBorder]}>
+                <View style={styles.catHeader}>
+                  <Text style={styles.catLabel}>Not counted in expenses</Text>
+                  <Text style={styles.catValue}>{fmt(debtNotInExpenses)}</Text>
+                </View>
+              </View>
+            </Card>
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>Trend</Text>
         <Card>
@@ -274,7 +303,7 @@ export default function ReportsScreen() {
               return (
                 <View key={l.id} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
                   <View style={styles.catHeader}>
-                    <Text style={styles.catLabel}>{l.name}</Text>
+                    <Text style={styles.catLabel}>{l.name}{l.counts_as_expense ? '' : ' · not in expenses'}</Text>
                     <Text style={styles.catValue}>{pct.toFixed(0)}% paid</Text>
                   </View>
                   <MiniBar percent={pct} color={COLORS.blue} />

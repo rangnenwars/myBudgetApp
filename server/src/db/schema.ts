@@ -27,16 +27,25 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   tier: text('tier').notNull().default('standard'),
   budgetClass: text('budget_class'),
-  // 'admin' can manage every account via /api/v1/admin/users; 'user' cannot.
+  // 'admin' can manage every account via /api/v1/admin/users; 'support' can
+  // only activate/deactivate one (routes/admin.ts enforces the split, not
+  // this column); 'system_manager' gets read-only aggregate metrics via
+  // /api/v1/system/metrics and never touches an individual account; 'user' can do neither.
   role: text('role').notNull().default('user'),
   // Deactivated accounts are rejected at login and at refresh — see routes/auth.ts.
   isActive: boolean('is_active').notNull().default(true),
+  // Set/cleared alongside isActive in routes/admin.ts — updatedAt is touched
+  // by any field change (role/tier too), so it can't answer "inactive since when" on its own.
+  deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+  // Set on successful register/login (routes/auth.ts) — powers the
+  // system-manager usage metrics; not updated on token refresh.
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex('idx_users_email_lower').on(sql`lower(${table.email})`),
   check('users_tier_check', sql`${table.tier} IN ('standard', 'pro')`),
-  check('users_role_check', sql`${table.role} IN ('user', 'admin')`),
+  check('users_role_check', sql`${table.role} IN ('user', 'admin', 'support', 'system_manager')`),
   check('users_budget_class_check', sql`${table.budgetClass} IN ('low', 'middle', 'high', 'ultra_high', 'rich')`),
 ]);
 
@@ -111,6 +120,32 @@ export const transactions = pgTable('transactions', {
 ]);
 
 // ============================================================
+// recurring_transactions — "repeat every month" rules. The user's first
+// entry is a normal transaction; this row makes the same amount post again on
+// the 1st of every following month (lib/recurringTransactions.ts). Stopping
+// a repeat deletes the row — transactions already posted stay.
+// ============================================================
+export const recurringTransactions = pgTable('recurring_transactions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  category: text('category_key').notNull().references(() => categories.key),
+  type: text('type', { enum: ['income', 'expense'] }).notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  note: text('note'),
+  // First day of the latest month already posted (the month of the user's
+  // original entry, advanced as months are posted). Kept on the rule, not
+  // derived from transactions, so deleting a posted transaction doesn't
+  // make it reappear.
+  posted_through: date('posted_through').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_recurring_user').on(table.userId),
+  check('recurring_amount_check', sql`${table.amount} > 0`),
+  check('recurring_type_check', sql`${table.type} IN ('income', 'expense')`),
+]);
+
+// ============================================================
 // loans
 // ============================================================
 // Below the id/user_id/name/principal/outstanding/emi columns, every field
@@ -132,6 +167,14 @@ export const loans = pgTable('loans', {
   lender: text('lender'),
   note: text('note'),
   is_active: boolean('is_active').notNull().default(true),
+  // When false, no monthly EMI expense is posted for this loan (the debt
+  // still counts as a liability in Reports).
+  counts_as_expense: boolean('counts_as_expense').notNull().default(true),
+  // First day of the latest month whose EMI expense has been auto-posted for
+  // this loan (null = none yet, so only the current month is posted next).
+  // Kept on the loan, not derived from transactions, so deleting an
+  // auto-posted transaction doesn't make it reappear.
+  emi_expensed_through: date('emi_expensed_through'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
@@ -228,4 +271,29 @@ export const budgets = pgTable('budgets', {
 }, (table) => [
   uniqueIndex('idx_budgets_user_category').on(table.userId, table.categoryKey),
   check('budgets_limit_check', sql`${table.monthlyLimit} > 0`),
+]);
+
+// ============================================================
+// admin_audit_log — one row per role/tier/active/delete change made
+// through /api/v1/admin/users, by an admin or support account.
+// actor/target ids are ON DELETE SET NULL (not CASCADE) so a log entry
+// survives the account it describes being deleted or its actor later
+// removed; actorEmail/targetEmail are snapshotted at write time so the
+// entry stays readable even after that. Account metadata only — never
+// touches transactions/loans/investments/goals, same invariant as the
+// admin routes themselves.
+// ============================================================
+export const adminAuditLog = pgTable('admin_audit_log', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  actorId: bigint('actor_id', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  actorEmail: text('actor_email').notNull(),
+  targetId: bigint('target_id', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  targetEmail: text('target_email').notNull(),
+  action: text('action').notNull(),
+  details: text('details'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_admin_audit_actor').on(table.actorId),
+  index('idx_admin_audit_target').on(table.targetId),
+  index('idx_admin_audit_created').on(table.createdAt),
 ]);

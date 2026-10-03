@@ -7,6 +7,7 @@ import { users, refreshTokens } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { badRequest, unauthorized, conflict, forbidden } from '../lib/errors';
 import { requireAuth } from '../middleware/auth';
+import { loginLimiter, registerLimiter, refreshLimiter } from '../middleware/rateLimit';
 import { signAccessToken, generateRefreshToken, hashToken, REFRESH_TOKEN_TTL_MS } from '../lib/tokens';
 
 const router = Router();
@@ -49,6 +50,7 @@ const issueTokenPair = async (userId: number) => {
 
 router.post(
   '/register',
+  registerLimiter,
   asyncHandler(async (req, res) => {
     const body = registerSchema.parse(req.body);
 
@@ -56,7 +58,7 @@ router.post(
     if (existing) throw conflict('An account with that email already exists.');
 
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_COST);
-    const [user] = await db.insert(users).values({ name: body.name, email: body.email, passwordHash }).returning();
+    const [user] = await db.insert(users).values({ name: body.name, email: body.email, passwordHash, lastLoginAt: new Date() }).returning();
 
     const tokens = await issueTokenPair(user.id);
     res.status(201).json({ user: toUserResponse(user), ...tokens });
@@ -65,6 +67,7 @@ router.post(
 
 router.post(
   '/login',
+  loginLimiter,
   asyncHandler(async (req, res) => {
     const body = loginSchema.parse(req.body);
 
@@ -80,6 +83,8 @@ router.post(
     // actually proven correct — doesn't help an attacker enumerate accounts.
     if (!user.isActive) throw forbidden('This account has been deactivated. Contact an administrator.');
 
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+
     const tokens = await issueTokenPair(user.id);
     res.json({ user: toUserResponse(user), ...tokens });
   })
@@ -87,6 +92,7 @@ router.post(
 
 router.post(
   '/refresh',
+  refreshLimiter,
   asyncHandler(async (req, res) => {
     const { refreshToken } = refreshSchema.parse(req.body);
     const hash = hashToken(refreshToken);
@@ -137,10 +143,17 @@ router.get(
 // "Known deviations"). This is a placeholder for a real billing flow, not
 // a real upgrade endpoint. Keep it obviously named so nobody mistakes it
 // for production billing later.
+// Off in production unless ALLOW_SELF_TIER_CHANGE=true, so nobody can grant
+// themselves Pro for free; admins can still set a tier via /admin/users.
+// Read per request so tests can toggle it.
+const selfTierChangeAllowed = (): boolean =>
+  process.env.ALLOW_SELF_TIER_CHANGE != null ? process.env.ALLOW_SELF_TIER_CHANGE === 'true' : process.env.NODE_ENV !== 'production';
+
 router.patch(
   '/me/tier',
   requireAuth,
   asyncHandler(async (req, res) => {
+    if (!selfTierChangeAllowed()) throw forbidden('Plan changes are not available yet.');
     const { tier } = tierSchema.parse(req.body);
     const [user] = await db.update(users).set({ tier, updatedAt: new Date() }).where(eq(users.id, req.userId!)).returning();
     if (!user) throw badRequest('User not found.');

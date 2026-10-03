@@ -4,11 +4,16 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
-import { getAdminUsers, updateAdminUser, deleteAdminUser, AdminUser } from '../../utils/database';
+import { getAdminUsers, updateAdminUser, deleteAdminUser, AdminUser, AdminRole } from '../../utils/database';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+
+// Order matters here — rendered left-to-right/top-to-bottom in the role
+// picker, low to high privilege, so promote/demote reads as moving along the row.
+const ROLES: AdminRole[] = ['user', 'support', 'system_manager', 'admin'];
+const ROLE_LABEL: Record<AdminRole, string> = { user: 'User', support: 'Support', system_manager: 'System mgr', admin: 'Admin' };
 
 export default function AdminUsersScreen() {
   const { user, isAdmin } = useAuth();
@@ -17,6 +22,7 @@ export default function AdminUsersScreen() {
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isSelf = !!selected && selected.id === user?.id;
 
   const load = useCallback(async () => {
     if (!isAdmin) return;
@@ -30,7 +36,7 @@ export default function AdminUsersScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const applyPatch = async (patch: Partial<{ role: 'user' | 'admin'; isActive: boolean; tier: 'standard' | 'pro' }>) => {
+  const applyPatch = async (patch: Partial<{ role: AdminRole; isActive: boolean; tier: 'standard' | 'pro' }>) => {
     if (!selected) return;
     setSaving(true);
     setError(null);
@@ -102,8 +108,8 @@ export default function AdminUsersScreen() {
               <Text style={styles.rowMeta}>Joined {fmtDate(item.createdAt)}{item.budgetClass ? ` · ${item.budgetClass}` : ''}</Text>
             </View>
             <View style={styles.chipCol}>
-              <View style={[styles.chip, item.role === 'admin' ? styles.chipAdmin : styles.chipMuted]}>
-                <Text style={styles.chipText}>{item.role === 'admin' ? 'Admin' : 'User'}</Text>
+              <View style={[styles.chip, ROLE_CHIP_STYLE[item.role]]}>
+                <Text style={styles.chipText}>{ROLE_LABEL[item.role]}</Text>
               </View>
               <View style={[styles.chip, item.tier === 'pro' ? styles.chipPro : styles.chipMuted]}>
                 <Text style={styles.chipText}>{item.tier === 'pro' ? 'Pro' : 'Standard'}</Text>
@@ -127,26 +133,28 @@ export default function AdminUsersScreen() {
             </View>
             <Text style={styles.modalEmail}>{selected?.email}</Text>
 
+            {isSelf && <Text style={styles.selfNote}>This is your own account — use your own login to change these settings.</Text>}
+
             <View style={styles.controlRow}>
               <Text style={styles.controlLabel}>Active</Text>
               <Switch
                 value={selected?.isActive ?? true}
                 onValueChange={(v) => applyPatch({ isActive: v })}
-                disabled={saving}
+                disabled={saving || isSelf}
                 trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
               />
             </View>
 
             <Text style={styles.controlLabel}>Role</Text>
-            <View style={styles.optionRow}>
-              {(['user', 'admin'] as const).map((r) => (
+            <View style={styles.roleOptionRow}>
+              {ROLES.map((r) => (
                 <Pressable
                   key={r}
-                  style={[styles.optionBtn, selected?.role === r && styles.optionBtnActive]}
+                  style={[styles.roleOptionBtn, selected?.role === r && styles.optionBtnActive]}
                   onPress={() => applyPatch({ role: r })}
-                  disabled={saving}
+                  disabled={saving || isSelf}
                 >
-                  <Text style={[styles.optionBtnText, selected?.role === r && styles.optionBtnTextActive]}>{r === 'admin' ? 'Admin' : 'User'}</Text>
+                  <Text style={[styles.optionBtnText, selected?.role === r && styles.optionBtnTextActive]}>{ROLE_LABEL[r]}</Text>
                 </Pressable>
               ))}
             </View>
@@ -158,7 +166,7 @@ export default function AdminUsersScreen() {
                   key={t}
                   style={[styles.optionBtn, selected?.tier === t && styles.optionBtnActive]}
                   onPress={() => applyPatch({ tier: t })}
-                  disabled={saving}
+                  disabled={saving || isSelf}
                 >
                   <Text style={[styles.optionBtnText, selected?.tier === t && styles.optionBtnTextActive]}>{t === 'pro' ? 'Pro' : 'Standard'}</Text>
                 </Pressable>
@@ -167,9 +175,9 @@ export default function AdminUsersScreen() {
 
             {error && <Text style={styles.error}>{error}</Text>}
 
-            <Pressable style={styles.deleteBtn} onPress={() => selected && onDelete(selected)} disabled={saving}>
-              <Ionicons name="trash-outline" size={16} color={COLORS.red} />
-              <Text style={styles.deleteBtnText}>Delete account</Text>
+            <Pressable style={[styles.deleteBtn, isSelf && styles.deleteBtnDisabled]} onPress={() => selected && onDelete(selected)} disabled={saving || isSelf}>
+              <Ionicons name="trash-outline" size={16} color={isSelf ? COLORS.textDim : COLORS.red} />
+              <Text style={[styles.deleteBtnText, isSelf && styles.deleteBtnTextDisabled]}>Delete account</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -217,6 +225,8 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11, fontWeight: '600', color: COLORS.text },
   chipMuted: { backgroundColor: COLORS.input },
   chipAdmin: { backgroundColor: `${COLORS.purple}33` },
+  chipSupport: { backgroundColor: `${COLORS.blue}33` },
+  chipSystemManager: { backgroundColor: `${COLORS.yellow}33` },
   chipPro: { backgroundColor: `${COLORS.accent}33` },
   chipActive: { backgroundColor: `${COLORS.accent}22` },
   chipInactive: { backgroundColor: `${COLORS.red}22` },
@@ -225,10 +235,13 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
   modalEmail: { color: COLORS.textMuted, fontSize: 13, marginBottom: SPACING.xs },
+  selfNote: { color: COLORS.textDim, fontSize: 12, marginBottom: SPACING.xs },
   controlRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACING.xs },
   controlLabel: { color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.xs },
   optionRow: { flexDirection: 'row', gap: SPACING.xs },
   optionBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.cardBorder },
+  roleOptionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+  roleOptionBtn: { width: '48%', alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.cardBorder },
   optionBtnActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   optionBtnText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
   optionBtnTextActive: { color: '#04140D' },
@@ -245,4 +258,13 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   deleteBtnText: { color: COLORS.red, fontWeight: '700', fontSize: 14 },
+  deleteBtnDisabled: { borderColor: COLORS.cardBorder },
+  deleteBtnTextDisabled: { color: COLORS.textDim },
 });
+
+const ROLE_CHIP_STYLE: Record<AdminRole, object> = {
+  user: styles.chipMuted,
+  support: styles.chipSupport,
+  system_manager: styles.chipSystemManager,
+  admin: styles.chipAdmin,
+};

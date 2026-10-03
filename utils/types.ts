@@ -13,6 +13,16 @@ export interface Transaction {
   created_at: string;
 }
 
+/** A "repeat every month" rule: posts the same entry on the 1st of each month after the original one. */
+export interface RecurringTransaction {
+  id: number;
+  type: TxnType;
+  category: string;
+  amount: number;
+  note: string | null;
+  posted_through: string;
+}
+
 export interface Loan {
   id: number;
   name: string;
@@ -29,6 +39,9 @@ export interface Loan {
   // boolean type now that a server exists; nothing reads this field beyond
   // the storage layer's own "active" filter, so widening it is safe.
   is_active: boolean;
+  // false = EMI payments don't become expense transactions, but the
+  // outstanding balance still counts as a liability (Reports net worth).
+  counts_as_expense: boolean;
 }
 
 export interface Investment {

@@ -6,6 +6,7 @@ import {
   FlatList,
   Pressable,
   Modal,
+  Switch,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -16,9 +17,10 @@ import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme'
 import { MiniBar } from '../../components/MiniBar';
 import { ProGate } from '../../components/ProGate';
 import { useAuth } from '../../context/AuthContext';
-import { addLoan, deleteLoan, getLoans, updateLoan, Loan } from '../../utils/database';
-import { simulateDebtPayoff, DebtStrategy } from '../../utils/calculations';
-import { confirmAction } from '../../utils/alert';
+import { addLoan, deleteLoan, getLoans, updateLoan, payLoanEmi, payLoanPartial, Loan } from '../../utils/database';
+import { simulateDebtPayoff, computePartPayment, DebtStrategy } from '../../utils/calculations';
+import { confirmAction, showAlert } from '../../utils/alert';
+import { todayLocalIso } from '../../utils/dates';
 import { apiErrorMessage } from '../../utils/api';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -33,8 +35,14 @@ export default function LoansScreen() {
   const [outstanding, setOutstanding] = useState('');
   const [emi, setEmi] = useState('');
   const [interestRate, setInterestRate] = useState('');
+  const [countsAsExpense, setCountsAsExpense] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [payingId, setPayingId] = useState<number | null>(null);
+  const [partLoan, setPartLoan] = useState<Loan | null>(null);
+  const [partAmount, setPartAmount] = useState('');
+  const [partError, setPartError] = useState<string | null>(null);
+  const [partSaving, setPartSaving] = useState(false);
   const [strategy, setStrategy] = useState<DebtStrategy>('snowball');
   const [extraPerMonth, setExtraPerMonth] = useState('');
 
@@ -44,7 +52,7 @@ export default function LoansScreen() {
 
   const resetForm = () => {
     setEditingId(null);
-    setName(''); setPrincipal(''); setOutstanding(''); setEmi(''); setInterestRate(''); setError(null);
+    setName(''); setPrincipal(''); setOutstanding(''); setEmi(''); setInterestRate(''); setCountsAsExpense(true); setError(null);
   };
 
   const openAdd = () => {
@@ -59,6 +67,7 @@ export default function LoansScreen() {
     setOutstanding(String(loan.outstanding));
     setEmi(String(loan.emi));
     setInterestRate(loan.interest_rate != null ? String(loan.interest_rate) : '');
+    setCountsAsExpense(loan.counts_as_expense);
     setError(null);
     setModalOpen(true);
   };
@@ -75,7 +84,7 @@ export default function LoansScreen() {
     setError(null);
     try {
       if (editingId != null) {
-        await updateLoan(editingId, { name: name.trim(), principal: p, outstanding: o, emi: e, interest_rate: r });
+        await updateLoan(editingId, { name: name.trim(), principal: p, outstanding: o, emi: e, interest_rate: r, counts_as_expense: countsAsExpense });
       } else {
         await addLoan({
           name: name.trim(),
@@ -88,6 +97,7 @@ export default function LoansScreen() {
           loan_type: null,
           lender: null,
           note: null,
+          counts_as_expense: countsAsExpense,
         });
       }
       resetForm();
@@ -100,11 +110,57 @@ export default function LoansScreen() {
     }
   };
 
-  const onPayEmi = async (loan: Loan) => {
-    if (!user) return;
-    const next = Math.max(0, loan.outstanding - loan.emi);
-    await updateLoan(loan.id, { outstanding: next });
-    await load();
+  const onPayEmi = (loan: Loan) => {
+    if (!user || payingId != null) return;
+    const payment = Math.min(loan.emi, loan.outstanding);
+    confirmAction(
+      'Mark EMI paid',
+      loan.counts_as_expense
+        ? `Record ${fmt(payment)} for ${loan.name}? This lowers the outstanding balance. This month's EMI is already counted in your expenses automatically.`
+        : `Record ${fmt(payment)} for ${loan.name}? This lowers the outstanding balance only — this loan is not counted in your expenses.`,
+      'Record payment',
+      async () => {
+        setPayingId(loan.id);
+        try {
+          await payLoanEmi(loan.id, todayLocalIso());
+          await load();
+        } catch (err) {
+          showAlert('Could not record EMI', apiErrorMessage(err, 'Please try again.'));
+        } finally {
+          setPayingId(null);
+        }
+      }
+    );
+  };
+
+  const openPart = (loan: Loan) => {
+    setPartLoan(loan);
+    setPartAmount('');
+    setPartError(null);
+  };
+
+  const closePart = () => {
+    setPartLoan(null);
+    setPartAmount('');
+    setPartError(null);
+  };
+
+  const onSavePart = async () => {
+    if (!partLoan) return;
+    const amount = parseFloat(partAmount);
+    if (!amount || amount <= 0) { setPartError('Enter the amount you are paying.'); return; }
+    if (amount > partLoan.outstanding) { setPartError(`Amount can't exceed the outstanding balance (${fmt(partLoan.outstanding)}).`); return; }
+    setPartSaving(true);
+    setPartError(null);
+    try {
+      await payLoanPartial(partLoan.id, amount, todayLocalIso());
+      closePart();
+      await load();
+    } catch (err) {
+      setPartError(apiErrorMessage(err, 'Could not record the part payment.'));
+    } finally {
+      setPartSaving(false);
+    }
   };
 
   const onDelete = (id: number) => {
@@ -181,7 +237,10 @@ export default function LoansScreen() {
           return (
             <Pressable style={styles.card} onPress={() => openEdit(item)}>
               <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
+                <View style={styles.cardTitleWrap}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  {!item.counts_as_expense && <Text style={styles.notExpenseChip}>Not in expenses</Text>}
+                </View>
                 <View style={styles.cardHeaderRight}>
                   <Text style={styles.cardEmi}>{fmt(item.emi)}/mo</Text>
                   <Pressable
@@ -201,15 +260,32 @@ export default function LoansScreen() {
                 <Text style={styles.cardMuted}>Outstanding {fmt(item.outstanding)} of {fmt(item.principal)}</Text>
                 {monthsLeft != null && <Text style={styles.cardMuted}>{monthsLeft} mo left</Text>}
               </View>
-              <Pressable
-                style={styles.payBtn}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onPayEmi(item);
-                }}
-              >
-                <Text style={styles.payBtnText}>Mark EMI paid</Text>
-              </Pressable>
+              {item.outstanding > 0 ? (
+                <View style={styles.payRow}>
+                  <Pressable
+                    style={[styles.payBtn, styles.payBtnFlex, payingId != null && styles.payBtnDisabled]}
+                    disabled={payingId != null}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onPayEmi(item);
+                    }}
+                  >
+                    <Text style={styles.payBtnText}>{payingId === item.id ? 'Recording…' : 'Mark EMI paid'}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.payBtn, styles.payBtnFlex, payingId != null && styles.payBtnDisabled]}
+                    disabled={payingId != null}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      openPart(item);
+                    }}
+                  >
+                    <Text style={styles.payBtnText}>Part payment</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={styles.paidOffText}>Fully paid off</Text>
+              )}
             </Pressable>
           );
         }}
@@ -240,10 +316,95 @@ export default function LoansScreen() {
             <Text style={styles.label}>Interest rate % (optional)</Text>
             <TextInput style={styles.input} value={interestRate} onChangeText={setInterestRate} placeholder="e.g. 8.5" placeholderTextColor={COLORS.textDim} keyboardType="numeric" />
 
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleText}>
+                <Text style={styles.toggleLabel}>Add monthly EMI to expenses</Text>
+                <Text style={styles.toggleHint}>
+                  {countsAsExpense
+                    ? "Each month's EMI is added to expenses automatically. The balance still counts as debt."
+                    : 'No EMI is added to expenses. The balance still counts as debt in Reports.'}
+                </Text>
+              </View>
+              <Switch
+                value={countsAsExpense}
+                onValueChange={setCountsAsExpense}
+                trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Save loan'}</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={partLoan != null} animationType={MODAL_ANIMATION} transparent onRequestClose={closePart}>
+        <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Part payment{partLoan ? ` · ${partLoan.name}` : ''}</Text>
+              <Pressable onPress={closePart}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </Pressable>
+            </View>
+
+            {partLoan && (() => {
+              const amount = parseFloat(partAmount);
+              const valid = amount > 0 && amount <= partLoan.outstanding;
+              const next = valid ? computePartPayment(partLoan, amount) : null;
+              return (
+                <>
+                  <Text style={styles.plannerHint}>
+                    Outstanding {fmt(partLoan.outstanding)} · EMI {fmt(partLoan.emi)}/mo. The EMI is reduced in the same proportion, so the loan still ends on the same schedule.
+                  </Text>
+
+                  <Text style={styles.label}>Amount paying now</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={partAmount}
+                    onChangeText={setPartAmount}
+                    placeholder="0"
+                    placeholderTextColor={COLORS.textDim}
+                    keyboardType="numeric"
+                    autoFocus
+                  />
+
+                  {next && (
+                    <View style={styles.previewBox}>
+                      <View style={styles.cardFooter}>
+                        <Text style={styles.cardMuted}>New outstanding</Text>
+                        <Text style={styles.previewValue}>{fmt(next.outstanding)}</Text>
+                      </View>
+                      <View style={styles.cardFooter}>
+                        <Text style={styles.cardMuted}>New EMI</Text>
+                        <Text style={styles.previewValue}>{next.monthsLeft == null ? 'Loan closed' : `${fmt(next.emi)}/mo`}</Text>
+                      </View>
+                      {next.monthsLeft != null && (
+                        <View style={styles.cardFooter}>
+                          <Text style={styles.cardMuted}>Instalments left</Text>
+                          <Text style={styles.previewValue}>{next.monthsLeft} mo</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  <Text style={styles.toggleHint}>
+                    {partLoan.counts_as_expense
+                      ? "This payment will be added to this month's expenses."
+                      : 'This loan is not counted in expenses, so only the balance changes.'}
+                  </Text>
+                </>
+              );
+            })()}
+
+            {partError && <Text style={styles.error}>{partError}</Text>}
+
+            <Pressable style={styles.saveBtn} onPress={onSavePart} disabled={partSaving}>
+              <Text style={styles.saveBtnText}>{partSaving ? 'Recording…' : 'Record part payment'}</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -263,12 +424,20 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   cardTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700' },
+  cardTitleWrap: { flexShrink: 1, gap: 2 },
+  notExpenseChip: { color: COLORS.textMuted, fontSize: 11 },
   cardEmi: { color: COLORS.blue, fontSize: 13, fontWeight: '600' },
   cardDeleteBtn: { padding: 2 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between' },
   cardMuted: { color: COLORS.textMuted, fontSize: 12 },
   payBtn: { backgroundColor: `${COLORS.blue}22`, borderRadius: RADIUS.sm, paddingVertical: 8, alignItems: 'center' },
   payBtnText: { color: COLORS.blue, fontWeight: '600', fontSize: 13 },
+  payBtnDisabled: { opacity: 0.5 },
+  payRow: { flexDirection: 'row', gap: SPACING.sm },
+  payBtnFlex: { flex: 1 },
+  previewBox: { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.xs },
+  previewValue: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
+  paidOffText: { color: COLORS.accent, fontSize: 13, fontWeight: '600', textAlign: 'center', paddingVertical: 8 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
@@ -285,6 +454,10 @@ const styles = StyleSheet.create({
   catRow: { paddingVertical: SPACING.sm },
   catRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   input: { backgroundColor: COLORS.input, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12, color: COLORS.text, fontSize: 15 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md, marginTop: SPACING.sm },
+  toggleText: { flex: 1 },
+  toggleLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
+  toggleHint: { color: COLORS.textDim, fontSize: 12, marginTop: 2 },
   error: { color: COLORS.red, fontSize: 13 },
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.sm },
   saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },

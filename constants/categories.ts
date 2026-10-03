@@ -43,6 +43,8 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { key: 'rashmi_contribution_exp', label: 'Rashmi contribution', icon: '👩', color: '#A78BFA', group: 'Family & education', type: 'expense' },
 
   // Loans & EMIs
+  { key: 'loan_emi', label: 'Loan EMI', icon: '🏦', color: '#3B82F6', group: 'Loans & EMIs', type: 'expense' },
+  { key: 'loan_part_payment', label: 'Loan part payment', icon: '💵', color: '#1D4ED8', group: 'Loans & EMIs', type: 'expense' },
   { key: 'home_loan_1', label: 'Home loan 1 EMI', icon: '🏡', color: '#60A5FA', group: 'Loans & EMIs', type: 'expense' },
   { key: 'home_loan_2', label: 'Home loan 2 EMI', icon: '🏘️', color: '#3B82F6', group: 'Loans & EMIs', type: 'expense' },
   { key: 'home_loan_3_4', label: 'Home loan 3 & 4 EMI', icon: '🏗️', color: '#2563EB', group: 'Loans & EMIs', type: 'expense' },

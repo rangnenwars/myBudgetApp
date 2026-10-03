@@ -8,3 +8,13 @@ ios
 .DS_Store
 docs
 README.md
+# Secrets must never be baked into an image layer — runtime env only.
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+server/node_modules
+server/coverage
+coverage
+backups

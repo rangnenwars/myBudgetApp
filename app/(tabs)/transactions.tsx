@@ -6,6 +6,7 @@ import {
   FlatList,
   Pressable,
   Modal,
+  Switch,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,8 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { CategoryPicker } from '../../components/CategoryPicker';
+import { DateField } from '../../components/DateField';
+import { RepeatingEntries } from '../../components/RepeatingEntries';
 import { useAuth } from '../../context/AuthContext';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
@@ -22,15 +25,23 @@ import {
   updateTransaction,
   deleteTransaction,
   getTransactions,
+  getRecurring,
+  repeatTransactionMonthly,
   Transaction,
+  RecurringTransaction,
   TxnType,
 } from '../../utils/database';
 import { monthlyEquivalent, EntryPeriod } from '../../utils/calculations';
+import { todayLocalIso, entryDateError, monthYearOf } from '../../utils/dates';
 import { useCategories } from '../../context/CategoriesContext';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const PERIOD_OPTIONS: { key: EntryPeriod; label: string }[] = [
+// 'once' logs the exact amount on the chosen date; the others convert a recurring bill to its monthly equivalent.
+type TxnPeriod = 'once' | EntryPeriod;
+
+const PERIOD_OPTIONS: { key: TxnPeriod; label: string }[] = [
+  { key: 'once', label: 'Once' },
   { key: 'monthly', label: 'Monthly' },
   { key: 'quarterly', label: 'Quarterly' },
   { key: 'yearly', label: 'Yearly' },
@@ -44,16 +55,22 @@ export default function TransactionsScreen() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [type, setType] = useState<TxnType>('expense');
-  const [period, setPeriod] = useState<EntryPeriod>('monthly');
+  const [period, setPeriod] = useState<TxnPeriod>('once');
+  const [date, setDate] = useState(todayLocalIso());
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [rules, setRules] = useState<RecurringTransaction[]>([]);
+  const [repeatingOpen, setRepeatingOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
+    // Transactions first: the server posts any due repeating entries while serving this request.
     setItems(await getTransactions());
+    setRules(await getRecurring());
   }, [user]);
 
   useFocusEffect(
@@ -65,7 +82,9 @@ export default function TransactionsScreen() {
   const resetForm = () => {
     setEditingId(null);
     setType('expense');
-    setPeriod('monthly');
+    setPeriod('once');
+    setRepeat(false);
+    setDate(todayLocalIso());
     setAmount('');
     setCategory(null);
     setNote('');
@@ -80,7 +99,9 @@ export default function TransactionsScreen() {
   const openEdit = (item: Transaction) => {
     setEditingId(item.id);
     setType(item.type);
-    setPeriod('monthly'); // editing works on the amount as stored — see the period note below
+    setPeriod('once'); // editing works on the amount as stored — see the period note below
+    setDate(item.date);
+    setRepeat(false);
     setAmount(String(item.amount));
     setCategory(item.category);
     setNote(item.note ?? '');
@@ -99,6 +120,11 @@ export default function TransactionsScreen() {
       setError('Choose a category.');
       return;
     }
+    const dateError = entryDateError(date, todayLocalIso());
+    if (dateError) {
+      setError(dateError);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -110,19 +136,20 @@ export default function TransactionsScreen() {
           type,
           category,
           note: note.trim() || null,
+          date,
         });
+        if (repeat) await repeatTransactionMonthly(editingId);
       } else {
-        const now = new Date();
-        const monthlyAmount = monthlyEquivalent(value, period);
+        const recurring = period !== 'once' && period !== 'monthly';
         await addTransaction({
-          amount: monthlyAmount,
+          amount: period === 'once' ? value : monthlyEquivalent(value, period),
           type,
           category,
           subcategory: null,
-          note: note.trim() || (period !== 'monthly' ? `${period} entry — original ${fmt(value)}` : null),
-          date: now.toISOString().slice(0, 10),
-          month: now.getMonth() + 1,
-          year: now.getFullYear(),
+          note: note.trim() || (recurring ? `${period} entry — original ${fmt(value)}` : null),
+          date,
+          ...monthYearOf(date),
+          repeat_monthly: repeat || undefined,
         });
       }
       resetForm();
@@ -159,9 +186,17 @@ export default function TransactionsScreen() {
     <View style={styles.flex}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Transactions</Text>
-        <Pressable style={styles.addBtn} onPress={openAdd}>
-          <Ionicons name="add" size={22} color="#04140D" />
-        </Pressable>
+        <View style={styles.headerActions}>
+          {rules.length > 0 && (
+            <Pressable style={styles.repeatChip} onPress={() => setRepeatingOpen(true)}>
+              <Ionicons name="repeat" size={14} color={COLORS.textMuted} />
+              <Text style={styles.repeatChipText}>Repeating · {rules.length}</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.addBtn} onPress={openAdd}>
+            <Ionicons name="add" size={22} color="#04140D" />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>
@@ -243,6 +278,9 @@ export default function TransactionsScreen() {
               ))}
             </View>
 
+            <Text style={styles.label}>Date</Text>
+            <DateField value={date} onChange={setDate} />
+
             {editingId == null && (
               <>
                 <Text style={styles.label}>Period</Text>
@@ -257,9 +295,9 @@ export default function TransactionsScreen() {
                     </Pressable>
                   ))}
                 </View>
-                {period !== 'monthly' && (
+                {period !== 'once' && period !== 'monthly' && (
                   <Text style={styles.hint}>
-                    Logged as this month's equivalent ({period === 'quarterly' ? '÷3' : '÷12'}) — the original amount is kept in the note.
+                    Logged as the monthly equivalent ({period === 'quarterly' ? '÷3' : '÷12'}) — the original amount is kept in the note.
                   </Text>
                 )}
               </>
@@ -287,6 +325,23 @@ export default function TransactionsScreen() {
               placeholderTextColor={COLORS.textDim}
             />
 
+            <View style={styles.repeatRow}>
+              <View style={styles.repeatText}>
+                <Text style={styles.repeatLabel}>Repeat every month</Text>
+                <Text style={styles.hint}>
+                  {repeat
+                    ? 'Added again on the 1st of each following month, until you stop it under "Repeating".'
+                    : 'Turn on for salary, rent or any fixed monthly amount.'}
+                </Text>
+              </View>
+              <Switch
+                value={repeat}
+                onValueChange={setRepeat}
+                trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
@@ -295,6 +350,13 @@ export default function TransactionsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <RepeatingEntries
+        visible={repeatingOpen}
+        rules={rules}
+        onClose={() => setRepeatingOpen(false)}
+        onChanged={load}
+      />
     </View>
   );
 }
@@ -309,6 +371,12 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.sm,
   },
   headerTitle: { color: COLORS.text, fontSize: 22, fontWeight: '700' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  repeatChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
+  repeatChipText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
+  repeatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md, marginTop: SPACING.xs },
+  repeatText: { flex: 1 },
+  repeatLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   addBtn: {
     backgroundColor: COLORS.accent,
     width: 36,
