@@ -101,7 +101,7 @@ deploy/
   remote-deploy.sh         # runs on the Droplet: pull, up, prune, record release
 ```
 
-The contents of each are in sections 4–6.
+They're described in section 4–6.
 
 ---
 
@@ -141,11 +141,10 @@ dig +short www.prapanji.in
 
 ```bash
 # deploy user that GitHub Actions logs in as — docker group, no sudo
-adduser --disabled-password --gecos "" deploy
-usermod -aG docker deploy   # after Docker is installed below
-
-# Docker + compose plugin
+# Docker + compose plugin (first — the docker group must exist before usermod)
 curl -fsSL https://get.docker.com | sh
+
+adduser --disabled-password --gecos "" deploy
 usermod -aG docker deploy
 
 # basic hardening
@@ -197,386 +196,30 @@ JWT_REFRESH_SECRET=<openssl rand -hex 32, different>
      | `DEPLOY_SSH_KEY` | contents of `mybudget_deploy` (private key) |
      | `DEPLOY_KNOWN_HOSTS` | output of `ssh-keyscan -t ed25519 <reserved-ip>` — pins the host key, prevents MITM |
 
-   - Environment variable (not secret): `PUBLIC_API_URL=https://prapanji.in/api/v1`.
+   - Optional *repository* variable (Settings → Secrets and variables → Actions → Variables), not an environment variable: `PUBLIC_API_URL=https://prapanji.in/api/v1`. The workflow defaults to this value if it's unset.
 2. **Branch protection on `main`**: require PRs, require the `ci` status checks (`client`, `server`, `docker-build`) to pass, no force-pushes.
 3. **Packages**: after the first push, GHCR packages `mybudget-web` and `mybudget-server` appear under your account — keep them **private**; the deploy job logs the Droplet in with a short-lived token each time.
 4. **Actions → General**: workflow permissions "Read repository contents" by default (each workflow requests what it needs explicitly).
 
 ---
 
-## 4. Production runtime files
+## 4–6. Runtime files and workflows
 
-### 4.1 `deploy/docker-compose.prod.yml`
+These are real files in the repo — read them there rather than a copy here:
 
-```yaml
-name: mybudget
+| File | What it does |
+|---|---|
+| [deploy/docker-compose.prod.yml](../deploy/docker-compose.prod.yml) | Image-based prod stack: `caddy` (the only service with host ports: 80, 443, 443/udp), `web`, `server`, `postgres`. Images are `ghcr.io/rangnenwars/mybudget-{web,server}:${IMAGE_TAG}`; secrets come from `/opt/mybudget/.env`; sets `NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`, `CORS_ORIGIN`, `TRUST_PROXY=1`, `APP_URL`, optional `SMTP_*`. Log rotation on every service. |
+| [deploy/Caddyfile](../deploy/Caddyfile) | Automatic HTTPS for `prapanji.in` + `www` (redirects to the apex); `/api/*` and `/health` → `server:4000`, everything else → `web:80`; HSTS and basic security headers. |
+| [deploy/remote-deploy.sh](../deploy/remote-deploy.sh) | Runs on the Droplet as `deploy`. Logs in to GHCR with the token piped on stdin, **pulls first** (a failed pull leaves the running release untouched), then saves the old tag to `release.env.prev`, switches `release.env`, runs `up -d --wait` (fails if a service isn't healthy within 180 s), prunes images older than a week, appends to `deploy-history.log`. |
+| [.github/workflows/ci.yml](../.github/workflows/ci.yml) | On PRs and non-`main` pushes, and called by `deploy.yml`. Jobs: `client` (`npm run quality`), `server` (Postgres 16 service container → `db:migrate` → `db:seed` → `npm run quality`), `docker-build` (both images, no push; skipped when called from `deploy`). Superseded PR runs are cancelled; `main` runs never are. |
+| [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) | `main` push → `ci` → `build` (pushes both images tagged with the commit SHA + `latest`; web built with `EXPO_PUBLIC_API_URL` = repository variable `PUBLIC_API_URL`, default `https://prapanji.in/api/v1`) → `deploy` (**`production` environment approval**, scp the three `deploy/` files, run `remote-deploy.sh`, smoke-test `/health` and `/`). On failure it rolls back to `release.env.prev`, but only if the server had already switched to the new tag. A manual run with `image_tag` = an older SHA redeploys that image without re-testing (rollback). |
+| [.github/dependabot.yml](../.github/dependabot.yml) | Weekly updates for actions (pinned to commit SHAs), both npm trees, the Dockerfiles and the prod compose images. |
 
-x-logging: &logging
-  driver: json-file
-  options: { max-size: "10m", max-file: "5" }
-
-services:
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on: [web, server]
-    restart: unless-stopped
-    logging: *logging
-
-  web:
-    image: ghcr.io/rangnenwars/mybudget-web:${IMAGE_TAG:?IMAGE_TAG not set}
-    restart: unless-stopped
-    logging: *logging
-
-  server:
-    image: ghcr.io/rangnenwars/mybudget-server:${IMAGE_TAG:?IMAGE_TAG not set}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://mybudget:${POSTGRES_PASSWORD:?}@postgres:5432/mybudget
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?}
-      PORT: 4000
-      NODE_ENV: production
-      SEED_DEMO_ACCOUNTS: "false"
-      CORS_ORIGIN: https://prapanji.in,https://www.prapanji.in
-      TRUST_PROXY: "1"
-      APP_URL: https://prapanji.in   # base of password-reset / email-confirmation links
-      # Account emails (and the issue digest) need SMTP — without it, reset and
-      # confirmation emails are not sent (a warning is logged). Put the values
-      # in /opt/mybudget/.env next to the other secrets.
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-}
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 6
-      start_period: 30s
-    restart: unless-stopped
-    logging: *logging
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: mybudget
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
-      POSTGRES_DB: mybudget
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mybudget"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-    logging: *logging
-    # no `ports:` — reachable only on the internal compose network
-
-volumes:
-  pgdata:
-  caddy_data:
-  caddy_config:
-```
-
-Only Caddy publishes host ports. Postgres, the API and the static web container are unreachable from the internet.
-
-### 4.2 `deploy/Caddyfile`
-
-```caddyfile
-{
-	email admin@prapanji.in   # Let's Encrypt expiry notices — change to a real mailbox
-}
-
-www.prapanji.in {
-	redir https://prapanji.in{uri} permanent
-}
-
-prapanji.in {
-	encode zstd gzip
-
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options    nosniff
-		Referrer-Policy           strict-origin-when-cross-origin
-		X-Frame-Options           DENY
-		-Server
-	}
-
-	handle /api/* {
-		reverse_proxy server:4000
-	}
-	handle /health {
-		reverse_proxy server:4000
-	}
-	handle {
-		reverse_proxy web:80
-	}
-}
-```
-
-The API's routes are already mounted under `/api/v1/...` in `server/src/app.ts`, so no path rewriting is needed. The image's own `nginx.conf` keeps handling SPA fallback and long-cache headers for `/_expo/`.
-
-### 4.3 `deploy/remote-deploy.sh`
-
-Runs on the Droplet as `deploy`, invoked by the workflow over SSH. Reads the GHCR token from stdin so it never appears in a process list or shell history.
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-IMAGE_TAG="$1"; GHCR_USER="$2"
-cd /opt/mybudget
-
-docker login ghcr.io -u "$GHCR_USER" --password-stdin   # token piped on stdin
-
-# remember what was running, for one-command rollback
-[ -f release.env ] && cp release.env release.env.prev
-echo "IMAGE_TAG=$IMAGE_TAG" > release.env
-
-COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env"
-$COMPOSE pull
-$COMPOSE up -d --remove-orphans          # server entrypoint runs migrations on start
-$COMPOSE ps
-
-docker logout ghcr.io
-docker image prune -af --filter "until=168h"   # keep a week of old images for fast rollback
-echo "$(date -Iseconds) $IMAGE_TAG" >> deploy-history.log
-```
-
----
-
-## 5. CI — `.github/workflows/ci.yml`
-
-Runs on every PR and push, and is reused by the deploy workflow so production is only ever built from a commit that passed the same checks. It mirrors the local `.husky/pre-commit` gate.
-
-```yaml
-name: ci
-
-on:
-  pull_request:
-  push:
-    branches-ignore: [main]   # main is covered by deploy.yml, which calls this workflow
-  workflow_call:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  client:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: npm ci --legacy-peer-deps
-      - run: npm run quality            # tsc --noEmit + jest with coverage thresholds
-
-  server:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: mybudget
-          POSTGRES_PASSWORD: mybudget_ci
-          POSTGRES_DB: mybudget
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U mybudget"
-          --health-interval 5s --health-timeout 3s --health-retries 10
-    env:
-      DATABASE_URL: postgres://mybudget:mybudget_ci@localhost:5432/mybudget
-      JWT_ACCESS_SECRET: ci-access-secret-not-real
-      JWT_REFRESH_SECRET: ci-refresh-secret-not-real
-    defaults:
-      run: { working-directory: server }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: server/package-lock.json
-      - run: npm ci
-      - run: npm run db:migrate         # proves every drizzle migration applies cleanly to an empty DB
-      - run: npm run quality            # tsc --noEmit + jest
-
-  docker-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Build web image (no push)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
-      - name: Build server image (no push)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: server/Dockerfile
-          push: false
-          cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server
-```
-
----
-
-## 6. CD — `.github/workflows/deploy.yml`
-
-```yaml
-name: deploy
-
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Existing image tag (commit SHA) to deploy — use for rollback. Leave empty to build HEAD."
-        required: false
-
-permissions:
-  contents: read
-
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false        # never kill a deploy half-way
-
-env:
-  REGISTRY: ghcr.io/rangnenwars
-
-jobs:
-  ci:
-    if: inputs.image_tag == ''
-    uses: ./.github/workflows/ci.yml
-
-  build:
-    needs: ci
-    if: inputs.image_tag == ''
-    runs-on: ubuntu-latest
-    environment: production        # for the PUBLIC_API_URL variable; approval happens on `deploy`
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      tag: ${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build & push web
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          build-args: EXPO_PUBLIC_API_URL=${{ vars.PUBLIC_API_URL }}
-          tags: |
-            ${{ env.REGISTRY }}/mybudget-web:${{ github.sha }}
-            ${{ env.REGISTRY }}/mybudget-web:latest
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
-      - name: Build & push server
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: server/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/mybudget-server:${{ github.sha }}
-            ${{ env.REGISTRY }}/mybudget-server:latest
-          cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server
-
-  deploy:
-    needs: [build]
-    if: always() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && inputs.image_tag != ''))
-    runs-on: ubuntu-latest
-    environment:
-      name: production             # pauses here for required-reviewer approval
-      url: https://prapanji.in
-    permissions:
-      contents: read
-      packages: read
-    env:
-      TAG: ${{ inputs.image_tag || needs.build.outputs.tag }}
-      TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure SSH
-        run: |
-          install -m 700 -d ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}"     > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-
-      - name: Ship compose + Caddy config
-        run: scp deploy/docker-compose.prod.yml deploy/Caddyfile deploy/remote-deploy.sh "$TARGET:/opt/mybudget/"
-
-      - name: Roll out ${{ env.TAG }}
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | \
-            ssh "$TARGET" "bash /opt/mybudget/remote-deploy.sh '$TAG' '${{ github.actor }}'"
-
-      - name: Smoke test
-        run: |
-          for i in $(seq 1 30); do
-            if curl -fsS https://prapanji.in/health | grep -q '"ok"' && curl -fsS -o /dev/null https://prapanji.in/; then
-              echo "Healthy"; exit 0
-            fi
-            sleep 5
-          done
-          echo "Smoke test failed"; exit 1
-
-      - name: Auto-rollback on failed smoke test
-        if: failure()
-        run: |
-          ssh "$TARGET" 'cd /opt/mybudget && [ -f release.env.prev ] && cp release.env.prev release.env && \
-            docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env up -d'
-```
-
-> Third-party actions above are pinned to major versions for readability. Before enabling, pin each to a full commit SHA (Dependabot keeps SHA pins updated).
-
-### `.github/dependabot.yml`
-
-```yaml
-version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule: { interval: weekly }
-  - package-ecosystem: npm
-    directory: /
-    schedule: { interval: weekly }
-  - package-ecosystem: npm
-    directory: /server
-    schedule: { interval: weekly }
-  - package-ecosystem: docker
-    directory: /
-    schedule: { interval: weekly }
-```
+Choices made while implementing:
+- **Only the `deploy` job uses the `production` environment.** Required reviewers apply to every job that references an environment, so `build` reads `PUBLIC_API_URL` as a *repository* variable (with a built-in default) to avoid a second approval prompt.
+- **Secrets reach shell steps through `env:`**, never `${{ }}` inside scripts, and the image tag is checked to be a 40-character SHA before use.
+- **No Let's Encrypt email** in the Caddyfile — Let's Encrypt stopped sending expiry emails in 2025; the DO uptime check (§8) alerts on certificate expiry instead.
 
 ---
 
@@ -645,8 +288,8 @@ updates:
 - [x] `Dockerfile`: `EXPO_PUBLIC_API_URL` build arg (§2.1)
 - [x] `server/docker-entrypoint.sh`: `SEED_DEMO_ACCOUNTS` gate (§2.2) + first-admin path
 - [x] `server/src/app.ts`: `CORS_ORIGIN` (§2.3)
-- [ ] Add `deploy/` and `.github/` files (§4–6), pin actions to SHAs
-- [ ] Merge `MyBudgetApp-B1` work into `main` (deploys run from `main` only)
+- [x] Add `deploy/` and `.github/` files (§4–6), pin actions to SHAs
+- [x] Merge `MyBudgetApp-B1` work into `main` (deploys run from `main` only)
 
 **Phase 1 — infrastructure**
 - [ ] Droplet (BLR1, 2 GB, Monitoring + Backups), reserved IP, Cloud Firewall, Spaces bucket

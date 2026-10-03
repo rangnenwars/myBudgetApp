@@ -1,0 +1,145 @@
+# main → test → build & push images to GHCR → (approval) → deploy to the
+# Droplet over SSH → smoke test, with automatic rollback on failure.
+# Manual run with `image_tag` = an earlier commit SHA redeploys that image
+# (rollback) without re-testing or rebuilding.
+# See docs/DEPLOYMENT_DIGITALOCEAN.md §5–7.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Existing image tag (full commit SHA) to redeploy — for rollback. Leave empty to test, build and deploy HEAD."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false        # never kill a deploy half-way
+
+env:
+  REGISTRY: ghcr.io/rangnenwars
+  SITE_URL: https://prapanji.in
+
+jobs:
+  ci:
+    if: inputs.image_tag == ''
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: ci
+    if: inputs.image_tag == ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & push web
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          push: true
+          # Inlined into the JS bundle at export time (see Dockerfile).
+          build-args: EXPO_PUBLIC_API_URL=${{ vars.PUBLIC_API_URL || 'https://prapanji.in/api/v1' }}
+          tags: |
+            ${{ env.REGISTRY }}/mybudget-web:${{ github.sha }}
+            ${{ env.REGISTRY }}/mybudget-web:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Build & push server
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/mybudget-server:${{ github.sha }}
+            ${{ env.REGISTRY }}/mybudget-server:latest
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+
+  deploy:
+    needs: [build]
+    if: >-
+      always() &&
+      (needs.build.result == 'success' ||
+       (needs.build.result == 'skipped' && inputs.image_tag != ''))
+    runs-on: ubuntu-latest
+    environment:
+      name: production             # pauses here for required-reviewer approval
+      url: https://prapanji.in
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ inputs.image_tag || needs.build.outputs.tag }}
+      TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+    steps:
+      - name: Validate image tag
+        run: |
+          [[ "$TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "image_tag must be a full 40-char commit SHA, got: $TAG"; exit 1; }
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host *\n  BatchMode yes\n  ConnectTimeout 20\n' > ~/.ssh/config
+
+      - name: Ship compose + Caddy config
+        run: scp deploy/docker-compose.prod.yml deploy/Caddyfile deploy/remote-deploy.sh "$TARGET:/opt/mybudget/"
+
+      - name: Roll out ${{ env.TAG }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          # shellcheck disable=SC2029 # $TAG / $GHCR_USER expand on the runner, by design
+          printf '%s\n' "$GHCR_TOKEN" | \
+            ssh "$TARGET" "bash /opt/mybudget/remote-deploy.sh '$TAG' '$GHCR_USER'"
+
+      - name: Smoke test
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS "$SITE_URL/health" | grep -q '"ok"' && curl -fsS -o /dev/null "$SITE_URL/"; then
+              echo "Healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "Smoke test failed"; exit 1
+
+      # Only if the server already switched to $TAG — a failure before the
+      # switch (scp, pull) left the previous release running untouched.
+      - name: Roll back to the previous release
+        if: failure()
+        run: |
+          # shellcheck disable=SC2029 # $TAG expands on the runner, by design
+          ssh "$TARGET" "cd /opt/mybudget && \
+            if ! grep -qx 'IMAGE_TAG=$TAG' release.env 2>/dev/null; then echo 'Server never switched to $TAG — nothing to roll back'; exit 0; fi && \
+            if [ ! -f release.env.prev ]; then echo 'First deploy — no previous release to roll back to'; exit 1; fi && \
+            cp release.env.prev release.env && \
+            docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env up -d --wait --wait-timeout 180 && \
+            echo \"Rolled back to \$(cat release.env)\""
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

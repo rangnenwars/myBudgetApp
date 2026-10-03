@@ -1,0 +1,31 @@
+# TLS + routing for https://prapanji.in. Caddy obtains and renews the
+# Let's Encrypt certificates on its own once DNS for both names points at
+# the Droplet and ports 80/443 are open.
+
+www.prapanji.in {
+	redir https://prapanji.in{uri} permanent
+}
+
+prapanji.in {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+
+	# API routes are already mounted under /api/v1 in server/src/app.ts — no rewrite.
+	handle /api/* {
+		reverse_proxy server:4000
+	}
+	handle /health {
+		reverse_proxy server:4000
+	}
+	# Static web build; its own nginx.conf does the SPA fallback and asset caching.
+	handle {
+		reverse_proxy web:80
+	}
+}
