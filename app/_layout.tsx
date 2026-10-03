@@ -21,6 +21,15 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="input-expenses" options={{ presentation: 'modal' }} />
               <Stack.Screen name="admin/index" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="admin/audit-log" />
+              <Stack.Screen name="admin/metrics" />
+              <Stack.Screen name="settings" />
+              <Stack.Screen name="accounts" />
+              <Stack.Screen name="budgets" />
+              <Stack.Screen name="forgot-password" />
+              <Stack.Screen name="reset-password" />
+              <Stack.Screen name="verify-email" />
+              <Stack.Screen name="report-issue" options={{ presentation: 'modal' }} />
             </Stack>
           </ResponsiveContainer>
         </CategoriesProvider>

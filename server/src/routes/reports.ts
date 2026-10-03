@@ -5,21 +5,22 @@ import { db } from '../db/client';
 import { loans, savingsGoals } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
-import { loanEmiMiddleware } from '../lib/loanEmiExpenses';
-import { recurringMiddleware } from '../lib/recurringTransactions';
-import { getTransactionsInRange } from '../lib/queries';
+import { autoPostMiddleware } from '../lib/autoPost';
+import { getTotalsInRange, forEachTransactionBatch } from '../lib/queries';
+import { localToday, addMonths } from '../lib/clock';
 import {
   computeMonthSummary,
   computeMonthlySeries,
   computeCategoryBreakdown,
   generateMonthRange,
-  transactionsToCsv,
+  transactionsToCsvRows,
+  CSV_HEADER,
   simulateDebtPayoff,
   computeGoalETA,
 } from '../calculations';
 
 const router = Router();
-router.use(requireAuth, loanEmiMiddleware, recurringMiddleware);
+router.use(requireAuth, autoPostMiddleware);
 
 const rangeQuery = z.object({
   startMonth: z.coerce.number().int().min(1).max(12),
@@ -38,7 +39,7 @@ router.get(
   '/summary',
   asyncHandler(async (req, res) => {
     const q = rangeQuery.parse(req.query);
-    const rows = await getTransactionsInRange(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear);
+    const rows = await getTotalsInRange(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear);
     res.json(computeMonthSummary(rows));
   })
 );
@@ -47,7 +48,7 @@ router.get(
   '/monthly-series',
   asyncHandler(async (req, res) => {
     const q = rangeQuery.parse(req.query);
-    const rows = await getTransactionsInRange(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear);
+    const rows = await getTotalsInRange(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear);
     const range = generateMonthRange(q.startMonth, q.startYear, q.endMonth, q.endYear);
     res.json(computeMonthlySeries(rows, range));
   })
@@ -57,7 +58,7 @@ router.get(
   '/category-breakdown',
   asyncHandler(async (req, res) => {
     const q = breakdownQuery.parse(req.query);
-    const rows = await getTransactionsInRange(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear);
+    const rows = await getTotalsInRange(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear);
     res.json(computeCategoryBreakdown(rows, q.type));
   })
 );
@@ -66,12 +67,15 @@ router.get(
   '/export.csv',
   asyncHandler(async (req, res) => {
     const q = rangeQuery.parse(req.query);
-    const rows = await getTransactionsInRange(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear);
-    const csv = transactionsToCsv(rows);
     const filename = `mybudget-${q.startYear}-${String(q.startMonth).padStart(2, '0')}_to_${q.endYear}-${String(q.endMonth).padStart(2, '0')}.csv`;
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(csv);
+    // Streamed 1,000 rows at a time, so a multi-year export never sits in memory whole.
+    res.write(CSV_HEADER);
+    await forEachTransactionBatch(req.userId!, q.startMonth, q.startYear, q.endMonth, q.endYear, (rows) => {
+      res.write('\n' + transactionsToCsvRows(rows).join('\n'));
+    });
+    res.end();
   })
 );
 
@@ -87,10 +91,10 @@ router.get(
 router.get(
   '/goal-eta',
   asyncHandler(async (req, res) => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    const range = generateMonthRange(start.getMonth() + 1, start.getFullYear(), now.getMonth() + 1, now.getFullYear());
-    const rows = await getTransactionsInRange(req.userId!, range[0].month, range[0].year, now.getMonth() + 1, now.getFullYear());
+    const today = localToday();
+    const start = addMonths(today.year, today.month, -2);
+    const range = generateMonthRange(start.month, start.year, today.month, today.year);
+    const rows = await getTotalsInRange(req.userId!, start.month, start.year, today.month, today.year);
     const series = computeMonthlySeries(rows, range);
     const avgMonthlySavings = series.length ? series.reduce((s, p) => s + p.net, 0) / series.length : 0;
 

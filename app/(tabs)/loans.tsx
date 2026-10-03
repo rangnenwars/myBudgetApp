@@ -9,8 +9,7 @@ import {
   Switch,
   TextInput,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
@@ -18,12 +17,15 @@ import { MiniBar } from '../../components/MiniBar';
 import { ProGate } from '../../components/ProGate';
 import { useAuth } from '../../context/AuthContext';
 import { addLoan, deleteLoan, getLoans, updateLoan, payLoanEmi, payLoanPartial, Loan } from '../../utils/database';
-import { simulateDebtPayoff, computePartPayment, DebtStrategy } from '../../utils/calculations';
+import { simulateDebtPayoff, computePartPayment, DebtStrategy, splitEmi, monthsToRepay } from '../../utils/calculations';
 import { confirmAction, showAlert } from '../../utils/alert';
-import { todayLocalIso } from '../../utils/dates';
+import { todayLocalIso, isValidIsoDate } from '../../utils/dates';
 import { apiErrorMessage } from '../../utils/api';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+const LOAN_TYPES = ['home', 'car', 'personal', 'education', 'gold', 'other'] as const;
+const LOAN_TYPE_LABEL: Record<string, string> = { home: 'Home', car: 'Car', personal: 'Personal', education: 'Education', gold: 'Gold', other: 'Other' };
 
 export default function LoansScreen() {
   const { user } = useAuth();
@@ -35,6 +37,11 @@ export default function LoansScreen() {
   const [outstanding, setOutstanding] = useState('');
   const [emi, setEmi] = useState('');
   const [interestRate, setInterestRate] = useState('');
+  const [loanType, setLoanType] = useState<string | null>(null);
+  const [lender, setLender] = useState('');
+  const [tenure, setTenure] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [loanNote, setLoanNote] = useState('');
   const [countsAsExpense, setCountsAsExpense] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -53,6 +60,7 @@ export default function LoansScreen() {
   const resetForm = () => {
     setEditingId(null);
     setName(''); setPrincipal(''); setOutstanding(''); setEmi(''); setInterestRate(''); setCountsAsExpense(true); setError(null);
+    setLoanType(null); setLender(''); setTenure(''); setStartDate(''); setLoanNote('');
   };
 
   const openAdd = () => {
@@ -67,6 +75,11 @@ export default function LoansScreen() {
     setOutstanding(String(loan.outstanding));
     setEmi(String(loan.emi));
     setInterestRate(loan.interest_rate != null ? String(loan.interest_rate) : '');
+    setLoanType(loan.loan_type);
+    setLender(loan.lender ?? '');
+    setTenure(loan.tenure_months != null ? String(loan.tenure_months) : '');
+    setStartDate(loan.start_date ?? '');
+    setLoanNote(loan.note ?? '');
     setCountsAsExpense(loan.counts_as_expense);
     setError(null);
     setModalOpen(true);
@@ -80,25 +93,25 @@ export default function LoansScreen() {
     const r = interestRate ? parseFloat(interestRate) : null;
     if (!name.trim()) { setError('Enter a loan name.'); return; }
     if (!p || !o || !e) { setError('Enter valid principal, outstanding, and EMI amounts.'); return; }
+    if (r != null && (Number.isNaN(r) || r < 0 || r >= 100)) { setError('Interest rate must be between 0 and 100%.'); return; }
+    const t = tenure.trim() ? parseInt(tenure, 10) : null;
+    if (t != null && (Number.isNaN(t) || t < 1 || t > 600)) { setError('Tenure must be 1–600 months.'); return; }
+    if (startDate.trim() && !isValidIsoDate(startDate.trim())) { setError('Start date must be a real date as YYYY-MM-DD.'); return; }
+    const details = {
+      interest_rate: r,
+      tenure_months: t,
+      start_date: startDate.trim() || null,
+      loan_type: loanType,
+      lender: lender.trim() || null,
+      note: loanNote.trim() || null,
+    };
     setSaving(true);
     setError(null);
     try {
       if (editingId != null) {
-        await updateLoan(editingId, { name: name.trim(), principal: p, outstanding: o, emi: e, interest_rate: r, counts_as_expense: countsAsExpense });
+        await updateLoan(editingId, { name: name.trim(), principal: p, outstanding: o, emi: e, counts_as_expense: countsAsExpense, ...details });
       } else {
-        await addLoan({
-          name: name.trim(),
-          principal: p,
-          outstanding: o,
-          emi: e,
-          interest_rate: r,
-          tenure_months: null,
-          start_date: null,
-          loan_type: null,
-          lender: null,
-          note: null,
-          counts_as_expense: countsAsExpense,
-        });
+        await addLoan({ name: name.trim(), principal: p, outstanding: o, emi: e, counts_as_expense: countsAsExpense, ...details });
       }
       resetForm();
       setModalOpen(false);
@@ -115,9 +128,7 @@ export default function LoansScreen() {
     const payment = Math.min(loan.emi, loan.outstanding);
     confirmAction(
       'Mark EMI paid',
-      loan.counts_as_expense
-        ? `Record ${fmt(payment)} for ${loan.name}? This lowers the outstanding balance. This month's EMI is already counted in your expenses automatically.`
-        : `Record ${fmt(payment)} for ${loan.name}? This lowers the outstanding balance only — this loan is not counted in your expenses.`,
+      `Record ${fmt(payment)} for ${loan.name}? This lowers the outstanding balance only — this loan is not counted in your expenses.`,
       'Record payment',
       async () => {
         setPayingId(loan.id);
@@ -233,13 +244,18 @@ export default function LoansScreen() {
         }
         renderItem={({ item }) => {
           const percentPaid = item.principal > 0 ? ((item.principal - item.outstanding) / item.principal) * 100 : 0;
-          const monthsLeft = item.emi > 0 ? Math.ceil(item.outstanding / item.emi) : null;
+          const monthsLeft = monthsToRepay(item.outstanding, item.interest_rate, item.emi);
+          const nextSplit = item.interest_rate ? splitEmi(item.outstanding, item.interest_rate, item.emi) : null;
+          const subtitle = [item.loan_type ? LOAN_TYPE_LABEL[item.loan_type] ?? item.loan_type : null, item.lender, item.interest_rate != null ? `${item.interest_rate}%` : null]
+            .filter(Boolean)
+            .join(' · ');
           return (
             <Pressable style={styles.card} onPress={() => openEdit(item)}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleWrap}>
                   <Text style={styles.cardTitle}>{item.name}</Text>
                   {!item.counts_as_expense && <Text style={styles.notExpenseChip}>Not in expenses</Text>}
+                  {subtitle ? <Text style={styles.cardMuted}>{subtitle}</Text> : null}
                 </View>
                 <View style={styles.cardHeaderRight}>
                   <Text style={styles.cardEmi}>{fmt(item.emi)}/mo</Text>
@@ -258,20 +274,29 @@ export default function LoansScreen() {
               <MiniBar percent={percentPaid} color={COLORS.blue} />
               <View style={styles.cardFooter}>
                 <Text style={styles.cardMuted}>Outstanding {fmt(item.outstanding)} of {fmt(item.principal)}</Text>
-                {monthsLeft != null && <Text style={styles.cardMuted}>{monthsLeft} mo left</Text>}
+                {item.outstanding > 0 && <Text style={styles.cardMuted}>{monthsLeft == null ? "EMI doesn't cover interest" : `${monthsLeft} mo left`}</Text>}
               </View>
+              {nextSplit && item.outstanding > 0 && (
+                <Text style={styles.cardMuted}>
+                  Next EMI: {fmt(nextSplit.interest)} interest · {fmt(nextSplit.principal)} principal
+                </Text>
+              )}
               {item.outstanding > 0 ? (
                 <View style={styles.payRow}>
-                  <Pressable
-                    style={[styles.payBtn, styles.payBtnFlex, payingId != null && styles.payBtnDisabled]}
-                    disabled={payingId != null}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      onPayEmi(item);
-                    }}
-                  >
-                    <Text style={styles.payBtnText}>{payingId === item.id ? 'Recording…' : 'Mark EMI paid'}</Text>
-                  </Pressable>
+                  {item.counts_as_expense ? (
+                    <Text style={[styles.cardMuted, styles.payBtnFlex, styles.autoNote]}>EMI recorded and balance reduced automatically each month</Text>
+                  ) : (
+                    <Pressable
+                      style={[styles.payBtn, styles.payBtnFlex, payingId != null && styles.payBtnDisabled]}
+                      disabled={payingId != null}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onPayEmi(item);
+                      }}
+                    >
+                      <Text style={styles.payBtnText}>{payingId === item.id ? 'Recording…' : 'Mark EMI paid'}</Text>
+                    </Pressable>
+                  )}
                   <Pressable
                     style={[styles.payBtn, styles.payBtnFlex, payingId != null && styles.payBtnDisabled]}
                     disabled={payingId != null}
@@ -301,6 +326,7 @@ export default function LoansScreen() {
               </Pressable>
             </View>
 
+            <ScrollView style={styles.formScroll} contentContainerStyle={styles.formScrollContent} keyboardShouldPersistTaps="handled">
             <Text style={styles.label}>Loan name</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="e.g. Home loan 1" placeholderTextColor={COLORS.textDim} />
 
@@ -313,16 +339,43 @@ export default function LoansScreen() {
             <Text style={styles.label}>Monthly EMI</Text>
             <TextInput style={styles.input} value={emi} onChangeText={setEmi} placeholder="0" placeholderTextColor={COLORS.textDim} keyboardType="numeric" />
 
-            <Text style={styles.label}>Interest rate % (optional)</Text>
+            <Text style={styles.label}>Interest rate % per year (optional)</Text>
             <TextInput style={styles.input} value={interestRate} onChangeText={setInterestRate} placeholder="e.g. 8.5" placeholderTextColor={COLORS.textDim} keyboardType="numeric" />
+            <Text style={styles.toggleHint}>Used to split each EMI into interest and principal. Without it the whole EMI reduces the balance.</Text>
+
+            <Text style={styles.label}>Loan type (optional)</Text>
+            <View style={styles.chipRow}>
+              {LOAN_TYPES.map((t) => (
+                <Pressable key={t} style={[styles.typeChip, loanType === t && styles.typeChipActive]} onPress={() => setLoanType(loanType === t ? null : t)}>
+                  <Text style={[styles.typeChipText, loanType === t && styles.typeChipTextActive]}>{LOAN_TYPE_LABEL[t]}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Lender (optional)</Text>
+            <TextInput style={styles.input} value={lender} onChangeText={setLender} placeholder="e.g. SBI" placeholderTextColor={COLORS.textDim} />
+
+            <View style={styles.twoCol}>
+              <View style={styles.col}>
+                <Text style={styles.label}>Tenure, months</Text>
+                <TextInput style={styles.input} value={tenure} onChangeText={setTenure} placeholder="e.g. 240" placeholderTextColor={COLORS.textDim} keyboardType="number-pad" />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>Start date</Text>
+                <TextInput style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={COLORS.textDim} />
+              </View>
+            </View>
+
+            <Text style={styles.label}>Note (optional)</Text>
+            <TextInput style={styles.input} value={loanNote} onChangeText={setLoanNote} placeholder="Anything to remember" placeholderTextColor={COLORS.textDim} />
 
             <View style={styles.toggleRow}>
               <View style={styles.toggleText}>
                 <Text style={styles.toggleLabel}>Add monthly EMI to expenses</Text>
                 <Text style={styles.toggleHint}>
                   {countsAsExpense
-                    ? "Each month's EMI is added to expenses automatically. The balance still counts as debt."
-                    : 'No EMI is added to expenses. The balance still counts as debt in Reports.'}
+                    ? "Each month's EMI is added to expenses and the balance goes down by its principal part, automatically. Enter the balance as it is today."
+                    : 'No EMI is added to expenses — tap "Mark EMI paid" when you pay. The balance still counts as debt in Reports.'}
                 </Text>
               </View>
               <Switch
@@ -332,6 +385,8 @@ export default function LoansScreen() {
                 thumbColor="#FFFFFF"
               />
             </View>
+
+            </ScrollView>
 
             {error && <Text style={styles.error}>{error}</Text>}
 
@@ -414,6 +469,16 @@ export default function LoansScreen() {
 }
 
 const styles = StyleSheet.create({
+  formScroll: { maxHeight: 460 },
+  formScrollContent: { gap: SPACING.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+  typeChip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 6 },
+  typeChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  typeChipText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
+  typeChipTextActive: { color: '#04140D' },
+  twoCol: { flexDirection: 'row', gap: SPACING.sm },
+  col: { flex: 1, gap: SPACING.xs },
+  autoNote: { alignSelf: 'center', fontSize: 11.5 },
   flex: { flex: 1, backgroundColor: COLORS.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg, paddingBottom: SPACING.sm },
   headerTitle: { color: COLORS.text, fontSize: 22, fontWeight: '700' },

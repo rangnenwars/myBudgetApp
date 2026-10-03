@@ -50,6 +50,41 @@
       "when": 1790992839508,
       "tag": "0006_daily_virginia_dare",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790994558428,
+      "tag": "0007_lean_nitro",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790995484999,
+      "tag": "0008_petite_junta",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790996079992,
+      "tag": "0009_issue_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791009752499,
+      "tag": "0010_flimsy_vance_astro",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791010481515,
+      "tag": "0011_mute_rocket_raccoon",
+      "breakpoints": true
     }
   ]
 }

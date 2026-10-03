@@ -50,7 +50,7 @@ Estimated monthly cost: Droplet $12 + Droplet weekly backups $2.40 + Spaces $5 �
 
 ## 2. Changes needed in the repo
 
-These are the code/config changes the pipeline depends on. None exist yet.
+These are the code/config changes the pipeline depends on. §2.1–§2.3 are done (plus per-IP auth rate limiting, which needs `TRUST_PROXY: 1` behind Caddy, and `ALLOW_SELF_TIER_CHANGE`, off by default in production); the rest don't exist yet.
 
 ### 2.1 Bake the production API URL into the web build — `Dockerfile`
 
@@ -75,7 +75,7 @@ if [ "${SEED_DEMO_ACCOUNTS:-true}" = "true" ]; then
 fi
 ```
 
-Production sets `SEED_DEMO_ACCOUNTS=false`. You then need one way to create the first real admin — either a small `src/db/create-admin.ts` script run once via `docker compose exec server npx tsx src/db/create-admin.ts <email>`, or register normally and promote the user with a one-off SQL `UPDATE`.
+Production sets `SEED_DEMO_ACCOUNTS=false` (the entrypoint also skips seeding under `NODE_ENV=production`, and `seed-accounts.ts` refuses to run there). To create the first real admin, register normally in the app, then run once: `docker compose exec server npx tsx src/db/create-admin.ts <email>` — it promotes that existing account; no password is passed on the command line.
 
 ### 2.3 Restrict CORS — `server/src/app.ts`
 
@@ -248,6 +248,16 @@ services:
       NODE_ENV: production
       SEED_DEMO_ACCOUNTS: "false"
       CORS_ORIGIN: https://prapanji.in,https://www.prapanji.in
+      TRUST_PROXY: "1"
+      APP_URL: https://prapanji.in   # base of password-reset / email-confirmation links
+      # Account emails (and the issue digest) need SMTP — without it, reset and
+      # confirmation emails are not sent (a warning is logged). Put the values
+      # in /opt/mybudget/.env next to the other secrets.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
       interval: 10s
@@ -632,9 +642,9 @@ updates:
 ## 10. Rollout checklist
 
 **Phase 0 — repo prep (one PR)**
-- [ ] `Dockerfile`: `EXPO_PUBLIC_API_URL` build arg (§2.1)
-- [ ] `server/docker-entrypoint.sh`: `SEED_DEMO_ACCOUNTS` gate (§2.2) + first-admin path
-- [ ] `server/src/app.ts`: `CORS_ORIGIN` (§2.3)
+- [x] `Dockerfile`: `EXPO_PUBLIC_API_URL` build arg (§2.1)
+- [x] `server/docker-entrypoint.sh`: `SEED_DEMO_ACCOUNTS` gate (§2.2) + first-admin path
+- [x] `server/src/app.ts`: `CORS_ORIGIN` (§2.3)
 - [ ] Add `deploy/` and `.github/` files (§4–6), pin actions to SHAs
 - [ ] Merge `MyBudgetApp-B1` work into `main` (deploys run from `main` only)
 

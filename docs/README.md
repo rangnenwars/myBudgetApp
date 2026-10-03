@@ -35,7 +35,7 @@ The `.html` files are self-contained — open them directly in any browser, no s
 | Routing | expo-router (file-based, tab navigator) |
 | Client data layer | `utils/database.ts` + `utils/api.ts` — thin axios wrapper calling the server's REST API; identical on native and web (no more platform split) |
 | Business logic | `utils/calculations.ts` — pure, storage-agnostic functions shared by **both** the client and the server (`server/src/calculations.ts` re-exports it directly) |
-| Session | `@react-native-async-storage/async-storage`, storing a short-lived JWT access token + a rotated refresh token (`utils/tokenStorage.ts`) |
+| Session | Short-lived JWT access token + rotated refresh token. Native: both in the OS keychain/keystore via `expo-secure-store` (`utils/tokenStorage.ts`, migrating any tokens older builds left in AsyncStorage). Web: refresh token only in an httpOnly cookie, access token only in memory (`utils/tokenStorage.web.ts`) — nothing in `localStorage` |
 | Icons | `@expo/vector-icons` (Ionicons) |
 | Charts | `react-native-chart-kit` (line + pie, Reports tab) |
 | File export | `expo-file-system` + `expo-sharing` (native), Blob download (web) — CSV text now comes straight from the server (`GET /reports/export.csv`) |
@@ -84,30 +84,34 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 ## 3. Feature list
 
 **Free (Standard tier)**
-- **Auth** — register/login with email + password, server-side bcrypt + JWT session, no guest mode
+- **Auth** — register/login with email + password (8+ characters), server-side bcrypt + JWT session, no guest mode
+- **Your account** (gear icon on the Dashboard → Settings) — email confirmation (link emailed on sign-up, resend from Settings, a reminder banner on the Dashboard until confirmed), forgotten-password reset by emailed link ("Forgot password?" on the login screen), change password (signs out other devices), sign out everywhere, download all your data as JSON, and delete your account (password required) — see API_REFERENCE "Your account"
+- **Budgets** (Dashboard → Budgets) — a monthly limit per expense category with a progress bar for this month; anything at 80%+ shows as a "Budget alerts" card on the Dashboard (yellow at 80%, red when over)
+- **Accounts** (Dashboard → Accounts) — bank, cash, wallet/UPI and credit-card balances you type in; they count toward net worth (card dues subtract)
 - **Dashboard** — income/expense/net savings for the current month (‹ › arrows step back to earlier months), top-5 expense categories, budget-class badge, Expense/Loan/Investment breakdown
 - **Input expenses** — bulk entry screen: pick Monthly/Quarterly/Yearly, add one row per category+amount, save all at once (mirrors the original Excel workflow)
-- **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, a date for every entry (Today by default, or Yesterday / any past date via the date control; future dates are rejected; editing can change it too), and a Once/Monthly/Quarterly/Yearly period on new entries (Once logs the exact amount on the chosen date; Quarterly/Yearly are converted to a monthly-equivalent amount, same as Input Expenses), and a "Repeat every month" switch for salary, rent or any fixed monthly amount (income or expense) — the entry is added again on the 1st of each following month until stopped from the "Repeating" button (edit the amount or stop it) — tap a row to edit it, tap the trash icon to delete it
+- **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, a date for every entry (Today by default, or Yesterday / any past date via the date control; future dates are rejected; editing can change it too), and a Once/Monthly/Quarterly/Yearly period on new entries (Once logs the exact amount on the chosen date; Quarterly/Yearly are converted to a monthly-equivalent amount, same as Input Expenses), and a "Repeat" switch for salary, rent, insurance or any fixed amount (income or expense) — monthly, quarterly or yearly, added again on the same day of the month (29–31 fall back to the month's end) until stopped from the "Repeating" button (change the amount, how often or the day, or stop it). Search (notes, category names, amounts) and the All/Expenses/Income filter run on the server, and the list loads 50 at a time as you scroll — tap a row to edit it, tap the trash icon to delete it
 - **Custom categories** — add, rename, and delete your own category (name + income/expense) from any category picker, with a search box to find items once the list grows — see §3a
-- **Loans** — add/edit/delete, track principal/outstanding/EMI/interest rate, "mark EMI paid" button (lowers the balance only). A per-loan "Add monthly EMI to expenses" toggle (on by default) decides whether the loan's EMI is posted to expenses automatically every month as a `Loan EMI` transaction — see API_REFERENCE "Automatic monthly EMI expenses"; either way the outstanding debt shows under Reports → Liabilities and in net worth. "Part payment" button (prepayment): lowers the outstanding balance and scales the EMI down proportionally so the remaining tenure is unchanged, with a live before/after preview — tap a card to edit any field, trash icon to delete
+- **Loans** — add/edit/delete, track principal/outstanding/EMI/interest rate plus optional loan type, lender, tenure, start date and note. A per-loan "Add monthly EMI to expenses" toggle (on by default) posts the EMI to expenses every month as a `Loan EMI` transaction **and pays the balance down by that month's principal** (interest worked out from the rate), so the balance stays right without any tapping; each card shows the next EMI's interest/principal split and the months left at the current rate — see API_REFERENCE "Automatic monthly EMI expenses and pay-down". Loans not counted as expenses (e.g. family loans) keep a "Mark EMI paid" button instead. Either way the outstanding debt shows under Reports → Liabilities and in net worth. "Part payment" button (prepayment): lowers the outstanding balance and scales the EMI down proportionally so the remaining tenure is unchanged, with a live before/after preview — tap a card to edit any field, trash icon to delete
 - **Investments** — add/edit/delete, invested vs. current value, auto-computed gain % (recomputed server-side on every edit), portfolio summary — tap a card to edit, trash icon to delete
 - **Goals** — add/edit/delete, contribute funds, progress bar toward target — tap a card to edit name/target, trash icon to delete
+- **Report issue** (bug icon on the Dashboard, every signed-in user) — category, where it happened, severity, title, description, steps, expected behaviour, optional screenshot (PNG/JPEG/WebP, max 2 MB); app version and device are attached automatically; earlier reports and their status are listed underneath — see "Report issue & nightly digest" below
 
 **Pro (test-mode toggle, no real billing)**
 - **Reports tab** — time-range picker (month/3mo/6mo/year/all-time), income/expense/net trend chart, category donut, debt payoff progress, goal progress, CSV export
 - **Debt payoff planner** (Loans tab) — snowball or avalanche strategy, month-by-month payoff simulation with EMI-rolling, "what if I add ₹X/mo"
 - **Goal ETA** (Goals tab) — projected completion date from your trailing 3-month savings rate
 - **Spending insights** (Dashboard) — month-over-month category deltas, savings rate
-- **Net worth tracking** — computed live (investments + goal savings − loan outstanding) and snapshotted monthly for trending in Reports
+- **Net worth tracking** — computed live (investments + goal savings + account balances − loan outstanding − credit-card dues) and snapshotted monthly for trending in Reports
 
-**Admin (role: 'admin' accounts only, unless noted)**
-- **User management** (`/admin`, shield icon on the Dashboard) — list every account (name, email, role, tier, active status, budget class, join date), without visibility into anyone's financial data
+**Staff (role: 'admin' accounts only, unless noted)**
+- **User management** (`/admin`, shield icon on the Dashboard; admin and support) — searchable by name or email; unconfirmed emails are tagged — list every account (name, email, role, tier, active status, budget class, join date), without visibility into anyone's financial data
 - **Access control** — activate/deactivate any account (deactivated accounts are rejected at login, and mid-session within one refresh cycle — see §3a), promote/demote between `user`/`admin`/`support`/`system_manager`, override tier
 - **Account deletion** — permanently remove an account and everything it owns (cascading delete)
 - An admin can never modify or delete their own account through this screen (self-lockout is structurally impossible, not just guarded) — use your own login to change your own settings
-- **Support role** (server-only today, no dedicated screen) — same `GET`/`PATCH /admin/users` surface as admin, but restricted to activating/deactivating an account; a `PATCH` body containing `role` or `tier` from a support account is rejected with 403. Can't delete accounts.
-- **System manager role** (server-only today, no dedicated screen) — read-only access to `GET /api/v1/system/metrics` only (user counts, active/inactive split, signup and login activity, aggregate usage counts, a cost/revenue estimate at ₹100/user/year). Never reaches the per-account list or any account action.
-- **Admin audit log** — every `PATCH`/`DELETE` on an account is recorded (actor, target, what changed) and readable via `GET /api/v1/admin/audit-log`, admin-only.
+- **Support role** — opens the same User management screen, which shows only the Active switch, and only for regular users; the server enforces the same rules (a `PATCH` with `role` or `tier`, or one aimed at another staff account, is rejected with 403). Can't delete accounts.
+- **System manager role** — the shield icon opens **System metrics** (`app/admin/metrics.tsx`, also reachable by admins from User management) backed by `GET /api/v1/system/metrics` only (user counts, active/inactive split, signup and login activity, aggregate usage counts, a cost/revenue estimate at ₹100/user/year). Never reaches the per-account list or any account action.
+- **Admin audit log** (`app/admin/audit-log.tsx`, document icon on User management) — every `PATCH`/`DELETE` on an account is recorded (actor, target, what changed); the latest 100 are listed, admin-only.
 
 ---
 
@@ -123,13 +127,30 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 - `isActive: false` also stamps `deactivatedAt` (cleared on reactivation) — kept separate from `updatedAt`, which every field change touches, so "inactive since when" stays answerable.
 - Every `PATCH`/`DELETE` on an account writes a row to `admin_audit_log` (actor, target, which fields changed) — see [DATABASE_DESIGN.md](DATABASE_DESIGN.md) and [API_REFERENCE.md](API_REFERENCE.md#admin-audit-log--apiv1adminaudit-log-).
 
+## 3b. Report issue & nightly digest
+
+**Submitting.** `app/report-issue.tsx` (bug icon on the Dashboard) posts to `POST /api/v1/issues`. The allowed categories, severities and screens live in `constants/issues.ts`, shared by client and server. The screenshot is picked with `expo-image-picker` (photo-library permission only — camera and microphone are disabled in `app.json`), checked against 2 MB on the device, then sent base64-encoded; the server decodes it, enforces 2 MB again, sniffs the real image type from its first bytes, and stores it in `issue_reports.screenshot` (bytea). Reports are a separate table — see [DATABASE_DESIGN.md](DATABASE_DESIGN.md).
+
+**Nightly job** (`server/src/jobs/issueDigest.ts`, run by the in-process scheduler in `jobs/scheduler.ts`):
+1. **Stack analysis first** (`server/src/lib/issueAnalysis.ts`) over every report from the last 180 days plus anything still un-emailed: totals and week-over-week trend; breakdowns by category/severity/screen/platform/app version; hotspot screens (most open, severe reports); duplicate clusters (word-overlap similarity, boosted by same screen or a shared error signature); recurring error signatures (`TypeError…`, `HTTP 500`, timeouts, `NaN`); new app versions that already have several reports. Each report gets a P1–P4 priority from severity, category, how many similar reports exist, hotspot and regression signals.
+2. **Check new issues** — the not-yet-emailed ones, highest priority first (max `ISSUE_DIGEST_MAX`, default 25).
+3. **Fix suggestion** per issue — Claude (`claude-opus-5-5`) when `ANTHROPIC_API_KEY` is set: it gets the report, its screenshot, the analysis context and similar reports, and returns likely cause, numbered fix steps, files to check, confidence and questions for the reporter. Without a key, or if the call fails, a rule-based suggestion (screen → client/server files, keyword hints) is used instead, so the email always goes out.
+4. **Email** to `ISSUE_DIGEST_TO` (or every active admin if unset) via SMTP: the stack summary, then each issue with its suggestion and screenshot inline. Reports are marked `notified_at` only after SMTP accepts the message, so a failed send is retried the next night — reusing the stored suggestion rather than paying for it again. A Postgres advisory lock keeps it to one send even with several server replicas.
+
+**Turning it on** — in the `.env` next to `docker-compose.yml`: `ISSUE_DIGEST_ENABLED=true`, `ISSUE_DIGEST_TO=<your email>`, `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` (Gmail needs an App Password), optionally `ANTHROPIC_API_KEY`, `ISSUE_DIGEST_TIME` (default `02:00`) and `TZ` (default `Asia/Kolkata`). Then `docker compose up -d --build server`. All variables are listed in `server/.env.example`.
+
+**By hand:**
+- `docker compose exec server npm run issues:analyze` — print the stack analysis (`-- --json` for the full report)
+- `docker compose exec server npm run issues:digest -- --dry-run` — analyse and print the email that would be sent; no Claude calls, no email, nothing written
+- `docker compose exec server npm run issues:digest` — run the real digest now
+
 ---
 
 ## 4. Functionality flows
 
 **Auth flow**
 ```
-app launch → check AsyncStorage for a token pair
+app launch → check secure storage for a token pair (web: always try — the refresh cookie is invisible to JS)
   → tokens found → GET /auth/me (axios interceptor silently refreshes
       the access token first if it's stale) → succeeds → /(tabs) dashboard
                                              → fails → /login
@@ -181,7 +202,7 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 
 ---
 
-## 5. Pages / screens (10 total)
+## 5. Pages / screens (18 total)
 
 | # | Screen | File | Notes |
 |---|---|---|---|
@@ -194,7 +215,15 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 | 7 | Investments | `app/(tabs)/investments.tsx` | Tab 4 |
 | 8 | Goals | `app/(tabs)/goals.tsx` | Tab 5 |
 | 9 | Reports | `app/(tabs)/reports.tsx` | Tab 6, Pro-gated |
-| 10 | Admin — Users | `app/admin/index.tsx` | Modal stack screen, reached from the Dashboard's shield icon (`role: 'admin'` only) |
+| 10 | Admin — Users | `app/admin/index.tsx` | Modal stack screen, reached from the Dashboard's shield icon (admin; support with Active switch only) |
+| 11 | Admin — Audit log | `app/admin/audit-log.tsx` | From User management (admin only) |
+| 12 | System metrics | `app/admin/metrics.tsx` | Shield icon for system managers; from User management for admins |
+| 13 | Settings | `app/settings.tsx` | Gear icon on the Dashboard — email confirmation, password, data export, sign out everywhere, delete account |
+| 14 | Budgets | `app/budgets.tsx` | Dashboard → Budgets |
+| 15 | Accounts | `app/accounts.tsx` | Dashboard → Accounts |
+| 16 | Forgot password | `app/forgot-password.tsx` | "Forgot password?" on Login |
+| 17 | Reset password | `app/reset-password.tsx` | Opened from the emailed link (`?token=…`) |
+| 18 | Confirm email | `app/verify-email.tsx` | Opened from the emailed link (`?token=…`) |
 
 `app/index.tsx` is a redirect (session check → `/login` or `/(tabs)`), not a user-facing page, so it's not counted above.
 

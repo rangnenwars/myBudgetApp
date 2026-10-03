@@ -133,21 +133,22 @@ describe('loans CRUD', () => {
     expect(crossDelete.status).toBe(404);
   });
 
+  // Manual "mark EMI paid" is only for loans that don't count as an expense —
+  // counted loans are paid down automatically when their EMI posts.
   describe('POST /loans/:id/pay-emi', () => {
     const createLoan = async (token: string, extra: Record<string, unknown> = {}) =>
-      (await request(app).post('/api/v1/loans').set(auth(token)).send({ name: 'Car loan', principal: 500000, outstanding: 400000, emi: 10000, ...extra })).body;
+      (await request(app).post('/api/v1/loans').set(auth(token)).send({ name: 'Car loan', principal: 500000, outstanding: 400000, emi: 10000, counts_as_expense: false, ...extra })).body;
     const payEmi = (token: string, id: number) => request(app).post(`/api/v1/loans/${id}/pay-emi`).set(auth(token)).send({ date: '2026-09-05' });
 
-    it('lowers outstanding by one EMI and adds no expense of its own (the month\'s EMI is already auto-posted)', async () => {
+    it('is refused for a loan whose EMI is posted and paid down automatically, leaving it untouched', async () => {
       const { accessToken } = await registerUser();
-      const loan = await createLoan(accessToken);
+      const loan = await createLoan(accessToken, { counts_as_expense: true });
       expect(await listTxns(accessToken)).toHaveLength(1); // the auto-posted EMI for this month
 
       const res = await payEmi(accessToken, loan.id);
-      expect(res.status).toBe(201);
-      expect(res.body.loan.outstanding).toBe(390000);
-      expect(res.body.transaction).toBeUndefined();
-
+      expect(res.status).toBe(400);
+      const list = await request(app).get('/api/v1/loans').set(auth(accessToken));
+      expect(list.body[0].outstanding).toBe(400000);
       expect(await listTxns(accessToken)).toHaveLength(1);
     });
 
@@ -290,11 +291,72 @@ describe('loans CRUD', () => {
     it('stops posting once the loan is fully paid off', async () => {
       const { accessToken } = await registerUser();
       const loan = await createLoan(accessToken, { outstanding: 20000 });
-      await listTxns(accessToken);
+      await listTxns(accessToken); // first posting: expense only
 
-      await request(app).post(`/api/v1/loans/${loan.id}/pay-emi`).set(auth(accessToken)).send({ date: '2026-09-05' });
+      // Two months to catch up: the first clears the balance, the second posts nothing.
       await db.update(loans).set({ emi_expensed_through: monthsAgoStart(2) }).where(eq(loans.id, loan.id));
-      expect(await listTxns(accessToken)).toHaveLength(1);
+      expect(await listTxns(accessToken)).toHaveLength(2);
+      const [row] = await db.select().from(loans).where(eq(loans.id, loan.id));
+      expect(row.outstanding).toBe(0);
+
+      await db.update(loans).set({ emi_expensed_through: monthsAgoStart(1) }).where(eq(loans.id, loan.id));
+      expect(await listTxns(accessToken)).toHaveLength(2);
+    });
+
+    it("does not reduce the balance on a loan's first posting — the balance entered is already today's", async () => {
+      const { accessToken } = await registerUser();
+      const loan = await createLoan(accessToken);
+      await listTxns(accessToken);
+      const [row] = await db.select().from(loans).where(eq(loans.id, loan.id));
+      expect(row.outstanding).toBe(300000);
+    });
+
+    it('pays the balance down by each posted month\'s principal (no rate: the whole EMI)', async () => {
+      const { accessToken } = await registerUser();
+      const loan = await createLoan(accessToken);
+      await db.update(loans).set({ emi_expensed_through: monthsAgoStart(3) }).where(eq(loans.id, loan.id));
+      await listTxns(accessToken);
+      const [row] = await db.select().from(loans).where(eq(loans.id, loan.id));
+      expect(row.outstanding).toBe(240000); // 3 × 20,000
+    });
+
+    it('splits each EMI into interest and principal at the loan rate, and caps the final instalment', async () => {
+      const { accessToken } = await registerUser();
+      const loan = await createLoan(accessToken, { outstanding: 100000, emi: 10000, interest_rate: 12 });
+      await db.update(loans).set({ emi_expensed_through: monthsAgoStart(1) }).where(eq(loans.id, loan.id));
+      const [emiTxn] = await listTxns(accessToken);
+      expect(emiTxn.amount).toBe(10000);
+      let [row] = await db.select().from(loans).where(eq(loans.id, loan.id));
+      expect(row.outstanding).toBe(91000); // 1,000 interest (1% a month), 9,000 principal
+
+      await db.update(loans).set({ outstanding: 5000, emi_expensed_through: monthsAgoStart(1) }).where(eq(loans.id, loan.id));
+      const txns = await listTxns(accessToken);
+      expect(txns.map((t) => t.amount).sort((a, b) => a - b)).toEqual([5050, 10000]); // 5,000 + 50 interest
+      [row] = await db.select().from(loans).where(eq(loans.id, loan.id));
+      expect(row.outstanding).toBe(0);
+    });
+  });
+
+  describe('loan details', () => {
+    it('saves and updates tenure, start date, type, lender and note', async () => {
+      const { accessToken } = await registerUser();
+      const res = await request(app)
+        .post('/api/v1/loans')
+        .set(auth(accessToken))
+        .send({ name: 'Home', principal: 5000000, outstanding: 4000000, emi: 45000, interest_rate: 8.5, tenure_months: 240, start_date: '2022-04-01', loan_type: 'home', lender: 'HDFC', note: 'Flat' });
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ tenure_months: 240, start_date: '2022-04-01', loan_type: 'home', lender: 'HDFC', note: 'Flat', interest_rate: 8.5 });
+
+      const patched = await request(app).patch(`/api/v1/loans/${res.body.id}`).set(auth(accessToken)).send({ lender: 'SBI', note: null });
+      expect(patched.body).toMatchObject({ lender: 'SBI', note: null, tenure_months: 240 });
+    });
+
+    it('rejects an out-of-range interest rate or amount with 400', async () => {
+      const { accessToken } = await registerUser();
+      const base = { name: 'X', principal: 1000, outstanding: 1000, emi: 100 };
+      expect((await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ ...base, interest_rate: 150 })).status).toBe(400);
+      expect((await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ ...base, principal: 1e13 })).status).toBe(400);
+      expect((await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ ...base, start_date: '2026-02-30' })).status).toBe(400);
     });
   });
 
@@ -344,7 +406,7 @@ describe('loans CRUD', () => {
 
     it('uses the adjusted EMI for the next "mark EMI paid"', async () => {
       const { accessToken } = await registerUser();
-      const loan = await createLoan(accessToken);
+      const loan = await createLoan(accessToken, { counts_as_expense: false });
       await partPay(accessToken, loan.id, { amount: 50000, date: '2026-09-05' });
 
       const next = await request(app).post(`/api/v1/loans/${loan.id}/pay-emi`).set(auth(accessToken)).send({ date: '2026-09-06' });
@@ -426,5 +488,25 @@ describe('loans CRUD', () => {
     expect((await request(app).delete(`/api/v1/loans/${created.body.id}`).set(auth(accessToken))).status).toBe(204);
     const list = await request(app).get('/api/v1/loans').set(auth(accessToken));
     expect(list.body).toHaveLength(0);
+  });
+});
+
+describe('POST /api/v1/loans/:id/part-payment under concurrency', () => {
+  it('simultaneous part payments each reduce the balance — none is lost', async () => {
+    const { accessToken } = await registerUser();
+    const loan = await request(app)
+      .post('/api/v1/loans')
+      .set(auth(accessToken))
+      .send({ name: 'Race', principal: 10000, outstanding: 10000, emi: 1000, counts_as_expense: false });
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        request(app).post(`/api/v1/loans/${loan.body.id}/part-payment`).set(auth(accessToken)).send({ amount: 1000, date: '2026-09-15' })
+      )
+    );
+    expect(results.every((r) => r.status === 201)).toBe(true);
+
+    const [row] = await db.select().from(loans).where(eq(loans.id, loan.body.id));
+    expect(row.outstanding).toBe(5000);
   });
 });

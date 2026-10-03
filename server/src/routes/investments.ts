@@ -4,17 +4,20 @@ import { and, eq, desc } from 'drizzle-orm';
 import { db } from '../db/client';
 import { investments } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
+import { idParam, money, MAX_AMOUNT } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { notFound } from '../lib/errors';
+import { localToday } from '../lib/clock';
 
 const router = Router();
 router.use(requireAuth);
 
 const createSchema = z.object({
-  name: z.string().trim().min(1),
-  type: z.string().trim().min(1),
-  amount: z.coerce.number().positive(),
-  current_value: z.coerce.number().nullish(),
+  name: z.string().trim().min(1).max(80),
+  type: z.string().trim().min(1).max(40),
+  amount: money(),
+  // Can't be negative — an investment's worst case is worth nothing.
+  current_value: z.coerce.number().min(0).max(MAX_AMOUNT, 'Amount is too large.').nullish(),
 });
 
 const updateSchema = createSchema
@@ -46,7 +49,7 @@ router.post(
         amount: body.amount,
         current_value: currentValue,
         returns_percent: returnsPercent,
-        start_date: new Date().toISOString().slice(0, 10),
+        start_date: localToday().iso,
       })
       .returning();
     res.status(201).json(row);
@@ -56,7 +59,7 @@ router.post(
 router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const body = updateSchema.parse(req.body);
 
     const [existing] = await db.select().from(investments).where(and(eq(investments.id, id), eq(investments.userId, req.userId!)));
@@ -81,7 +84,7 @@ router.patch(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const [deleted] = await db
       .delete(investments)
       .where(and(eq(investments.id, id), eq(investments.userId, req.userId!)))

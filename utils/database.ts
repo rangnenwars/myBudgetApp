@@ -11,7 +11,21 @@
 // from the JWT) so screen call sites needed minimal changes.
 
 import { api } from './api';
-import { TxnType, Transaction, RecurringTransaction, Loan, Investment, SavingsGoal, GoalContribution, MonthSummary, CategoryTotal } from './types';
+import {
+  TxnType,
+  Transaction,
+  RecurringTransaction,
+  RepeatFrequency,
+  Loan,
+  Investment,
+  SavingsGoal,
+  GoalContribution,
+  MonthSummary,
+  CategoryTotal,
+  Account,
+  AccountType,
+  BudgetStatus,
+} from './types';
 import { Category, CategoryType } from '../constants/categories';
 
 export * from './types';
@@ -19,8 +33,10 @@ export * from './calculations';
 
 // ---------- Transactions ----------
 
-/** `repeat_monthly` also saves a rule so the same entry posts again on the 1st of every following month. */
-export const addTransaction = async (t: Omit<Transaction, 'id' | 'created_at'> & { repeat_monthly?: boolean }): Promise<Transaction> => {
+/** `repeat_frequency` (or the older `repeat_monthly: true`) also saves a rule so the same entry posts again every month/quarter/year on the entry's day. */
+export const addTransaction = async (
+  t: Omit<Transaction, 'id' | 'created_at'> & { repeat_monthly?: boolean; repeat_frequency?: RepeatFrequency }
+): Promise<Transaction> => {
   const { data } = await api.post('/transactions', {
     amount: t.amount,
     type: t.type,
@@ -29,6 +45,15 @@ export const addTransaction = async (t: Omit<Transaction, 'id' | 'created_at'> &
     note: t.note,
     date: t.date,
     repeat_monthly: t.repeat_monthly,
+    repeat_frequency: t.repeat_frequency,
+  });
+  return data;
+};
+
+/** Saves several entries in one all-or-nothing request — either all are saved or none (no half-saved batch to re-submit as duplicates). */
+export const addTransactionsBatch = async (entries: Omit<Transaction, 'id' | 'created_at' | 'month' | 'year'>[]): Promise<Transaction[]> => {
+  const { data } = await api.post('/transactions/batch', {
+    entries: entries.map((t) => ({ amount: t.amount, type: t.type, category_key: t.category, subcategory: t.subcategory, note: t.note, date: t.date })),
   });
   return data;
 };
@@ -54,6 +79,23 @@ export const deleteTransaction = async (id: number): Promise<void> => {
 
 export const getTransactions = async (month?: number, year?: number): Promise<Transaction[]> => {
   const { data } = await api.get('/transactions', { params: { month, year } });
+  return data;
+};
+
+export interface TransactionPageQuery {
+  q?: string;
+  type?: TxnType;
+  category?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  cursor?: string | null;
+}
+
+/** One newest-first page with server-side search/filters; pass the returned nextCursor to get the next page (null = no more). */
+export const getTransactionsPage = async (query: TransactionPageQuery): Promise<{ items: Transaction[]; nextCursor: string | null }> => {
+  const params = Object.fromEntries(Object.entries(query).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const { data } = await api.get('/transactions/page', { params });
   return data;
 };
 
@@ -99,21 +141,24 @@ export const getExportCsv = async (startMonth: number, startYear: number, endMon
   return data;
 };
 
-// ---------- Repeating (monthly) entries ----------
+// ---------- Repeating entries ----------
 
 export const getRecurring = async (): Promise<RecurringTransaction[]> => {
   const { data } = await api.get('/recurring');
   return data;
 };
 
-/** Makes an existing transaction repeat monthly (posting resumes from the month after it). */
-export const repeatTransactionMonthly = async (transactionId: number): Promise<RecurringTransaction> => {
-  const { data } = await api.post('/recurring', { transaction_id: transactionId });
+/** Makes an existing transaction repeat (on its own day of the month), starting one period after it. */
+export const repeatTransactionMonthly = async (transactionId: number, frequency: RepeatFrequency = 'monthly'): Promise<RecurringTransaction> => {
+  const { data } = await api.post('/recurring', { transaction_id: transactionId, frequency });
   return data;
 };
 
-/** A new amount applies to months not yet posted; already-posted transactions keep theirs. */
-export const updateRecurring = async (id: number, patch: Partial<{ amount: number; note: string | null }>): Promise<RecurringTransaction> => {
+/** Changes apply to entries not yet posted; already-posted transactions keep theirs. */
+export const updateRecurring = async (
+  id: number,
+  patch: Partial<{ amount: number; note: string | null; frequency: RepeatFrequency; day_of_month: number }>
+): Promise<RecurringTransaction> => {
   const { data } = await api.patch(`/recurring/${id}`, patch);
   return data;
 };
@@ -132,6 +177,11 @@ export const addLoan = async (l: Omit<Loan, 'id' | 'is_active' | 'counts_as_expe
     outstanding: l.outstanding,
     emi: l.emi,
     interest_rate: l.interest_rate,
+    tenure_months: l.tenure_months,
+    start_date: l.start_date,
+    loan_type: l.loan_type,
+    lender: l.lender,
+    note: l.note,
     counts_as_expense: l.counts_as_expense,
   });
   return data;
@@ -139,13 +189,25 @@ export const addLoan = async (l: Omit<Loan, 'id' | 'is_active' | 'counts_as_expe
 
 export const updateLoan = async (
   id: number,
-  patch: Partial<{ name: string; principal: number; outstanding: number; emi: number; interest_rate: number | null; counts_as_expense: boolean }>
+  patch: Partial<{
+    name: string;
+    principal: number;
+    outstanding: number;
+    emi: number;
+    interest_rate: number | null;
+    tenure_months: number | null;
+    start_date: string | null;
+    loan_type: string | null;
+    lender: string | null;
+    note: string | null;
+    counts_as_expense: boolean;
+  }>
 ): Promise<Loan> => {
   const { data } = await api.patch(`/loans/${id}`, patch);
   return data;
 };
 
-/** Marks one EMI as paid: the server lowers `outstanding` only. It does not log an expense — a counted loan's monthly EMI is posted automatically by the server, and an excluded loan stays out of expenses. */
+/** Marks one EMI as paid on a loan that does NOT count as an expense: lowers `outstanding`, logs nothing. Counted loans are refused — the server posts their EMI and pays the balance down automatically each month. */
 export const payLoanEmi = async (id: number, date: string): Promise<{ loan: Loan }> => {
   const { data } = await api.post(`/loans/${id}/pay-emi`, { date });
   return data;
@@ -269,11 +331,13 @@ export interface AdminUser {
   createdAt: string;
   deactivatedAt: string | null;
   lastLoginAt: string | null;
+  emailVerified: boolean;
 }
 
-export const getAdminUsers = async (): Promise<AdminUser[]> => {
-  const { data } = await api.get('/admin/users');
-  return data;
+/** Newest accounts first, searched by name/email on the server; `total` is how many match in all. */
+export const getAdminUsers = async (q?: string, limit = 100, offset = 0): Promise<{ items: AdminUser[]; total: number }> => {
+  const res = await api.get('/admin/users', { params: { q: q || undefined, limit, offset } });
+  return { items: res.data, total: Number(res.headers['x-total-count'] ?? res.data.length) };
 };
 
 export const updateAdminUser = async (
@@ -297,4 +361,104 @@ export const recordNetWorthSnapshot = async (): Promise<void> => {
 export const getNetWorthSnapshots = async (): Promise<{ month: number; year: number; net_worth: number }[]> => {
   const { data } = await api.get('/net-worth/history');
   return data.map((s: { month: number; year: number; netWorth: number }) => ({ month: s.month, year: s.year, net_worth: s.netWorth }));
+};
+
+// ---------- Money accounts (bank / cash / wallet / credit card) ----------
+
+export const getAccounts = async (): Promise<Account[]> => {
+  const { data } = await api.get('/accounts');
+  return data;
+};
+
+export const addAccount = async (a: { name: string; type: AccountType; balance: number }): Promise<Account> => {
+  const { data } = await api.post('/accounts', a);
+  return data;
+};
+
+export const updateAccount = async (id: number, patch: Partial<{ name: string; type: AccountType; balance: number }>): Promise<Account> => {
+  const { data } = await api.patch(`/accounts/${id}`, patch);
+  return data;
+};
+
+export const deleteAccount = async (id: number): Promise<void> => {
+  await api.delete(`/accounts/${id}`);
+};
+
+// ---------- Budgets (monthly limit per expense category) ----------
+
+/** Every limit with the month's spending against it, most-used first. */
+export const getBudgets = async (month?: number, year?: number): Promise<BudgetStatus[]> => {
+  const { data } = await api.get('/budgets', { params: { month, year } });
+  return data;
+};
+
+export const setBudget = async (categoryKey: string, monthlyLimit: number): Promise<void> => {
+  await api.put(`/budgets/${categoryKey}`, { monthly_limit: monthlyLimit });
+};
+
+export const deleteBudget = async (categoryKey: string): Promise<void> => {
+  await api.delete(`/budgets/${categoryKey}`);
+};
+
+// ---------- Your account (password reset, verification, export) ----------
+// Sign-in/out, change password and account deletion live in AuthContext
+// because they change the session; these are the stand-alone calls.
+
+export const requestPasswordReset = async (email: string): Promise<void> => {
+  await api.post('/auth/forgot-password', { email });
+};
+
+export const resetPassword = async (token: string, password: string): Promise<void> => {
+  await api.post('/auth/reset-password', { token, password });
+};
+
+export const verifyEmail = async (token: string): Promise<void> => {
+  await api.post('/auth/verify-email', { token });
+};
+
+export const resendVerificationEmail = async (): Promise<void> => {
+  await api.post('/auth/me/resend-verification');
+};
+
+/** Everything the account owns, as pretty-printed JSON text ready to save. */
+export const exportMyData = async (): Promise<string> => {
+  const { data } = await api.get('/auth/me/export');
+  return JSON.stringify(data, null, 2);
+};
+
+// ---------- Staff: audit log (admin) and system metrics (admin, system manager) ----------
+
+export interface AuditLogEntry {
+  id: number;
+  actorEmail: string;
+  targetEmail: string;
+  action: string;
+  details: string | null;
+  createdAt: string;
+}
+
+/** Newest first, `limit` at a time; pass the last id shown as `before` for the next (older) page. */
+export const getAuditLog = async (before?: number, limit = 100): Promise<AuditLogEntry[]> => {
+  const { data } = await api.get('/admin/audit-log', { params: { before, limit } });
+  return data;
+};
+
+export interface SystemMetrics {
+  users: { total: number; active: number; inactive: number; byRole: Record<AdminRole, number>; byTier: Record<'standard' | 'pro', number> };
+  signups: { last30Days: number };
+  engagement: { loggedInLast30Days: number; loggedInLast7Days: number };
+  usage: { transactions: number; loans: number; investments: number; goals: number; customCategories: number };
+  finance: {
+    costPerUserPerYearInr: number;
+    estimatedAnnualCostInr: number;
+    proUsers: number;
+    estimatedAnnualRevenueInr: number;
+    estimatedAnnualMarginInr: number;
+    revenueNote: string;
+  };
+}
+
+export const getSystemMetrics = async (): Promise<SystemMetrics> => {
+  const { data } = await api.get('/system/metrics');
+  return data;
 };

@@ -8,15 +8,33 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { badRequest, unauthorized, conflict, forbidden } from '../lib/errors';
 import { requireAuth } from '../middleware/auth';
 import { loginLimiter, registerLimiter, refreshLimiter } from '../middleware/rateLimit';
-import { signAccessToken, generateRefreshToken, hashToken, REFRESH_TOKEN_TTL_MS } from '../lib/tokens';
+import { hashToken } from '../lib/tokens';
+import {
+  clearRefreshCookie,
+  emailMatches,
+  incomingRefreshToken,
+  issueTokenPair,
+  pgErrorCode,
+  sendTokens,
+  sendVerificationEmail,
+  toUserResponse,
+  wantsCookie,
+} from '../lib/session';
 
 const router = Router();
-const BCRYPT_COST = 12;
+export const BCRYPT_COST = 12;
+
+// bcrypt only reads the first 72 bytes, so longer passwords would silently
+// be truncated — cap them instead.
+export const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(72, 'Password must be at most 72 characters');
 
 const registerSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required'),
+  name: z.string().trim().min(1, 'Name is required').max(80),
   email: z.string().trim().toLowerCase().email('Enter a valid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: passwordSchema,
 });
 
 const loginSchema = z.object({
@@ -24,29 +42,10 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
-const refreshSchema = z.object({ refreshToken: z.string().min(1) });
+// Optional: the web client sends no token in the body — it lives in the
+// httpOnly cookie instead (lib/session.ts).
+const refreshSchema = z.object({ refreshToken: z.string().min(1).optional() });
 const tierSchema = z.object({ tier: z.enum(['standard', 'pro']) });
-
-const toUserResponse = (user: typeof users.$inferSelect) => ({
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  tier: user.tier,
-  budgetClass: user.budgetClass,
-  role: user.role,
-  isActive: user.isActive,
-});
-
-const issueTokenPair = async (userId: number) => {
-  const accessToken = signAccessToken(userId);
-  const { token: refreshToken, hash } = generateRefreshToken();
-  await db.insert(refreshTokens).values({
-    userId,
-    tokenHash: hash,
-    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-  });
-  return { accessToken, refreshToken };
-};
 
 router.post(
   '/register',
@@ -54,14 +53,24 @@ router.post(
   asyncHandler(async (req, res) => {
     const body = registerSchema.parse(req.body);
 
-    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, body.email));
+    const [existing] = await db.select({ id: users.id }).from(users).where(emailMatches(body.email));
     if (existing) throw conflict('An account with that email already exists.');
 
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_COST);
-    const [user] = await db.insert(users).values({ name: body.name, email: body.email, passwordHash, lastLoginAt: new Date() }).returning();
+    let user: typeof users.$inferSelect;
+    try {
+      [user] = await db.insert(users).values({ name: body.name, email: body.email, passwordHash, lastLoginAt: new Date() }).returning();
+    } catch (err) {
+      // Two sign-ups for the same email racing past the check above.
+      if (pgErrorCode(err) === '23505') throw conflict('An account with that email already exists.');
+      throw err;
+    }
+
+    // Best-effort: a mail outage must not block sign-up — the app offers "resend".
+    await sendVerificationEmail(user).catch((err) => console.error('Verification email failed:', err));
 
     const tokens = await issueTokenPair(user.id);
-    res.status(201).json({ user: toUserResponse(user), ...tokens });
+    res.status(201).json({ user: toUserResponse(user), ...sendTokens(req, res, tokens) });
   })
 );
 
@@ -71,7 +80,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const body = loginSchema.parse(req.body);
 
-    const [user] = await db.select().from(users).where(eq(users.email, body.email));
+    const [user] = await db.select().from(users).where(emailMatches(body.email));
     // Same generic error whether the email doesn't exist or the password is wrong — don't reveal which.
     if (!user) throw unauthorized('Invalid email or password.');
 
@@ -86,7 +95,7 @@ router.post(
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
     const tokens = await issueTokenPair(user.id);
-    res.json({ user: toUserResponse(user), ...tokens });
+    res.json({ user: toUserResponse(user), ...sendTokens(req, res, tokens) });
   })
 );
 
@@ -94,37 +103,53 @@ router.post(
   '/refresh',
   refreshLimiter,
   asyncHandler(async (req, res) => {
-    const { refreshToken } = refreshSchema.parse(req.body);
-    const hash = hashToken(refreshToken);
+    const body = refreshSchema.parse(req.body ?? {});
+    const refreshToken = incomingRefreshToken(req, body.refreshToken);
+    if (!refreshToken) {
+      clearRefreshCookie(req, res);
+      throw unauthorized('Refresh token is invalid or expired.');
+    }
 
+    // Revoke-and-return in one statement: of two requests racing with the
+    // same token, exactly one gets the row, so a token can never be
+    // exchanged twice.
     const [row] = await db
-      .select()
-      .from(refreshTokens)
-      .where(and(eq(refreshTokens.tokenHash, hash), isNull(refreshTokens.revokedAt), gt(refreshTokens.expiresAt, new Date())));
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.tokenHash, hashToken(refreshToken)), isNull(refreshTokens.revokedAt), gt(refreshTokens.expiresAt, new Date())))
+      .returning({ userId: refreshTokens.userId });
 
-    if (!row) throw unauthorized('Refresh token is invalid or expired.');
+    if (!row) {
+      clearRefreshCookie(req, res);
+      throw unauthorized('Refresh token is invalid or expired.');
+    }
 
+    // Deactivated mid-session: the token was already revoked above, so the
+    // access token can't be renewed once it expires (max ~15 min away).
     const [user] = await db.select({ isActive: users.isActive }).from(users).where(eq(users.id, row.userId));
     if (!user?.isActive) {
-      // Deactivated mid-session: kill this refresh token too, so the
-      // access token can't be renewed once it expires (max ~15 min away).
-      await db.update(refreshTokens).set({ revokedAt: new Date() }).where(eq(refreshTokens.id, row.id));
+      clearRefreshCookie(req, res);
       throw unauthorized('Account no longer active.');
     }
 
-    // Rotate: revoke the one just used, issue a fresh pair.
-    await db.update(refreshTokens).set({ revokedAt: new Date() }).where(eq(refreshTokens.id, row.id));
     const tokens = await issueTokenPair(row.userId);
-    res.json(tokens);
+    res.json(sendTokens(req, res, tokens));
   })
 );
 
 router.post(
   '/logout',
   asyncHandler(async (req, res) => {
-    const { refreshToken } = refreshSchema.parse(req.body);
-    const hash = hashToken(refreshToken);
-    await db.update(refreshTokens).set({ revokedAt: new Date() }).where(and(eq(refreshTokens.tokenHash, hash), isNull(refreshTokens.revokedAt)));
+    const body = refreshSchema.parse(req.body ?? {});
+    const refreshToken = incomingRefreshToken(req, body.refreshToken);
+    if (!refreshToken && !wantsCookie(req)) throw badRequest('refreshToken is required.');
+    if (refreshToken) {
+      await db
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshTokens.tokenHash, hashToken(refreshToken)), isNull(refreshTokens.revokedAt)));
+    }
+    clearRefreshCookie(req, res);
     res.status(204).send();
   })
 );

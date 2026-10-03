@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { count, desc, eq, ilike, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import { users } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
+import { idParam, likeContains } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { requireStaff } from '../middleware/requireStaff';
 import { recordAdminAction } from '../lib/auditLog';
+import { revokeAllRefreshTokens } from '../lib/session';
 import { badRequest, notFound, forbidden } from '../lib/errors';
 
 const router = Router();
@@ -34,6 +36,7 @@ const toAdminUserResponse = (user: typeof users.$inferSelect) => ({
   createdAt: user.createdAt,
   deactivatedAt: user.deactivatedAt,
   lastLoginAt: user.lastLoginAt,
+  emailVerified: user.emailVerifiedAt != null,
 });
 
 const getActorEmail = async (actorId: number) => {
@@ -41,11 +44,26 @@ const getActorEmail = async (actorId: number) => {
   return actor?.email ?? 'unknown';
 };
 
+const listQuery = z.object({
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+// Newest accounts first, one page at a time, optionally filtered by a name or
+// email search done in the database — the list never loads every account.
+// X-Total-Count carries how many match in all.
 router.get(
   '/',
   requireStaff,
-  asyncHandler(async (_req, res) => {
-    const rows = await db.select().from(users).orderBy(users.createdAt);
+  asyncHandler(async (req, res) => {
+    const q = listQuery.parse(req.query);
+    const where = q.q ? or(ilike(users.name, likeContains(q.q)), ilike(users.email, likeContains(q.q))) : undefined;
+    const [rows, [{ total }]] = await Promise.all([
+      db.select().from(users).where(where).orderBy(desc(users.createdAt), desc(users.id)).limit(q.limit).offset(q.offset),
+      db.select({ total: count() }).from(users).where(where),
+    ]);
+    res.setHeader('X-Total-Count', String(total));
     res.json(rows.map(toAdminUserResponse));
   })
 );
@@ -54,7 +72,7 @@ router.patch(
   '/:id',
   requireStaff,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     if (id === req.userId) throw badRequest('Use your own account to change your own settings.');
 
     const body = patchSchema.parse(req.body);
@@ -79,6 +97,8 @@ router.patch(
     }
 
     const [updated] = await db.update(users).set(patch).where(eq(users.id, id)).returning();
+    // Deactivation ends every session now, not when tokens expire.
+    if (body.isActive === false) await revokeAllRefreshTokens(id);
 
     const changes: string[] = [];
     if (body.role !== undefined) changes.push(`role: ${target.role} -> ${body.role}`);
@@ -101,7 +121,7 @@ router.delete(
   '/:id',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     if (id === req.userId) throw badRequest('You cannot delete your own account.');
 
     const [target] = await db.select({ id: users.id, email: users.email, role: users.role }).from(users).where(eq(users.id, id));

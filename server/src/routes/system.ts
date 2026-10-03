@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { count, eq, gte, isNotNull } from 'drizzle-orm';
+import { sql, SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { users, transactions, loans, investments, savingsGoals, categories } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
@@ -28,28 +28,38 @@ router.get(
     const last30 = new Date(now.getTime() - 30 * DAY_MS);
     const last7 = new Date(now.getTime() - 7 * DAY_MS);
 
-    const [[{ total }], [{ active }], [{ inactive }], [{ signups30 }], [{ loggedIn30 }], [{ loggedIn7 }]] = await Promise.all([
-      db.select({ total: count() }).from(users),
-      db.select({ active: count() }).from(users).where(eq(users.isActive, true)),
-      db.select({ inactive: count() }).from(users).where(eq(users.isActive, false)),
-      db.select({ signups30: count() }).from(users).where(gte(users.createdAt, last30)),
-      db.select({ loggedIn30: count() }).from(users).where(gte(users.lastLoginAt, last30)),
-      db.select({ loggedIn7: count() }).from(users).where(gte(users.lastLoginAt, last7)),
-    ]);
+    // Two queries in all (was 13): every user count in one pass over users
+    // with FILTER, and the usage counts as scalar subqueries in another.
+    const n = (cond: SQL) => sql<number>`count(*) filter (where ${cond})::int`;
+    const [u] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        active: n(sql`${users.isActive}`),
+        inactive: n(sql`not ${users.isActive}`),
+        signups30: n(sql`${users.createdAt} >= ${last30}`),
+        loggedIn30: n(sql`${users.lastLoginAt} >= ${last30}`),
+        loggedIn7: n(sql`${users.lastLoginAt} >= ${last7}`),
+        role_user: n(sql`${users.role} = 'user'`),
+        role_admin: n(sql`${users.role} = 'admin'`),
+        role_support: n(sql`${users.role} = 'support'`),
+        role_system_manager: n(sql`${users.role} = 'system_manager'`),
+        tier_standard: n(sql`${users.tier} = 'standard'`),
+        tier_pro: n(sql`${users.tier} = 'pro'`),
+      })
+      .from(users);
+    const { total, active, inactive, signups30, loggedIn30, loggedIn7 } = u;
+    const byRole = Object.fromEntries(ROLES.map((r) => [r, u[`role_${r}` as keyof typeof u]]));
+    const byTier = Object.fromEntries(TIERS.map((t) => [t, u[`tier_${t}` as keyof typeof u]]));
 
-    const roleRows = await db.select({ role: users.role, n: count() }).from(users).groupBy(users.role);
-    const byRole = Object.fromEntries(ROLES.map((r) => [r, roleRows.find((row) => row.role === r)?.n ?? 0]));
-
-    const tierRows = await db.select({ tier: users.tier, n: count() }).from(users).groupBy(users.tier);
-    const byTier = Object.fromEntries(TIERS.map((t) => [t, tierRows.find((row) => row.tier === t)?.n ?? 0]));
-
-    const [[{ txCount }], [{ loanCount }], [{ investmentCount }], [{ goalCount }], [{ customCategoryCount }]] = await Promise.all([
-      db.select({ txCount: count() }).from(transactions),
-      db.select({ loanCount: count() }).from(loans),
-      db.select({ investmentCount: count() }).from(investments),
-      db.select({ goalCount: count() }).from(savingsGoals),
-      db.select({ customCategoryCount: count() }).from(categories).where(isNotNull(categories.userId)),
-    ]);
+    const countOf = (table: typeof transactions | typeof loans | typeof investments | typeof savingsGoals) => sql<number>`(select count(*)::int from ${table})`;
+    const [{ txCount, loanCount, investmentCount, goalCount, customCategoryCount }] = await db.execute<{
+      txCount: number;
+      loanCount: number;
+      investmentCount: number;
+      goalCount: number;
+      customCategoryCount: number;
+    }>(sql`select ${countOf(transactions)} as "txCount", ${countOf(loans)} as "loanCount", ${countOf(investments)} as "investmentCount",
+      ${countOf(savingsGoals)} as "goalCount", (select count(*)::int from ${categories} where ${categories.userId} is not null) as "customCategoryCount"`).then((r) => r.rows);
 
     const proUsers = byTier.pro;
     const estimatedAnnualCostInr = active * COST_PER_USER_PER_YEAR_INR;

@@ -70,12 +70,20 @@ export default function LoginScreen() {
               placeholder="••••••••"
               placeholderTextColor={COLORS.textDim}
               secureTextEntry={!showPassword}
+              onSubmitEditing={onSubmit}
+              returnKeyType="go"
             />
             <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn}>
               <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={COLORS.textMuted} />
             </Pressable>
           </View>
         </View>
+
+        <Link href="/forgot-password" asChild>
+          <Pressable style={styles.forgotBtn} hitSlop={6}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </Pressable>
+        </Link>
 
         {error && <Text style={styles.error}>{error}</Text>}
 
@@ -122,6 +130,8 @@ const styles = StyleSheet.create({
   passwordRow: { position: 'relative', justifyContent: 'center' },
   passwordInput: { paddingRight: 44 },
   eyeBtn: { position: 'absolute', right: 12 },
+  forgotBtn: { alignSelf: 'flex-end', marginTop: -SPACING.xs, marginBottom: SPACING.md },
+  forgotText: { color: COLORS.accent, fontSize: 13, fontWeight: '600' },
   error: { color: COLORS.red, fontSize: 13, marginBottom: SPACING.md },
   primaryBtn: {
     backgroundColor: COLORS.accent,

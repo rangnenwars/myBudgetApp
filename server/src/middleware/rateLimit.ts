@@ -26,3 +26,19 @@ export const loginLimiter = limiter(10, 'Too many failed sign-in attempts. Try a
 export const registerLimiter = limiter(5, 'Too many accounts created from this network. Try again later.');
 
 export const refreshLimiter = limiter(60, 'Too many requests. Try again later.');
+
+/** Anything that sends an email (password reset, verification resend) — stops it being used to spam an inbox. */
+export const emailLimiter = limiter(5, 'Too many emails requested. Try again in 15 minutes.');
+
+/** Report issue submissions carry up to a 2 MB screenshot each — cap how much one network can push per window. */
+export const issueReportLimiter = limiter(10, 'Too many issue reports. Try again in 15 minutes.');
+
+/**
+ * Endpoints that check the account password while signed in (change
+ * password, delete account). Keyed per account, not per IP, so a stolen
+ * access token can't be used to guess the password from many addresses.
+ * Mount after requireAuth.
+ */
+export const passwordCheckLimiter = limiter(10, 'Too many password attempts. Try again in 15 minutes.', {
+  keyGenerator: (req) => `user:${req.userId}`,
+});

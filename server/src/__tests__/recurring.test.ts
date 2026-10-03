@@ -2,7 +2,8 @@ import request from 'supertest';
 import { eq } from 'drizzle-orm';
 import { app, registerUser } from './helpers';
 import { db } from '../db/client';
-import { recurringTransactions } from '../db/schema';
+import { recurringTransactions, transactions } from '../db/schema';
+import { postDueRecurring, nextDueAfter, postingDate } from '../lib/recurringTransactions';
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -64,21 +65,23 @@ describe('repeat every month', () => {
     expect(await listRules(accessToken)).toHaveLength(0);
   });
 
-  it('posts each month since the original entry on the 1st, oldest first, with the rule amount', async () => {
+  // Day 1 so this month's entry is always already due, whatever today is;
+  // other days and frequencies are covered with a fixed date further down.
+  it('posts each month since the original entry, oldest first, with the rule amount', async () => {
     const { accessToken } = await registerUser();
-    await addRepeating(accessToken, { date: dayIn(3, 19), note: 'Salary' });
+    await addRepeating(accessToken, { date: dayIn(3, 1), note: 'Salary' });
 
     const txns = await listTxns(accessToken);
     expect(txns).toHaveLength(4); // the original + the 3 following months
-    const posted = txns.filter((t) => t.date.endsWith('-01') && t.note === 'Salary').map((t) => t.date).sort();
-    expect(posted).toEqual([monthsAgo(2).start, monthsAgo(1).start, CUR_START]);
+    const posted = txns.filter((t) => t.note === 'Salary').map((t) => t.date).sort();
+    expect(posted).toEqual([monthsAgo(3).start, monthsAgo(2).start, monthsAgo(1).start, CUR_START]);
     expect(txns.every((t) => t.amount === 50000 && t.type === 'income' && t.category === 'salary_1')).toBe(true);
   });
 
   it('counts posted income and expenses in the report totals for the current month', async () => {
     const { accessToken } = await registerUser();
-    await addRepeating(accessToken, { date: dayIn(1, 10) });
-    await addRepeating(accessToken, { date: dayIn(1, 10), type: 'expense', category_key: 'internet', amount: 800 });
+    await addRepeating(accessToken, { date: dayIn(1, 1) });
+    await addRepeating(accessToken, { date: dayIn(1, 1), type: 'expense', category_key: 'internet', amount: 800 });
 
     const summary = await request(app)
       .get('/api/v1/reports/summary')
@@ -89,14 +92,14 @@ describe('repeat every month', () => {
 
   it('uses a generic note when the entry had none', async () => {
     const { accessToken } = await registerUser();
-    await addRepeating(accessToken, { date: dayIn(1, 10) });
+    await addRepeating(accessToken, { date: dayIn(1, 1) });
     const posted = (await listTxns(accessToken)).find((t) => t.date === CUR_START);
     expect(posted?.note).toBe('Repeats monthly');
   });
 
   it('is idempotent across repeated reads and parallel requests', async () => {
     const { accessToken } = await registerUser();
-    await addRepeating(accessToken, { date: dayIn(2, 5) });
+    await addRepeating(accessToken, { date: dayIn(2, 1) });
 
     await Promise.all(Array.from({ length: 6 }, () => request(app).get('/api/v1/transactions').set(auth(accessToken))));
     await listTxns(accessToken);
@@ -105,7 +108,7 @@ describe('repeat every month', () => {
 
   it('does not bring back a posted transaction the user deleted', async () => {
     const { accessToken } = await registerUser();
-    await addRepeating(accessToken, { date: dayIn(1, 10) });
+    await addRepeating(accessToken, { date: dayIn(1, 1) });
     const posted = (await listTxns(accessToken)).find((t) => t.date === CUR_START)!;
 
     await request(app).delete(`/api/v1/transactions/${posted.id}`).set(auth(accessToken));
@@ -121,8 +124,9 @@ describe('repeat every month', () => {
 
   describe('making an existing transaction repeat', () => {
     const addPlain = async (token: string, body: Record<string, unknown> = {}) =>
-      (await request(app).post('/api/v1/transactions').set(auth(token)).send({ amount: 267000, type: 'income', category_key: 'salary_1', date: dayIn(1, 19), note: 'Salary', ...body })).body as Txn;
-    const makeRepeat = (token: string, transaction_id: unknown) => request(app).post('/api/v1/recurring').set(auth(token)).send({ transaction_id });
+      (await request(app).post('/api/v1/transactions').set(auth(token)).send({ amount: 267000, type: 'income', category_key: 'salary_1', date: dayIn(1, 1), note: 'Salary', ...body })).body as Txn;
+    const makeRepeat = (token: string, transaction_id: unknown, extra: Record<string, unknown> = {}) =>
+      request(app).post('/api/v1/recurring').set(auth(token)).send({ transaction_id, ...extra });
 
     it('copies the transaction into a rule and posts from the following month', async () => {
       const { accessToken } = await registerUser();
@@ -135,6 +139,14 @@ describe('repeat every month', () => {
       const all = await listTxns(accessToken);
       expect(all).toHaveLength(2); // the original + this month's posting
       expect(all.find((t) => t.date === CUR_START)).toMatchObject({ amount: 267000, type: 'income', note: 'Salary' });
+    });
+
+    it("takes a frequency and repeats on the transaction's own day of the month", async () => {
+      const { accessToken } = await registerUser();
+      const txn = await addPlain(accessToken, { date: '2025-01-20' });
+      const res = await makeRepeat(accessToken, txn.id, { frequency: 'yearly' });
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ frequency: 'yearly', day_of_month: 20, posted_through: '2025-01-01' });
     });
 
     it('refuses an identical rule so a double tap cannot double-post', async () => {
@@ -164,16 +176,17 @@ describe('repeat every month', () => {
   describe('editing and stopping', () => {
     it('changes the amount only for months not yet posted', async () => {
       const { accessToken } = await registerUser();
-      await addRepeating(accessToken, { date: dayIn(0, 15) });
+      await addRepeating(accessToken, { date: dayIn(0, 1) });
       const [rule] = await listRules(accessToken);
 
       const patched = await request(app).patch(`/api/v1/recurring/${rule.id}`).set(auth(accessToken)).send({ amount: 60000, note: 'Raise' });
       expect(patched.status).toBe(200);
       expect(patched.body).toMatchObject({ amount: 60000, note: 'Raise' });
 
-      await db.update(recurringTransactions).set({ posted_through: monthsAgo(1).start }).where(eq(recurringTransactions.id, rule.id));
+      // Rewind the rule one month so this month's entry falls due again.
+      await db.update(recurringTransactions).set({ posted_through: monthsAgo(1).start, next_due: CUR_START }).where(eq(recurringTransactions.id, rule.id));
       const txns = await listTxns(accessToken);
-      expect(txns.find((t) => t.date === dayIn(0, 15))?.amount).toBe(50000); // original entry untouched
+      expect(txns.find((t) => t.date === CUR_START && t.note == null)?.amount).toBe(50000); // original entry untouched
       expect(txns.find((t) => t.date === CUR_START && t.note === 'Raise')?.amount).toBe(60000);
     });
 
@@ -187,7 +200,7 @@ describe('repeat every month', () => {
 
     it('stops posting once deleted, but keeps what was already posted', async () => {
       const { accessToken } = await registerUser();
-      await addRepeating(accessToken, { date: dayIn(2, 5) });
+      await addRepeating(accessToken, { date: dayIn(2, 1) });
       expect(await listTxns(accessToken)).toHaveLength(3);
       const [rule] = await listRules(accessToken);
 
@@ -219,5 +232,102 @@ describe('repeat every month', () => {
       await request(app).delete(`/api/v1/transactions/${(await listTxns(accessToken))[0].id}`).set(auth(accessToken));
       expect((await request(app).delete(`/api/v1/categories/${category.body.key}`).set(auth(accessToken))).status).toBe(204);
     });
+  });
+});
+
+// Posting logic with a fixed "today", so day-of-month and frequency rules are
+// tested independently of when the suite runs. Rules are inserted directly
+// and results read from the database — no API call for these users, so the
+// request middleware (which uses the real date) never runs for them.
+describe('postDueRecurring schedule', () => {
+  const insertRule = async (userId: number, rule: { frequency: 'monthly' | 'quarterly' | 'yearly'; day: number; postedThrough: string }) =>
+    db
+      .insert(recurringTransactions)
+      .values({
+        userId,
+        category: 'salary_1',
+        type: 'income',
+        amount: 1000,
+        posted_through: rule.postedThrough,
+        frequency: rule.frequency,
+        day_of_month: rule.day,
+        next_due: nextDueAfter(rule.postedThrough, rule.frequency, rule.day),
+      })
+      .returning();
+  const postedDates = async (userId: number) =>
+    (await db.select({ date: transactions.date }).from(transactions).where(eq(transactions.userId, userId))).map((r) => r.date).sort();
+
+  it("posts on the rule's day, falling back to the last day of shorter months, and waits for this month's day", async () => {
+    const { user } = await registerUser();
+    const [rule] = await insertRule(user.id, { frequency: 'monthly', day: 31, postedThrough: '2026-01-01' });
+
+    expect(await postDueRecurring(user.id, new Date('2026-04-15T12:00:00Z'))).toBe(2);
+    expect(await postedDates(user.id)).toEqual(['2026-02-28', '2026-03-31']);
+    const [after] = await db.select().from(recurringTransactions).where(eq(recurringTransactions.id, rule.id));
+    expect(after).toMatchObject({ posted_through: '2026-03-01', next_due: '2026-04-30' });
+
+    // Nothing more until 30 April.
+    expect(await postDueRecurring(user.id, new Date('2026-04-29T12:00:00Z'))).toBe(0);
+    expect(await postDueRecurring(user.id, new Date('2026-04-30T12:00:00Z'))).toBe(1);
+  });
+
+  it('posts quarterly rules every third month', async () => {
+    const { user } = await registerUser();
+    await insertRule(user.id, { frequency: 'quarterly', day: 5, postedThrough: '2026-01-01' });
+    expect(await postDueRecurring(user.id, new Date('2026-10-20T00:00:00Z'))).toBe(3);
+    expect(await postedDates(user.id)).toEqual(['2026-04-05', '2026-07-05', '2026-10-05']);
+  });
+
+  it('posts yearly rules once a year', async () => {
+    const { user } = await registerUser();
+    await insertRule(user.id, { frequency: 'yearly', day: 1, postedThrough: '2024-03-01' });
+    expect(await postDueRecurring(user.id, new Date('2026-10-03T00:00:00Z'))).toBe(2);
+    expect(await postedDates(user.id)).toEqual(['2025-03-01', '2026-03-01']);
+  });
+
+  it('postingDate handles leap years', () => {
+    expect(postingDate(2028, 2, 30)).toBe('2028-02-29');
+    expect(postingDate(2027, 2, 30)).toBe('2027-02-28');
+  });
+});
+
+describe('repeat frequency via the API', () => {
+  it("POST /transactions with repeat_frequency saves a rule on the entry's day", async () => {
+    const { accessToken } = await registerUser();
+    const res = await request(app)
+      .post('/api/v1/transactions')
+      .set(auth(accessToken))
+      .send({ amount: 12000, type: 'expense', category_key: 'internet', date: '2026-09-15', repeat_frequency: 'quarterly' });
+    expect(res.status).toBe(201);
+    const [rule] = (await request(app).get('/api/v1/recurring').set(auth(accessToken))).body;
+    expect(rule).toMatchObject({ frequency: 'quarterly', day_of_month: 15, posted_through: '2026-09-01', next_due: '2026-12-15' });
+  });
+
+  it('refuses a second identical repeating entry with 409 and saves nothing', async () => {
+    const { accessToken } = await registerUser();
+    const body = { amount: 999, type: 'expense', category_key: 'internet', date: '2026-09-15', repeat_frequency: 'monthly' };
+    expect((await request(app).post('/api/v1/transactions').set(auth(accessToken)).send(body)).status).toBe(201);
+    expect((await request(app).post('/api/v1/transactions').set(auth(accessToken)).send(body)).status).toBe(409);
+    const all = (await request(app).get('/api/v1/transactions').set(auth(accessToken))).body as Txn[];
+    expect(all.filter((t) => t.amount === 999 && t.date === '2026-09-15')).toHaveLength(1);
+  });
+
+  it('PATCH frequency/day recomputes the next due date from the last period posted', async () => {
+    const { accessToken } = await registerUser();
+    await request(app)
+      .post('/api/v1/transactions')
+      .set(auth(accessToken))
+      .send({ amount: 500, type: 'expense', category_key: 'internet', date: '2026-09-01', repeat_frequency: 'yearly' });
+    const [rule] = (await request(app).get('/api/v1/recurring').set(auth(accessToken))).body;
+    const res = await request(app).patch(`/api/v1/recurring/${rule.id}`).set(auth(accessToken)).send({ frequency: 'quarterly', day_of_month: 10 });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ frequency: 'quarterly', day_of_month: 10, next_due: '2026-12-10' });
+    expect((await request(app).patch(`/api/v1/recurring/${rule.id}`).set(auth(accessToken)).send({ day_of_month: 32 })).status).toBe(400);
+  });
+
+  it('rejects an impossible date', async () => {
+    const { accessToken } = await registerUser();
+    const res = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 5, type: 'expense', category_key: 'internet', date: '2026-02-30' });
+    expect(res.status).toBe(400);
   });
 });

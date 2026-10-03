@@ -9,4 +9,4 @@ resolved 8. goals tab > added an optional target date field (add/edit goal form 
 resolved 9. removed the "Input expenses" shortcut from the home screen — same bulk-entry functionality is already covered by the Transactions tab
 resolved 10. removed the weekly custom-category "promotion to Community" batch — it was leaking test-generated junk categories (e.g. "Pet grooming fa5b23d4", "Idempotent test ...") into everyone's category picker; deleted the batch/cron/tests, and cleaned up the 42 leftover junk rows from the database
 open 11. Implement the feature for "report an issue" for every user, give some default fields to attach a screenshot upto 2MB. this should have its own table in database for issue analysis and fixing.
-open 12. 
+

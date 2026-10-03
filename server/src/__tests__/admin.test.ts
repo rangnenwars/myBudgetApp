@@ -194,6 +194,7 @@ describe('Deleted account access', () => {
     await request(app).delete(`/api/v1/admin/users/${target.user.id}`).set('Authorization', `Bearer ${admin.accessToken}`);
 
     const res = await request(app).patch('/api/v1/auth/me/tier').set('Authorization', `Bearer ${target.accessToken}`).send({ tier: 'pro' });
-    expect(res.status).toBe(400);
+    // requireAuth now checks the account still exists on every request.
+    expect(res.status).toBe(401);
   });
 });

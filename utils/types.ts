@@ -13,7 +13,7 @@ export interface Transaction {
   created_at: string;
 }
 
-/** A "repeat every month" rule: posts the same entry on the 1st of each month after the original one. */
+/** A repeating rule: posts the same entry every month/quarter/year on day_of_month, after the original one. */
 export interface RecurringTransaction {
   id: number;
   type: TxnType;
@@ -21,6 +21,10 @@ export interface RecurringTransaction {
   amount: number;
   note: string | null;
   posted_through: string;
+  frequency: RepeatFrequency;
+  day_of_month: number;
+  /** YYYY-MM-DD the next entry is added on. */
+  next_due: string;
 }
 
 export interface Loan {
@@ -54,6 +58,30 @@ export interface Investment {
   maturity_date: string | null;
   returns_percent: number | null;
   note: string | null;
+}
+
+export type AccountType = 'bank' | 'cash' | 'wallet' | 'credit_card';
+
+/** Where money sits. Balance is typed in by the user; for a credit card it is the amount owed. */
+export interface Account {
+  id: number;
+  name: string;
+  type: AccountType;
+  balance: number;
+  updated_at: string;
+}
+
+export type RepeatFrequency = 'monthly' | 'quarterly' | 'yearly';
+
+/** A category's monthly spending limit with what has been spent against it in the requested month. */
+export interface BudgetStatus {
+  category: string;
+  monthly_limit: number;
+  spent: number;
+  /** spent / monthly_limit, e.g. 0.85 = 85% used. */
+  ratio: number;
+  /** ok < 80% ≤ warning < 100% ≤ over */
+  status: 'ok' | 'warning' | 'over';
 }
 
 export interface SavingsGoal {

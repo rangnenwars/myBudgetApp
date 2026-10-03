@@ -5,9 +5,18 @@ import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { useCategories } from '../context/CategoriesContext';
 import { confirmAction } from '../utils/alert';
 import { apiErrorMessage } from '../utils/api';
-import { RecurringTransaction, updateRecurring, deleteRecurring } from '../utils/database';
+import { RecurringTransaction, RepeatFrequency, updateRecurring, deleteRecurring } from '../utils/database';
+import { Segmented } from './ScreenKit';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+const FREQUENCY_OPTIONS: { key: RepeatFrequency; label: string }[] = [
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'quarterly', label: 'Quarterly' },
+  { key: 'yearly', label: 'Yearly' },
+];
+const PER: Record<RepeatFrequency, string> = { monthly: '/mo', quarterly: '/qtr', yearly: '/yr' };
+const fmtDue = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
 interface Props {
   visible: boolean;
@@ -21,6 +30,8 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
   const { getCategory } = useCategories();
   const [editing, setEditing] = useState<RecurringTransaction | null>(null);
   const [amount, setAmount] = useState('');
+  const [frequency, setFrequency] = useState<RepeatFrequency>('monthly');
+  const [day, setDay] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -33,6 +44,8 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
   const startEdit = (rule: RecurringTransaction) => {
     setEditing(rule);
     setAmount(String(rule.amount));
+    setFrequency(rule.frequency);
+    setDay(String(rule.day_of_month));
     setError(null);
   };
 
@@ -43,10 +56,18 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
       setError('Enter a valid amount.');
       return;
     }
+    const dayValue = Number(day);
+    if (!Number.isInteger(dayValue) || dayValue < 1 || dayValue > 31) {
+      setError('Day of the month must be 1–31.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await updateRecurring(editing.id, { amount: value });
+      const patch: Parameters<typeof updateRecurring>[1] = { amount: value };
+      if (frequency !== editing.frequency) patch.frequency = frequency;
+      if (dayValue !== editing.day_of_month) patch.day_of_month = dayValue;
+      await updateRecurring(editing.id, patch);
       setEditing(null);
       onChanged();
     } catch (err) {
@@ -59,7 +80,7 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
   const onStop = () => {
     if (!editing) return;
     const rule = editing;
-    confirmAction('Stop repeating', 'Stop adding this every month? Entries already added stay.', 'Stop repeating', async () => {
+    confirmAction('Stop repeating', 'Stop adding this automatically? Entries already added stay.', 'Stop repeating', async () => {
       setBusy(true);
       try {
         await deleteRecurring(rule.id);
@@ -80,7 +101,7 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
       <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>{editing ? 'Edit repeating entry' : 'Repeats every month'}</Text>
+            <Text style={styles.title}>{editing ? 'Edit repeating entry' : 'Repeating entries'}</Text>
             <Pressable onPress={close}>
               <Ionicons name="close" size={22} color={COLORS.text} />
             </Pressable>
@@ -92,9 +113,24 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
                 {editingCat?.icon ?? '💰'} {editingCat?.label ?? editing.category}
                 {editing.note ? ` · ${editing.note}` : ''}
               </Text>
-              <Text style={styles.hint}>A new amount applies from the next month it is added. Entries already added keep their amount.</Text>
+              <Text style={styles.hint}>Changes apply from the next time it is added (next: {fmtDue(editing.next_due)}). Entries already added keep their amount.</Text>
 
-              <Text style={styles.label}>Amount per month</Text>
+              <Text style={styles.label}>How often</Text>
+              <Segmented options={FREQUENCY_OPTIONS} value={frequency} onChange={setFrequency} />
+
+              <Text style={styles.label}>Day of the month</Text>
+              <TextInput
+                style={styles.input}
+                value={day}
+                onChangeText={setDay}
+                placeholder="1"
+                placeholderTextColor={COLORS.textDim}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+              <Text style={styles.hint}>29–31 fall back to the last day in shorter months.</Text>
+
+              <Text style={styles.label}>Amount each time</Text>
               <TextInput
                 style={styles.input}
                 value={amount}
@@ -117,7 +153,7 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
               </Pressable>
             </>
           ) : rules.length === 0 ? (
-            <Text style={styles.empty}>Nothing repeats monthly. Turn on "Repeat every month" when adding a transaction.</Text>
+            <Text style={styles.empty}>Nothing repeats yet. Turn on “Repeat” when adding a transaction.</Text>
           ) : (
             <ScrollView style={styles.list}>
               {rules.map((rule) => {
@@ -127,10 +163,12 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
                     <Text style={styles.rowIcon}>{cat?.icon ?? '💰'}</Text>
                     <View style={styles.rowMid}>
                       <Text style={styles.rowLabel}>{cat?.label ?? rule.category}</Text>
-                      {rule.note ? <Text style={styles.rowNote}>{rule.note}</Text> : null}
+                      <Text style={styles.rowNote}>
+                        {rule.note ? `${rule.note} · ` : ''}next {fmtDue(rule.next_due)}
+                      </Text>
                     </View>
                     <Text style={[styles.rowAmount, { color: rule.type === 'income' ? COLORS.accent : COLORS.red }]}>
-                      {rule.type === 'income' ? '+' : '-'}{fmt(rule.amount)}/mo
+                      {rule.type === 'income' ? '+' : '-'}{fmt(rule.amount)}{PER[rule.frequency]}
                     </Text>
                   </Pressable>
                 );

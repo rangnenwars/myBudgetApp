@@ -1,7 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { transactions, users } from '../db/schema';
 import { classifyLocal } from '../calculations';
+import { localToday, addMonths, monthsDateRange } from './clock';
 
 /**
  * Recomputes budget class from a 3-month rolling average of expenses and
@@ -10,28 +11,20 @@ import { classifyLocal } from '../calculations';
  * having no server (see docs/PRO_FEATURES_DESIGN.md "Known deviations").
  */
 export const recomputeBudgetClass = async (userId: number): Promise<string> => {
-  const now = new Date();
-  let total = 0;
-  let months = 0;
+  const today = localToday();
+  const start = addMonths(today.year, today.month, -2);
+  const { from, toExclusive } = monthsDateRange(start.year, start.month, today.year, today.month);
 
-  for (let i = 0; i < 3; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const month = d.getMonth() + 1;
-    const year = d.getFullYear();
+  // One query for all three months (was one per month), on the date index.
+  const perMonth = await db
+    .select({ total: sql<string>`sum(${transactions.amount})` })
+    .from(transactions)
+    .where(and(eq(transactions.userId, userId), eq(transactions.type, 'expense'), gte(transactions.date, from), lt(transactions.date, toExclusive)))
+    .groupBy(sql`date_trunc('month', ${transactions.date})`);
 
-    const [row] = await db
-      .select({ total: sql<string | null>`sum(${transactions.amount})` })
-      .from(transactions)
-      .where(and(eq(transactions.userId, userId), eq(transactions.type, 'expense'), eq(transactions.month, month), eq(transactions.year, year)));
-
-    const monthTotal = row?.total ? Number(row.total) : 0;
-    if (monthTotal > 0) {
-      total += monthTotal;
-      months++;
-    }
-  }
-
-  const avg = months > 0 ? total / months : 0;
+  // Months with no expenses don't count toward the average.
+  const totals = perMonth.map((r) => Number(r.total)).filter((t) => t > 0);
+  const avg = totals.length > 0 ? totals.reduce((s, t) => s + t, 0) / totals.length : 0;
   const budgetClass = classifyLocal(avg);
   await db.update(users).set({ budgetClass, updatedAt: new Date() }).where(eq(users.id, userId));
   return budgetClass;

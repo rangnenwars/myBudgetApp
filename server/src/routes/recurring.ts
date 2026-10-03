@@ -4,9 +4,10 @@ import { and, eq, desc } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recurringTransactions, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
+import { idParam, money, optionalText } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { conflict, notFound } from '../lib/errors';
-import { monthStart } from '../lib/loanEmiExpenses';
+import { nextDueAfter, ruleScheduleFor, RepeatFrequency } from '../lib/recurringTransactions';
 
 // New entries get a rule via POST /transactions with repeat_monthly: true (the
 // entry and its rule are written together); POST here does the same for a
@@ -14,14 +15,21 @@ import { monthStart } from '../lib/loanEmiExpenses';
 const router = Router();
 router.use(requireAuth);
 
-const createSchema = z.object({ transaction_id: z.coerce.number().int().positive() });
+const frequencySchema = z.enum(['monthly', 'quarterly', 'yearly']);
+
+const createSchema = z.object({
+  transaction_id: z.coerce.number().int().positive(),
+  frequency: frequencySchema.default('monthly'),
+});
 
 const updateSchema = z
   .object({
-    amount: z.coerce.number().positive().optional(),
-    note: z.string().nullish(),
+    amount: money().optional(),
+    note: optionalText(500).optional(),
+    frequency: frequencySchema.optional(),
+    day_of_month: z.coerce.number().int().min(1).max(31).optional(),
   })
-  .refine((b) => b.amount !== undefined || b.note !== undefined, { message: 'Provide at least one field to update.' });
+  .refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Provide at least one field to update.' });
 
 router.get(
   '/',
@@ -31,8 +39,9 @@ router.get(
   })
 );
 
-// Makes an existing transaction repeat monthly: the rule copies its type,
-// category, amount and note, and posting resumes from the month after it.
+// Makes an existing transaction repeat (monthly by default): the rule copies
+// its type, category, amount and note, repeats on the same day of the month,
+// and the next entry is one period after it.
 // An identical rule (same type, category and amount) is refused, so a
 // double tap can't cause every month to post twice.
 router.post(
@@ -67,23 +76,36 @@ router.post(
         type: txn.type,
         amount: txn.amount,
         note: txn.note?.trim() || null,
-        posted_through: monthStart(txn.year, txn.month),
+        ...ruleScheduleFor(txn.date, body.frequency),
       })
       .returning();
     res.status(201).json(row);
   })
 );
 
-// A new amount applies to months not yet posted; transactions already posted keep theirs.
+// Changes apply to entries not yet posted; transactions already posted keep
+// theirs. A new frequency or day counts on from the last period posted.
 router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const body = updateSchema.parse(req.body);
 
     const updateData: Partial<typeof recurringTransactions.$inferInsert> = { updated_at: new Date() };
     if (body.amount !== undefined) updateData.amount = body.amount;
     if (body.note !== undefined) updateData.note = body.note?.trim() || null;
+    if (body.frequency !== undefined || body.day_of_month !== undefined) {
+      const [current] = await db
+        .select()
+        .from(recurringTransactions)
+        .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, req.userId!)));
+      if (!current) throw notFound('Repeating entry not found.');
+      const frequency = body.frequency ?? (current.frequency as RepeatFrequency);
+      const day = body.day_of_month ?? current.day_of_month;
+      updateData.frequency = frequency;
+      updateData.day_of_month = day;
+      updateData.next_due = nextDueAfter(current.posted_through, frequency, day);
+    }
 
     const [row] = await db
       .update(recurringTransactions)
@@ -98,7 +120,7 @@ router.patch(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const [deleted] = await db
       .delete(recurringTransactions)
       .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, req.userId!)))

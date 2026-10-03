@@ -3,9 +3,16 @@ import { and, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import { loans, transactions } from '../db/schema';
 import { recomputeBudgetClass } from './budgetClass';
+import { splitEmi } from '../calculations';
+import { localToday } from './clock';
 
 // A loan that counts as an expense contributes its EMI to every month it is
-// live. Rather than a scheduler, the missing months are posted lazily the next
+// live, and each posted EMI also pays the loan down: the balance drops by that
+// month's principal (splitEmi — interest on the reducing balance at the loan's
+// rate), so the balance tracks reality without a manual "paid" tap. The very
+// first posting for a loan (or after it is switched back on) records the
+// expense only: the balance the user just entered is already today's.
+// Rather than a scheduler, the missing months are posted lazily the next
 // time the user's data is read (see loanEmiMiddleware), so nothing depends on a
 // background process being up. Posting is idempotent: `emi_expensed_through`
 // on the loan records how far it has got, and the loan rows are locked while
@@ -31,22 +38,32 @@ export const monthsToPost = (through: string | null, curYear: number, curMonth: 
   return months.slice(-MAX_CATCH_UP_MONTHS);
 };
 
-/** Posts any missing monthly EMI expenses for the user's counted loans. Returns how many transactions were created. */
-export const postDueLoanEmis = async (userId: number, now: Date = new Date()): Promise<number> => {
-  const curYear = now.getUTCFullYear();
-  const curMonth = now.getUTCMonth() + 1;
-  const currentStart = monthStart(curYear, curMonth);
-
-  const dueFilter = and(
+/** Loans of the user that still need this month's (or earlier) EMI posted. */
+export const loansDueFilter = (userId: number, now: Date = new Date()) => {
+  const { year, month } = localToday(now);
+  return and(
     eq(loans.userId, userId),
     eq(loans.is_active, true),
     eq(loans.counts_as_expense, true),
     gt(loans.outstanding, 0),
-    or(isNull(loans.emi_expensed_through), lt(loans.emi_expensed_through, currentStart))
-  );
+    or(isNull(loans.emi_expensed_through), lt(loans.emi_expensed_through, monthStart(year, month)))
+  )!;
+};
 
-  const [pending] = await db.select({ id: loans.id }).from(loans).where(dueFilter).limit(1);
-  if (!pending) return 0;
+/**
+ * Posts any missing monthly EMI expenses for the user's counted loans. Returns
+ * how many transactions were created. `knownDue` skips the cheap "anything
+ * due?" pre-check when the caller (autoPostMiddleware) has just done it.
+ */
+export const postDueLoanEmis = async (userId: number, now: Date = new Date(), knownDue = false): Promise<number> => {
+  const { year: curYear, month: curMonth } = localToday(now);
+  const currentStart = monthStart(curYear, curMonth);
+  const dueFilter = loansDueFilter(userId, now);
+
+  if (!knownDue) {
+    const [pending] = await db.select({ id: loans.id }).from(loans).where(dueFilter).limit(1);
+    if (!pending) return 0;
+  }
 
   const posted = await db.transaction(async (tx) => {
     // Re-selected under a row lock: a concurrent request that got here first
@@ -54,11 +71,20 @@ export const postDueLoanEmis = async (userId: number, now: Date = new Date()): P
     const due = await tx.select().from(loans).where(dueFilter).for('update');
     let count = 0;
     for (const loan of due) {
+      const firstPosting = loan.emi_expensed_through == null;
+      let outstanding = loan.outstanding;
       for (const { year, month } of monthsToPost(loan.emi_expensed_through, curYear, curMonth)) {
+        let amount = loan.emi;
+        if (!firstPosting) {
+          if (outstanding <= 0) break; // paid off part-way through a catch-up
+          const split = splitEmi(outstanding, loan.interest_rate, loan.emi);
+          amount = split.payment;
+          outstanding = split.outstanding;
+        }
         await tx.insert(transactions).values({
           userId,
           category: 'loan_emi',
-          amount: loan.emi,
+          amount,
           type: 'expense',
           subcategory: null,
           note: `EMI - ${loan.name}`,
@@ -68,7 +94,10 @@ export const postDueLoanEmis = async (userId: number, now: Date = new Date()): P
         });
         count++;
       }
-      await tx.update(loans).set({ emi_expensed_through: currentStart }).where(eq(loans.id, loan.id));
+      await tx
+        .update(loans)
+        .set({ emi_expensed_through: currentStart, outstanding, ...(outstanding !== loan.outstanding && { updated_at: new Date() }) })
+        .where(eq(loans.id, loan.id));
     }
     return count;
   });

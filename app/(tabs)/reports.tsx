@@ -20,6 +20,7 @@ import {
   MonthPoint,
   Loan,
   SavingsGoal,
+  getAccounts,
 } from '../../utils/database';
 import { computeNetWorth, computeSavingsRate } from '../../utils/calculations';
 import { shareCsv } from '../../utils/exportFile';
@@ -91,13 +92,14 @@ export default function ReportsScreen() {
     const now = new Date();
     const { startMonth, startYear, endMonth, endYear } = getRangeBounds(range, now);
 
-    const [monthSeries, rangeSummary, categoryBreakdown, investments, userGoals, userLoans] = await Promise.all([
+    const [monthSeries, rangeSummary, categoryBreakdown, investments, userGoals, userLoans, userAccounts] = await Promise.all([
       getMonthlySeriesForRange(startMonth, startYear, endMonth, endYear),
       getRangeSummary(startMonth, startYear, endMonth, endYear),
       getCategoryBreakdownForRange(startMonth, startYear, endMonth, endYear, 'expense'),
       getInvestments(),
       getGoals(),
       getLoans(),
+      getAccounts(),
     ]);
     setSeries(monthSeries);
     setSummary(rangeSummary);
@@ -105,7 +107,8 @@ export default function ReportsScreen() {
     setGoals(userGoals);
     setLoans(userLoans);
 
-    const currentNetWorth = computeNetWorth(investments, userGoals, userLoans);
+    // Same formula as the server's snapshot (routes/netWorth.ts), so the headline and the trend agree.
+    const currentNetWorth = computeNetWorth(investments, userGoals, userLoans, userAccounts);
     setNetWorth(currentNetWorth);
     await recordNetWorthSnapshot();
     setNetWorthTrend(await getNetWorthSnapshots());

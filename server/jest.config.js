@@ -3,7 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testMatch: ['**/src/__tests__/**/*.test.ts'],
-  setupFiles: ['dotenv/config'],
+  setupFiles: ['dotenv/config', '<rootDir>/src/__tests__/setupEnv.ts'],
   globalTeardown: '<rootDir>/src/__tests__/globalTeardown.ts',
   // These integration tests hit a real Postgres (see docs/MASTER_BUILD_PROMPT_v3_BACKEND.md
   // "no mocking the database") — allow enough time for real queries.

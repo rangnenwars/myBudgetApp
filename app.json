@@ -31,7 +31,16 @@
       "expo-sqlite",
       "expo-status-bar",
       "expo-splash-screen",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "My Budget needs access to your photos so you can attach a screenshot when reporting an issue.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "extra": {
       "eas": {}
