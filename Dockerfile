@@ -3,7 +3,7 @@
 # bundle talks to the API at EXPO_PUBLIC_API_URL (see build arg below).
 
 # ---------- build ----------
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
