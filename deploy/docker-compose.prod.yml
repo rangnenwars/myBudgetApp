@@ -1,0 +1,86 @@
+# Production stack for https://prapanji.in — see docs/DEPLOYMENT_DIGITALOCEAN.md.
+# Lives at /opt/mybudget on the Droplet, copied there by .github/workflows/deploy.yml.
+# Images are built in CI and pulled from GHCR; nothing is built on the server.
+#   .env          — secrets, created by hand on the Droplet, never in git
+#   release.env   — IMAGE_TAG=<commit sha>, written by remote-deploy.sh
+# Only Caddy publishes host ports; postgres, server and web are reachable
+# only on the internal compose network.
+name: mybudget
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, server]
+    restart: unless-stopped
+    logging: *logging
+
+  web:
+    image: ghcr.io/rangnenwars/mybudget-web:${IMAGE_TAG:?IMAGE_TAG not set}
+    restart: unless-stopped
+    logging: *logging
+
+  server:
+    image: ghcr.io/rangnenwars/mybudget-server:${IMAGE_TAG:?IMAGE_TAG not set}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mybudget:${POSTGRES_PASSWORD:?}@postgres:5432/mybudget
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?}
+      PORT: 4000
+      NODE_ENV: production
+      SEED_DEMO_ACCOUNTS: "false"
+      CORS_ORIGIN: https://prapanji.in,https://www.prapanji.in
+      TRUST_PROXY: "1"
+      APP_URL: https://prapanji.in   # base of password-reset / email-confirmation links
+      # Account emails (and the issue digest) need SMTP — without it, reset and
+      # confirmation emails are not sent (a warning is logged). Put the values
+      # in /opt/mybudget/.env next to the other secrets.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 60s   # migrations + category seed run before the server listens
+    restart: unless-stopped
+    logging: *logging
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mybudget
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: mybudget
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mybudget"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    logging: *logging
+    # no `ports:` — reachable only on the internal compose network
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
