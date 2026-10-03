@@ -3,7 +3,7 @@
 # ../constants/categories.ts alongside server/, so the directory structure
 # inside the image mirrors the host repo exactly.
 
-FROM node:22-alpine
+FROM node:26-alpine
 WORKDIR /app
 
 COPY utils ./utils
