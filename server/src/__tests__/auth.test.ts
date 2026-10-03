@@ -107,6 +107,40 @@ describe('PATCH /api/v1/auth/me/tier', () => {
     const res = await request(app).patch('/api/v1/auth/me/tier').set('Authorization', `Bearer ${accessToken}`).send({ tier: 'ultra' });
     expect(res.status).toBe(400);
   });
+
+  describe('when self-service plan changes are off', () => {
+    const saved = { nodeEnv: process.env.NODE_ENV, allow: process.env.ALLOW_SELF_TIER_CHANGE };
+    afterEach(() => {
+      process.env.NODE_ENV = saved.nodeEnv;
+      if (saved.allow === undefined) delete process.env.ALLOW_SELF_TIER_CHANGE;
+      else process.env.ALLOW_SELF_TIER_CHANGE = saved.allow;
+    });
+
+    it('is refused with 403 by default in production, and the tier is unchanged', async () => {
+      const { accessToken } = await registerUser();
+      delete process.env.ALLOW_SELF_TIER_CHANGE;
+      process.env.NODE_ENV = 'production';
+      const res = await request(app).patch('/api/v1/auth/me/tier').set('Authorization', `Bearer ${accessToken}`).send({ tier: 'pro' });
+      expect(res.status).toBe(403);
+
+      process.env.NODE_ENV = saved.nodeEnv;
+      const me = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${accessToken}`);
+      expect(me.body.tier).toBe('standard');
+    });
+
+    it('is allowed in production only when ALLOW_SELF_TIER_CHANGE=true, and refused anywhere when it is false', async () => {
+      const { accessToken } = await registerUser();
+      process.env.NODE_ENV = 'production';
+      process.env.ALLOW_SELF_TIER_CHANGE = 'true';
+      const allowed = await request(app).patch('/api/v1/auth/me/tier').set('Authorization', `Bearer ${accessToken}`).send({ tier: 'pro' });
+      expect(allowed.status).toBe(200);
+
+      process.env.NODE_ENV = saved.nodeEnv;
+      process.env.ALLOW_SELF_TIER_CHANGE = 'false';
+      const refused = await request(app).patch('/api/v1/auth/me/tier').set('Authorization', `Bearer ${accessToken}`).send({ tier: 'standard' });
+      expect(refused.status).toBe(403);
+    });
+  });
 });
 
 describe('POST /api/v1/auth/refresh', () => {

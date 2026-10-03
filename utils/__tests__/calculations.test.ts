@@ -10,10 +10,13 @@ import {
   computeNetWorth,
   computeDebtOrder,
   simulateDebtPayoff,
+  computePartPayment,
   computeGoalETA,
   transactionsToCsv,
   bucketForGroup,
   monthlyEquivalent,
+  splitEmi,
+  monthsToRepay,
 } from '../calculations';
 import { Transaction, Loan, Investment, SavingsGoal } from '../types';
 
@@ -48,6 +51,7 @@ const loan = (overrides: Partial<Loan>): Loan => ({
   lender: null,
   note: null,
   is_active: true,
+  counts_as_expense: true,
   ...overrides,
 });
 
@@ -324,6 +328,35 @@ describe('simulateDebtPayoff', () => {
 
 // ---------- computeGoalETA ----------
 
+describe('computePartPayment', () => {
+  it('lowers the balance and scales the EMI by the same ratio', () => {
+    const result = computePartPayment({ outstanding: 100_000, emi: 10_000 }, 25_000);
+    expect(result).toEqual({ outstanding: 75_000, emi: 7_500, monthsLeft: 10 });
+  });
+
+  it('keeps the remaining number of instalments unchanged', () => {
+    const before = Math.ceil(240_000 / 12_000);
+    const after = computePartPayment({ outstanding: 240_000, emi: 12_000 }, 60_000);
+    expect(after.monthsLeft).toBe(before);
+  });
+
+  it('rounds to paise so repeated payments do not drift', () => {
+    const result = computePartPayment({ outstanding: 100_000, emi: 3_333 }, 1);
+    expect(result.outstanding).toBe(99_999);
+    expect(result.emi).toBe(3_332.97);
+  });
+
+  it('leaves the EMI untouched and reports no months left when the payment clears the loan', () => {
+    expect(computePartPayment({ outstanding: 5_000, emi: 1_000 }, 5_000)).toEqual({ outstanding: 0, emi: 1_000, monthsLeft: null });
+  });
+
+  it('never lets the EMI fall to zero', () => {
+    const result = computePartPayment({ outstanding: 1_000_000, emi: 1 }, 999_999);
+    expect(result.outstanding).toBe(1);
+    expect(result.emi).toBe(0.01);
+  });
+});
+
 describe('computeGoalETA', () => {
   it('reports already-reached goals as 0 months', () => {
     const g = goal({ target_amount: 1_000, saved_amount: 1_500 });
@@ -390,5 +423,76 @@ describe('monthlyEquivalent', () => {
   });
   it('handles zero', () => {
     expect(monthlyEquivalent(0, 'yearly')).toBe(0);
+  });
+});
+
+describe('splitEmi', () => {
+  it('splits an EMI into a month of interest at rate/12 and the rest as principal', () => {
+    expect(splitEmi(100000, 12, 10000)).toEqual({ payment: 10000, interest: 1000, principal: 9000, outstanding: 91000 });
+  });
+  it('treats a missing rate as interest-free', () => {
+    expect(splitEmi(50000, null, 5000)).toEqual({ payment: 5000, interest: 0, principal: 5000, outstanding: 45000 });
+  });
+  it('caps the final instalment at the balance plus interest', () => {
+    expect(splitEmi(5000, 12, 10000)).toEqual({ payment: 5050, interest: 50, principal: 5000, outstanding: 0 });
+  });
+  it('repays no principal (and holds the balance) when the EMI only covers interest', () => {
+    expect(splitEmi(100000, 24, 1500)).toEqual({ payment: 1500, interest: 1500, principal: 0, outstanding: 100000 });
+  });
+  it('is all zeros for a paid-off loan', () => {
+    expect(splitEmi(0, 10, 1000)).toEqual({ payment: 0, interest: 0, principal: 0, outstanding: 0 });
+  });
+});
+
+describe('monthsToRepay', () => {
+  it('is balance / EMI rounded up without interest', () => {
+    expect(monthsToRepay(10000, null, 3000)).toBe(4);
+  });
+  it('takes longer with interest', () => {
+    // ₹1,00,000 at 12% with a ₹10,000 EMI takes 11 instalments, not 10.
+    expect(monthsToRepay(100000, 12, 10000)).toBe(11);
+  });
+  it('is null when the EMI never covers the interest', () => {
+    expect(monthsToRepay(100000, 24, 1500)).toBeNull();
+  });
+  it('is 0 for a paid-off loan', () => {
+    expect(monthsToRepay(0, 10, 1000)).toBe(0);
+  });
+});
+
+describe('computeNetWorth with accounts', () => {
+  it('adds bank/cash/wallet balances and subtracts credit-card dues', () => {
+    const accounts = [
+      { type: 'bank' as const, balance: 10000 },
+      { type: 'cash' as const, balance: 500 },
+      { type: 'credit_card' as const, balance: 3000 },
+    ];
+    expect(computeNetWorth([], [], [], accounts)).toBe(7500);
+  });
+});
+
+describe('simulateDebtPayoff with interest and rollover', () => {
+  it('counts interest, so a loan at a rate takes longer than balance ÷ EMI', () => {
+    const [noRate] = simulateDebtPayoff([loan({ outstanding: 100000, emi: 10000, interest_rate: null })], 'snowball');
+    const [withRate] = simulateDebtPayoff([loan({ outstanding: 100000, emi: 10000, interest_rate: 12 })], 'snowball');
+    expect(noRate.payoffMonths).toBe(10);
+    expect(withRate.payoffMonths).toBe(11); // same as monthsToRepay
+  });
+
+  it('rolls an overpayment on to the next loan in the same month', () => {
+    // Extra 1,000 clears A (500) in month 1; the 500 left over plus B's EMI clears B (600) in month 1 too.
+    const results = simulateDebtPayoff(
+      [loan({ id: 1, name: 'A', outstanding: 500, emi: 100 }), loan({ id: 2, name: 'B', outstanding: 600, emi: 100 })],
+      'snowball',
+      1000
+    );
+    expect(results.map((r) => [r.name, r.payoffMonths])).toEqual([
+      ['A', 1],
+      ['B', 1],
+    ]);
+  });
+
+  it('leaves out a loan whose EMI never covers its interest', () => {
+    expect(simulateDebtPayoff([loan({ outstanding: 100000, emi: 1000, interest_rate: 24 })], 'snowball')).toEqual([]);
   });
 });

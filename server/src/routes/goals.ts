@@ -4,6 +4,7 @@ import { and, eq, desc, count } from 'drizzle-orm';
 import { db } from '../db/client';
 import { savingsGoals, goalContributions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
+import { isoDate, idParam, money, MAX_AMOUNT } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { notFound, badRequest } from '../lib/errors';
 
@@ -12,25 +13,25 @@ router.use(requireAuth);
 
 const GOAL_COLORS = ['#10B981', '#60A5FA', '#F59E0B', '#A78BFA', '#F472B6'];
 
-const deadlineSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'deadline must be YYYY-MM-DD').nullable().optional();
+const deadlineSchema = isoDate('deadline').nullable().optional();
 
 const createSchema = z.object({
-  name: z.string().trim().min(1),
-  target_amount: z.coerce.number().positive(),
+  name: z.string().trim().min(1).max(80),
+  target_amount: money(),
   deadline: deadlineSchema,
 });
 
 const updateSchema = z
   .object({
-    name: z.string().trim().min(1).optional(),
-    target_amount: z.coerce.number().positive().optional(),
-    saved_amount: z.coerce.number().min(0).optional(),
+    name: z.string().trim().min(1).max(80).optional(),
+    target_amount: money().optional(),
+    saved_amount: z.coerce.number().min(0).max(MAX_AMOUNT, 'Amount is too large.').optional(),
     deadline: deadlineSchema,
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update.' });
 
 const contributionSchema = z.object({
-  amount: z.coerce.number().positive(),
+  amount: money(),
   type: z.enum(['add', 'remove']),
 });
 
@@ -65,7 +66,7 @@ router.post(
 router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const body = updateSchema.parse(req.body);
 
     const updateData: Partial<typeof savingsGoals.$inferInsert> = { updated_at: new Date() };
@@ -74,12 +75,24 @@ router.patch(
     if (body.saved_amount !== undefined) updateData.saved_amount = body.saved_amount;
     if (body.deadline !== undefined) updateData.deadline = body.deadline ?? null;
 
-    const [row] = await db
-      .update(savingsGoals)
-      .set(updateData)
-      .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, req.userId!)))
-      .returning();
-    if (!row) throw notFound('Goal not found.');
+    const row = await db.transaction(async (tx) => {
+      const [goal] = await tx
+        .select()
+        .from(savingsGoals)
+        .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, req.userId!)))
+        .for('update');
+      if (!goal) throw notFound('Goal not found.');
+
+      const [updated] = await tx.update(savingsGoals).set(updateData).where(eq(savingsGoals.id, id)).returning();
+
+      // Setting saved_amount directly is recorded in the history as the
+      // difference, so the contributions always explain the total.
+      const diff = body.saved_amount !== undefined ? Math.round((body.saved_amount - goal.saved_amount) * 100) / 100 : 0;
+      if (diff !== 0) {
+        await tx.insert(goalContributions).values({ userId: req.userId!, goal_id: id, amount: Math.abs(diff), type: diff > 0 ? 'add' : 'remove' });
+      }
+      return updated;
+    });
     res.json(row);
   })
 );
@@ -91,14 +104,17 @@ router.patch(
 router.post(
   '/:id/contributions',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const body = contributionSchema.parse(req.body);
 
     const result = await db.transaction(async (tx) => {
       const [goal] = await tx
         .select()
         .from(savingsGoals)
-        .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, req.userId!)));
+        .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, req.userId!)))
+        // Row lock: two contributions arriving together would otherwise both
+        // read the same saved_amount and one would overwrite the other.
+        .for('update');
       if (!goal) throw notFound('Goal not found.');
 
       const nextSaved = body.type === 'add' ? goal.saved_amount + body.amount : goal.saved_amount - body.amount;
@@ -127,7 +143,7 @@ router.post(
 router.get(
   '/:id/contributions',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const [goal] = await db
       .select({ id: savingsGoals.id })
       .from(savingsGoals)
@@ -146,7 +162,7 @@ router.get(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const id = idParam(req);
     const [deleted] = await db
       .delete(savingsGoals)
       .where(and(eq(savingsGoals.id, id), eq(savingsGoals.userId, req.userId!)))

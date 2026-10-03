@@ -182,7 +182,7 @@ export const CategoryPicker: React.FC<Props> = ({ type, value, onChange }) => {
               sections={sections}
               keyExtractor={(item) => item.key}
               keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={query ? <Text style={styles.emptyText}>No categories match "{search.trim()}"</Text> : null}
+              ListEmptyComponent={query ? <Text style={styles.emptyText}>No categories match “{search.trim()}”</Text> : null}
               renderSectionHeader={({ section }) => (
                 <Text style={styles.sectionHeader}>{section.title}</Text>
               )}

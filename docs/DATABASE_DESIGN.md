@@ -34,7 +34,9 @@ users ──┬─< transactions >── categories
         ├─< net_worth_snapshots
         ├─< budgets >── categories
         ├─< refresh_tokens
-        └─< categories        (a user's own custom ones)
+        ├─< categories        (a user's own custom ones)
+        ├─< admin_audit_log   (as actor and, separately, as target — see §3)
+        └─< issue_reports     (Report issue submissions)
 
   ──<   = "one user has many"
   >──   = "many rows reference one"
@@ -74,16 +76,20 @@ CREATE INDEX idx_categories_user ON categories(user_id);
 -- users
 -- ============================================================
 CREATE TABLE users (
-  id            BIGSERIAL PRIMARY KEY,
-  name          TEXT NOT NULL,
-  email         TEXT NOT NULL,
-  password_hash TEXT NOT NULL,           -- bcrypt, server-side (see §5)
-  tier          TEXT NOT NULL DEFAULT 'standard' CHECK (tier IN ('standard', 'pro')),
-  budget_class  TEXT CHECK (budget_class IN ('low', 'middle', 'high', 'ultra_high', 'rich')),
-  role          TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
-  is_active     BOOLEAN NOT NULL DEFAULT true,  -- rejected at login/refresh when false — see §5
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id             BIGSERIAL PRIMARY KEY,
+  name           TEXT NOT NULL,
+  email          TEXT NOT NULL,
+  password_hash  TEXT NOT NULL,           -- bcrypt, server-side (see §5)
+  tier           TEXT NOT NULL DEFAULT 'standard' CHECK (tier IN ('standard', 'pro')),
+  budget_class   TEXT CHECK (budget_class IN ('low', 'middle', 'high', 'ultra_high', 'rich')),
+  role           TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'support', 'system_manager')),
+  is_active      BOOLEAN NOT NULL DEFAULT true,  -- rejected at login/refresh when false — see §5
+  deactivated_at TIMESTAMPTZ,             -- set/cleared alongside is_active by PATCH /admin/users/:id
+  last_login_at  TIMESTAMPTZ,             -- set on register/login, not on token refresh
+  email_verified_at TIMESTAMPTZ,          -- set when the emailed confirmation (or a password-reset) link is opened
+  tokens_valid_after TIMESTAMPTZ,         -- access tokens issued before this are rejected (password change/reset, sign out everywhere, deactivation)
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- case-insensitive uniqueness without needing the citext extension
 CREATE UNIQUE INDEX idx_users_email_lower ON users (lower(email));
@@ -102,6 +108,36 @@ CREATE TABLE refresh_tokens (
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 
 -- ============================================================
+-- user_tokens — single-use emailed tokens (password reset, email
+-- verification). Only the SHA-256 hash is stored, like refresh_tokens.
+-- ============================================================
+CREATE TABLE user_tokens (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose     TEXT NOT NULL CHECK (purpose IN ('password_reset', 'email_verify')),
+  token_hash  TEXT NOT NULL UNIQUE,
+  expires_at  TIMESTAMPTZ NOT NULL,   -- 1 hour (reset) / 7 days (verify)
+  used_at     TIMESTAMPTZ,            -- set on use, and on older tokens when a new one is issued
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_user_tokens_user ON user_tokens(user_id, purpose);
+
+-- ============================================================
+-- accounts — bank / cash / wallet balances and credit-card dues, typed in
+-- by the user and counted in net worth (credit cards subtract).
+-- ============================================================
+CREATE TABLE accounts (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  type        TEXT NOT NULL CHECK (type IN ('bank', 'cash', 'wallet', 'credit_card')),
+  balance     NUMERIC(14,2) NOT NULL DEFAULT 0,   -- credit_card: amount owed
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_accounts_user ON accounts(user_id);
+
+-- ============================================================
 -- transactions
 -- ============================================================
 CREATE TABLE transactions (
@@ -115,10 +151,37 @@ CREATE TABLE transactions (
   date        DATE NOT NULL,
   month       SMALLINT NOT NULL CHECK (month BETWEEN 1 AND 12),
   year        SMALLINT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- month/year are copies of date kept for the API shape; they can never disagree with it.
+  CONSTRAINT transactions_month_matches_date CHECK (month = EXTRACT(MONTH FROM date) AND year = EXTRACT(YEAR FROM date)),
+  CONSTRAINT transactions_note_length CHECK (length(note) <= 500 AND length(subcategory) <= 100)
 );
-CREATE INDEX idx_transactions_user_month ON transactions(user_id, year, month);
-CREATE INDEX idx_transactions_user_type_category ON transactions(user_id, type, category_key);
+-- (idx_transactions_user_month was dropped: every month filter is now a date range on idx_transactions_user_date.)
+-- Lists and report ranges read newest-first, optionally within a date range (server/src/lib/queries.ts).
+CREATE INDEX idx_transactions_user_date ON transactions(user_id, date DESC, id DESC);
+-- FK lookup: deleting a custom category checks for referencing rows.
+CREATE INDEX idx_transactions_category ON transactions(category_key);
+
+-- ============================================================
+-- recurring_transactions  (repeating rules: monthly / quarterly / yearly)
+-- ============================================================
+CREATE TABLE recurring_transactions (
+  id             BIGSERIAL PRIMARY KEY,
+  user_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category_key   TEXT NOT NULL REFERENCES categories(key),
+  type           TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  amount         NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  note           TEXT,
+  posted_through DATE NOT NULL,   -- first day of the latest period already posted; advanced as entries are posted
+  frequency      TEXT NOT NULL DEFAULT 'monthly' CHECK (frequency IN ('monthly', 'quarterly', 'yearly')),
+  day_of_month   SMALLINT NOT NULL DEFAULT 1 CHECK (day_of_month BETWEEN 1 AND 31),  -- 29–31 fall back to the month's last day
+  next_due       DATE NOT NULL,   -- date of the next entry; kept so the due check is one indexed comparison for any frequency
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- The due-rule check (next_due <= today) runs before every transactions/reports/budgets request.
+CREATE INDEX idx_recurring_user_due ON recurring_transactions(user_id, next_due);
+CREATE INDEX idx_recurring_category ON recurring_transactions(category_key);
 
 -- ============================================================
 -- loans
@@ -137,6 +200,8 @@ CREATE TABLE loans (
   lender        TEXT,
   note          TEXT,
   is_active     BOOLEAN NOT NULL DEFAULT true,
+  counts_as_expense BOOLEAN NOT NULL DEFAULT true,  -- false: no monthly EMI expense is auto-posted; the debt still counts as a liability
+  emi_expensed_through DATE,                        -- first day of the latest month whose EMI expense was auto-posted (NULL = none yet); each posting after the first also lowers outstanding by that month's principal
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -154,7 +219,7 @@ CREATE TABLE investments (
   current_value   NUMERIC(12,2),
   start_date      DATE,
   maturity_date   DATE,
-  returns_percent NUMERIC(6,2),
+  returns_percent NUMERIC(12,2),
   note            TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -194,6 +259,8 @@ CREATE TABLE goal_contributions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_goal_contributions_goal ON goal_contributions(goal_id, created_at);
+-- FK lookup for the ON DELETE CASCADE from users.
+CREATE INDEX idx_goal_contributions_user ON goal_contributions(user_id);
 
 -- ============================================================
 -- net_worth_snapshots
@@ -209,7 +276,7 @@ CREATE TABLE net_worth_snapshots (
 );
 
 -- ============================================================
--- budgets — per-category monthly limits (schema existed locally, unused by any screen today)
+-- budgets — per-category monthly spending limits (Budgets screen + dashboard alerts)
 -- ============================================================
 CREATE TABLE budgets (
   id            BIGSERIAL PRIMARY KEY,
@@ -218,6 +285,62 @@ CREATE TABLE budgets (
   monthly_limit NUMERIC(12,2) NOT NULL CHECK (monthly_limit > 0),
   UNIQUE (user_id, category_key)
 );
+CREATE INDEX idx_budgets_category ON budgets(category_key);
+
+-- ============================================================
+-- admin_audit_log — one row per role/tier/active/delete change made
+-- through /api/v1/admin/users, by an admin or support account. Account
+-- metadata only (actor/target email, which field changed) — never touches
+-- transactions/loans/investments/goals, same invariant as the admin routes.
+-- ============================================================
+CREATE TABLE admin_audit_log (
+  id          BIGSERIAL PRIMARY KEY,
+  actor_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,  -- who made the change
+  actor_email TEXT NOT NULL,                                   -- snapshotted so the row stays readable if actor_id is later nulled
+  target_id   BIGINT REFERENCES users(id) ON DELETE SET NULL,  -- account that was changed
+  target_email TEXT NOT NULL,                                  -- snapshotted for the same reason, incl. after the account is deleted
+  action      TEXT NOT NULL,                                   -- 'account_updated' | 'account_deleted'
+  details     TEXT,                                            -- e.g. "role: user -> admin, tier: standard -> pro"
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_admin_audit_actor ON admin_audit_log(actor_id);
+CREATE INDEX idx_admin_audit_target ON admin_audit_log(target_id);
+CREATE INDEX idx_admin_audit_created ON admin_audit_log(created_at);
+
+-- ============================================================
+-- issue_reports — "Report issue" submissions (POST /api/v1/issues).
+-- Screenshot stored inline (bytea, ≤ 2 MB decoded) so backups stay one
+-- pg_dump; list queries never select it. notified_at NULL = the nightly
+-- digest hasn't emailed it yet. analysis/suggestion = what that job found,
+-- kept so a retry after a failed send doesn't regenerate it.
+-- ============================================================
+CREATE TABLE issue_reports (
+  id                   BIGSERIAL PRIMARY KEY,
+  user_id              BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category             TEXT NOT NULL CHECK (category IN ('bug','crash','data','ui','performance','other')),
+  severity             TEXT NOT NULL CHECK (severity IN ('low','medium','high','critical')),
+  screen               TEXT NOT NULL,                -- constants/issues.ts ISSUE_SCREENS key
+  title                TEXT NOT NULL,
+  description          TEXT NOT NULL,
+  steps_to_reproduce   TEXT,
+  expected_behavior    TEXT,
+  platform             TEXT,
+  app_version          TEXT,
+  device_info          TEXT,
+  screenshot           BYTEA,
+  screenshot_mime_type TEXT,                         -- sniffed from the bytes, not the client's claim
+  screenshot_size      INTEGER CHECK (screenshot_size IS NULL OR screenshot_size <= 2097152),
+  status               TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','triaged','resolved','wont_fix')),
+  analysis             JSONB,                        -- { insight, fix, analyzedAt } from jobs/issueDigest.ts
+  suggestion           TEXT,                         -- the fix suggestion that was emailed
+  notified_at          TIMESTAMPTZ,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((screenshot IS NULL) = (screenshot_mime_type IS NULL))
+);
+CREATE INDEX idx_issue_reports_user ON issue_reports(user_id);
+CREATE INDEX idx_issue_reports_created ON issue_reports(created_at);
+CREATE INDEX idx_issue_reports_pending ON issue_reports(created_at) WHERE notified_at IS NULL;
 ```
 
 ---
@@ -233,7 +356,7 @@ CREATE TABLE budgets (
 | `category_key` as FK, not free text | The one real normalization gap in the old schema — see §1 |
 | `refresh_tokens` stores a hash, not the raw token | Standard practice — a leaked database dump shouldn't hand out valid session tokens |
 | Composite index `(user_id, year, month)` on transactions | Matches the exact query shape `getTransactions(userId, month, year)` already uses today |
-| `budgets` kept even though unused | Matches the existing local schema for continuity; flagged here so nobody's surprised it exists |
+| `budgets` | Monthly limit per expense category; `GET /budgets` joins it to the month's spending for ok/warning/over alerts |
 
 ### What does *not* need to change
 `utils/calculations.ts` — the pure functions (`computeMonthSummary`, `simulateDebtPayoff`, `bucketForGroup`, etc.) operate on plain arrays already fetched from storage. They don't care whether those arrays came from SQLite, `localStorage`, or a Postgres row set over HTTP. That's the payoff of the architecture documented in the [architecture-flows artifact](https://claude.ai/code/artifact/3787e434-ead3-4e0a-881d-119411b2a53d) — the backend swap only touches the data layer, not the 47-test business logic module.
@@ -244,8 +367,13 @@ CREATE TABLE budgets (
 
 - Passwords hashed server-side with **bcrypt** (cost factor 12) — `AuthContext.tsx`'s old client-side SHA-256 (`expo-crypto`) is gone entirely; that was only ever a placeholder for a build with no server to hash against.
 - **JWT access token**, short-lived (15 min), sent as `Authorization: Bearer`.
-- **Refresh token**, long-lived (30d), stored hashed in `refresh_tokens`, rotated on every use (old one revoked, new one issued) — matches the original spec's token lifetimes.
-- **Access control**: `users.role` (`'user' | 'admin'`) and `users.isActive` gate every request. `requireAdmin` middleware (`server/src/middleware/requireAdmin.ts`) re-checks `role` against the database on every admin-route request rather than trusting a JWT claim, so an admin's access changes take effect immediately. Login and refresh both reject a deactivated (`isActive: false`) account — see `docs/README.md` §3a for the exact behavior.
+- **Refresh token**, long-lived (30d), stored hashed in `refresh_tokens`, rotated on every use (old one revoked, new one issued) — matches the original spec's token lifetimes. Rotation is a single `UPDATE … RETURNING`, so a token can be exchanged at most once even under concurrent requests. Each login/refresh deletes that user's revoked or expired rows, so the table stays proportional to live sessions. Login looks emails up as `lower(email) = $1`, matching `idx_users_email_lower`.
+- **Access control**: `users.role` (`'user' | 'admin' | 'support' | 'system_manager'`) and `users.isActive` gate every request. Three role-gate middlewares, all re-checking the database on every request rather than trusting a JWT claim, so a role change or deactivation takes effect immediately instead of waiting for the access token to expire:
+  - `requireAdmin` (`server/src/middleware/requireAdmin.ts`) — `role: 'admin'` only. Gates `DELETE /admin/users/:id` and the audit log.
+  - `requireStaff` (`server/src/middleware/requireStaff.ts`) — `'admin' | 'support'`. Gates `GET`/`PATCH /admin/users`; `PATCH` further restricts `support` to the `isActive` field only (`routes/admin.ts` returns 403 if a support caller's body includes `role` or `tier`) — never role changes, never tier, never delete.
+  - `requireSystemManager` (`server/src/middleware/requireSystemManager.ts`) — `'admin' | 'system_manager'`. Gates `GET /api/v1/system/metrics` only; a `system_manager` account never reaches the per-account list or any account action.
+- Login and refresh both reject a deactivated (`isActive: false`) account — see `docs/README.md` §3a for the exact behavior. `deactivated_at` is set/cleared alongside `is_active` (not derived from `updated_at`, which every field change touches); `last_login_at` is set on register and login, not on refresh.
+- Every `PATCH`/`DELETE` on `/admin/users/:id` writes one row to `admin_audit_log` (actor, target, which fields changed) before the target row is touched — see the table DDL above. Readable via `GET /api/v1/admin/audit-log`, admin-only.
 
 ---
 
@@ -263,4 +391,4 @@ CREATE TABLE budgets (
 
 ## Status
 
-Fully implemented and verified: 134 server-side integration/e2e tests (Supertest against real Postgres, no mocking, coverage-enforced — see `docs/API_REFERENCE.md`) plus 47 client-side unit tests, all passing, run automatically before every commit via a Husky pre-commit hook. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.
+Fully implemented and verified: 142 server-side integration/e2e tests (Supertest against real Postgres, no mocking, coverage-enforced — see `docs/API_REFERENCE.md`) plus 47 client-side unit tests, all passing, run automatically before every commit via a Husky pre-commit hook. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.

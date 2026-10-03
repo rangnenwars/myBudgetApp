@@ -20,6 +20,7 @@ import {
   MonthPoint,
   Loan,
   SavingsGoal,
+  getAccounts,
 } from '../../utils/database';
 import { computeNetWorth, computeSavingsRate } from '../../utils/calculations';
 import { shareCsv } from '../../utils/exportFile';
@@ -91,13 +92,14 @@ export default function ReportsScreen() {
     const now = new Date();
     const { startMonth, startYear, endMonth, endYear } = getRangeBounds(range, now);
 
-    const [monthSeries, rangeSummary, categoryBreakdown, investments, userGoals, userLoans] = await Promise.all([
+    const [monthSeries, rangeSummary, categoryBreakdown, investments, userGoals, userLoans, userAccounts] = await Promise.all([
       getMonthlySeriesForRange(startMonth, startYear, endMonth, endYear),
       getRangeSummary(startMonth, startYear, endMonth, endYear),
       getCategoryBreakdownForRange(startMonth, startYear, endMonth, endYear, 'expense'),
       getInvestments(),
       getGoals(),
       getLoans(),
+      getAccounts(),
     ]);
     setSeries(monthSeries);
     setSummary(rangeSummary);
@@ -105,7 +107,8 @@ export default function ReportsScreen() {
     setGoals(userGoals);
     setLoans(userLoans);
 
-    const currentNetWorth = computeNetWorth(investments, userGoals, userLoans);
+    // Same formula as the server's snapshot (routes/netWorth.ts), so the headline and the trend agree.
+    const currentNetWorth = computeNetWorth(investments, userGoals, userLoans, userAccounts);
     setNetWorth(currentNetWorth);
     await recordNetWorthSnapshot();
     setNetWorthTrend(await getNetWorthSnapshots());
@@ -134,6 +137,9 @@ export default function ReportsScreen() {
   const onLayoutChart = (e: LayoutChangeEvent) => setChartWidth(e.nativeEvent.layout.width);
 
   const savingsRate = computeSavingsRate(summary);
+  const totalDebt = loans.reduce((sum, l) => sum + l.outstanding, 0);
+  const debtCountedInExpenses = loans.filter((l) => l.counts_as_expense).reduce((sum, l) => sum + l.outstanding, 0);
+  const debtNotInExpenses = totalDebt - debtCountedInExpenses;
   const maxCategoryTotal = categories[0]?.total ?? 1;
   const trendData = {
     labels: series.map((p) => p.label),
@@ -193,6 +199,32 @@ export default function ReportsScreen() {
             <Text style={[styles.summaryValue, { color: netWorth >= 0 ? COLORS.accent : COLORS.red }]}>{fmt(netWorth)}</Text>
           </Card>
         </View>
+
+        {loans.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Liabilities</Text>
+            <Card>
+              <View style={styles.catRow}>
+                <View style={styles.catHeader}>
+                  <Text style={styles.catLabel}>Total debt to repay</Text>
+                  <Text style={[styles.catValue, { color: COLORS.red }]}>{fmt(totalDebt)}</Text>
+                </View>
+              </View>
+              <View style={[styles.catRow, styles.catRowBorder]}>
+                <View style={styles.catHeader}>
+                  <Text style={styles.catLabel}>EMIs counted in expenses</Text>
+                  <Text style={styles.catValue}>{fmt(debtCountedInExpenses)}</Text>
+                </View>
+              </View>
+              <View style={[styles.catRow, styles.catRowBorder]}>
+                <View style={styles.catHeader}>
+                  <Text style={styles.catLabel}>Not counted in expenses</Text>
+                  <Text style={styles.catValue}>{fmt(debtNotInExpenses)}</Text>
+                </View>
+              </View>
+            </Card>
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>Trend</Text>
         <Card>
@@ -274,7 +306,7 @@ export default function ReportsScreen() {
               return (
                 <View key={l.id} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
                   <View style={styles.catHeader}>
-                    <Text style={styles.catLabel}>{l.name}</Text>
+                    <Text style={styles.catLabel}>{l.name}{l.counts_as_expense ? '' : ' · not in expenses'}</Text>
                     <Text style={styles.catValue}>{pct.toFixed(0)}% paid</Text>
                   </View>
                   <MiniBar percent={pct} color={COLORS.blue} />

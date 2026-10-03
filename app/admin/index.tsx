@@ -1,36 +1,62 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Modal, Switch, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, Modal, Switch, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
-import { getAdminUsers, updateAdminUser, deleteAdminUser, AdminUser } from '../../utils/database';
+import { getAdminUsers, updateAdminUser, deleteAdminUser, AdminUser, AdminRole } from '../../utils/database';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
 
+// Order matters here — rendered left-to-right/top-to-bottom in the role
+// picker, low to high privilege, so promote/demote reads as moving along the row.
+const ROLES: AdminRole[] = ['user', 'support', 'system_manager', 'admin'];
+const ROLE_LABEL: Record<AdminRole, string> = { user: 'User', support: 'Support', system_manager: 'System mgr', admin: 'Admin' };
+
+// Account list for staff. Admins can change role, tier and active state and
+// delete accounts; support can only activate/deactivate regular users (the
+// server enforces the same split — routes/admin.ts). System managers don't
+// see accounts at all, only aggregate metrics.
 export default function AdminUsersScreen() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isStaff, canViewMetrics } = useAuth();
   const [items, setItems] = useState<AdminUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isSelf = !!selected && selected.id === user?.id;
+  // Support may only act on regular users, never other staff.
+  const canToggleActive = !!selected && !isSelf && (isAdmin || selected.role === 'user');
 
   const load = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isStaff) return;
     setLoading(true);
     try {
-      setItems(await getAdminUsers());
+      const page = await getAdminUsers(search.trim());
+      setItems(page.items);
+      setTotal(page.total);
     } finally {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [isStaff, search]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Search runs on the server; wait for a pause in typing.
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(() => loadRef.current().catch(() => {}), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const applyPatch = async (patch: Partial<{ role: 'user' | 'admin'; isActive: boolean; tier: 'standard' | 'pro' }>) => {
+  useFocusEffect(useCallback(() => { loadRef.current().catch(() => {}); }, []));
+
+  const applyPatch = async (patch: Partial<{ role: AdminRole; isActive: boolean; tier: 'standard' | 'pro' }>) => {
     if (!selected) return;
     setSaving(true);
     setError(null);
@@ -57,7 +83,7 @@ export default function AdminUsersScreen() {
     });
   };
 
-  if (!isAdmin) {
+  if (!isStaff) {
     return (
       <View style={styles.flex}>
         <View style={styles.header}>
@@ -69,11 +95,18 @@ export default function AdminUsersScreen() {
         </View>
         <View style={styles.deniedBox}>
           <Ionicons name="lock-closed-outline" size={28} color={COLORS.textMuted} />
-          <Text style={styles.deniedText}>Admin access required.</Text>
+          <Text style={styles.deniedText}>Staff access required.</Text>
+          {canViewMetrics && (
+            <Pressable style={styles.linkBtn} onPress={() => router.replace('/admin/metrics')}>
+              <Text style={styles.linkBtnText}>Open system metrics</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );
   }
+
+  const visible = items;
 
   return (
     <View style={styles.flex}>
@@ -81,12 +114,36 @@ export default function AdminUsersScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>Users ({items.length})</Text>
-        <View style={{ width: 30 }} />
+        <Text style={styles.headerTitle}>Users ({total})</Text>
+        <View style={styles.headerLinks}>
+          {canViewMetrics && (
+            <Pressable onPress={() => router.push('/admin/metrics')} hitSlop={6} accessibilityLabel="System metrics">
+              <Ionicons name="stats-chart-outline" size={20} color={COLORS.textMuted} />
+            </Pressable>
+          )}
+          {isAdmin && (
+            <Pressable onPress={() => router.push('/admin/audit-log')} hitSlop={6} accessibilityLabel="Audit log">
+              <Ionicons name="document-text-outline" size={20} color={COLORS.textMuted} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={16} color={COLORS.textDim} />
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by name or email"
+          placeholderTextColor={COLORS.textDim}
+          autoCapitalize="none"
+        />
+      </View>
+      {!isAdmin && <Text style={styles.supportNote}>Support access: you can activate or deactivate regular user accounts.</Text>}
+
       <FlatList
-        data={items}
+        data={visible}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         refreshing={loading}
@@ -98,12 +155,15 @@ export default function AdminUsersScreen() {
               <Text style={styles.rowName}>
                 {item.name} {item.id === user?.id && <Text style={styles.youTag}>(you)</Text>}
               </Text>
-              <Text style={styles.rowEmail}>{item.email}</Text>
+              <Text style={styles.rowEmail}>
+                {item.email}
+                {item.emailVerified ? '' : ' · unconfirmed'}
+              </Text>
               <Text style={styles.rowMeta}>Joined {fmtDate(item.createdAt)}{item.budgetClass ? ` · ${item.budgetClass}` : ''}</Text>
             </View>
             <View style={styles.chipCol}>
-              <View style={[styles.chip, item.role === 'admin' ? styles.chipAdmin : styles.chipMuted]}>
-                <Text style={styles.chipText}>{item.role === 'admin' ? 'Admin' : 'User'}</Text>
+              <View style={[styles.chip, ROLE_CHIP_STYLE[item.role]]}>
+                <Text style={styles.chipText}>{ROLE_LABEL[item.role]}</Text>
               </View>
               <View style={[styles.chip, item.tier === 'pro' ? styles.chipPro : styles.chipMuted]}>
                 <Text style={styles.chipText}>{item.tier === 'pro' ? 'Pro' : 'Standard'}</Text>
@@ -127,26 +187,31 @@ export default function AdminUsersScreen() {
             </View>
             <Text style={styles.modalEmail}>{selected?.email}</Text>
 
+            {isSelf && <Text style={styles.selfNote}>This is your own account — use your own login to change these settings.</Text>}
+
             <View style={styles.controlRow}>
               <Text style={styles.controlLabel}>Active</Text>
               <Switch
                 value={selected?.isActive ?? true}
                 onValueChange={(v) => applyPatch({ isActive: v })}
-                disabled={saving}
+                disabled={saving || !canToggleActive}
                 trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
               />
             </View>
+            {!isAdmin && !isSelf && selected?.role !== 'user' && <Text style={styles.selfNote}>Only an admin can change staff accounts.</Text>}
 
+            {isAdmin && (
+            <>
             <Text style={styles.controlLabel}>Role</Text>
-            <View style={styles.optionRow}>
-              {(['user', 'admin'] as const).map((r) => (
+            <View style={styles.roleOptionRow}>
+              {ROLES.map((r) => (
                 <Pressable
                   key={r}
-                  style={[styles.optionBtn, selected?.role === r && styles.optionBtnActive]}
+                  style={[styles.roleOptionBtn, selected?.role === r && styles.optionBtnActive]}
                   onPress={() => applyPatch({ role: r })}
-                  disabled={saving}
+                  disabled={saving || isSelf}
                 >
-                  <Text style={[styles.optionBtnText, selected?.role === r && styles.optionBtnTextActive]}>{r === 'admin' ? 'Admin' : 'User'}</Text>
+                  <Text style={[styles.optionBtnText, selected?.role === r && styles.optionBtnTextActive]}>{ROLE_LABEL[r]}</Text>
                 </Pressable>
               ))}
             </View>
@@ -158,19 +223,24 @@ export default function AdminUsersScreen() {
                   key={t}
                   style={[styles.optionBtn, selected?.tier === t && styles.optionBtnActive]}
                   onPress={() => applyPatch({ tier: t })}
-                  disabled={saving}
+                  disabled={saving || isSelf}
                 >
                   <Text style={[styles.optionBtnText, selected?.tier === t && styles.optionBtnTextActive]}>{t === 'pro' ? 'Pro' : 'Standard'}</Text>
                 </Pressable>
               ))}
             </View>
 
+            </>
+            )}
+
             {error && <Text style={styles.error}>{error}</Text>}
 
-            <Pressable style={styles.deleteBtn} onPress={() => selected && onDelete(selected)} disabled={saving}>
-              <Ionicons name="trash-outline" size={16} color={COLORS.red} />
-              <Text style={styles.deleteBtnText}>Delete account</Text>
-            </Pressable>
+            {isAdmin && (
+              <Pressable style={[styles.deleteBtn, isSelf && styles.deleteBtnDisabled]} onPress={() => selected && onDelete(selected)} disabled={saving || isSelf}>
+                <Ionicons name="trash-outline" size={16} color={isSelf ? COLORS.textDim : COLORS.red} />
+                <Text style={[styles.deleteBtnText, isSelf && styles.deleteBtnTextDisabled]}>Delete account</Text>
+              </Pressable>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -193,6 +263,23 @@ const styles = StyleSheet.create({
   headerTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700' },
   deniedBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
   deniedText: { color: COLORS.textMuted, fontSize: 14 },
+  linkBtn: { marginTop: SPACING.sm, borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 10 },
+  linkBtnText: { color: COLORS.text, fontWeight: '600' },
+  headerLinks: { flexDirection: 'row', gap: SPACING.md, minWidth: 30, justifyContent: 'flex-end' },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+    backgroundColor: COLORS.input,
+    borderColor: COLORS.cardBorder,
+    borderWidth: 1,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+  },
+  searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 9 },
+  supportNote: { color: COLORS.textDim, fontSize: 12, marginHorizontal: SPACING.lg, marginTop: SPACING.sm },
   listContent: { padding: SPACING.lg, gap: SPACING.sm },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', marginTop: SPACING.xl },
   row: {
@@ -217,6 +304,8 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11, fontWeight: '600', color: COLORS.text },
   chipMuted: { backgroundColor: COLORS.input },
   chipAdmin: { backgroundColor: `${COLORS.purple}33` },
+  chipSupport: { backgroundColor: `${COLORS.blue}33` },
+  chipSystemManager: { backgroundColor: `${COLORS.yellow}33` },
   chipPro: { backgroundColor: `${COLORS.accent}33` },
   chipActive: { backgroundColor: `${COLORS.accent}22` },
   chipInactive: { backgroundColor: `${COLORS.red}22` },
@@ -225,10 +314,13 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
   modalEmail: { color: COLORS.textMuted, fontSize: 13, marginBottom: SPACING.xs },
+  selfNote: { color: COLORS.textDim, fontSize: 12, marginBottom: SPACING.xs },
   controlRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACING.xs },
   controlLabel: { color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.xs },
   optionRow: { flexDirection: 'row', gap: SPACING.xs },
   optionBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.cardBorder },
+  roleOptionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+  roleOptionBtn: { width: '48%', alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.cardBorder },
   optionBtnActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   optionBtnText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
   optionBtnTextActive: { color: '#04140D' },
@@ -245,4 +337,13 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   deleteBtnText: { color: COLORS.red, fontWeight: '700', fontSize: 14 },
+  deleteBtnDisabled: { borderColor: COLORS.cardBorder },
+  deleteBtnTextDisabled: { color: COLORS.textDim },
 });
+
+const ROLE_CHIP_STYLE: Record<AdminRole, object> = {
+  user: styles.chipMuted,
+  support: styles.chipSupport,
+  system_manager: styles.chipSystemManager,
+  admin: styles.chipAdmin,
+};

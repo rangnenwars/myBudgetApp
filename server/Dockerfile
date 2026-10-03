@@ -14,5 +14,9 @@ WORKDIR /app/server
 RUN npm ci
 RUN chmod +x docker-entrypoint.sh
 
+# Don't run the API as root: a compromise of the Node process then can't
+# write to the image or install anything. The node user ships with the image.
+USER node
+
 EXPOSE 4000
 CMD ["./docker-entrypoint.sh"]

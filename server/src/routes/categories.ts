@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { z } from 'zod';
-import { and, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { categories } from '../db/schema';
+import { budgets, categories } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
 import { forbidden, notFound, conflict } from '../lib/errors';
@@ -92,6 +92,20 @@ router.patch(
     if (!row || (row.userId != null && row.userId !== req.userId)) throw notFound('Category not found.');
     if (row.userId == null) throw forbidden('System categories cannot be renamed.');
 
+    // Same duplicate rule as POST: no two visible categories of one type share a name.
+    const [clash] = await db
+      .select({ key: categories.key })
+      .from(categories)
+      .where(
+        and(
+          or(isNull(categories.userId), eq(categories.userId, req.userId!)),
+          eq(categories.type, row.type),
+          sql`lower(${categories.label}) = lower(${body.name})`,
+          ne(categories.key, row.key)
+        )
+      );
+    if (clash) throw conflict(`"${body.name}" already exists.`);
+
     // The key (and therefore every transaction referencing it) is untouched —
     // only the display label changes.
     const [updated] = await db.update(categories).set({ label: body.name }).where(eq(categories.key, row.key)).returning();
@@ -107,14 +121,19 @@ router.delete(
     if (row.userId == null) throw forbidden('System categories cannot be deleted.');
 
     try {
-      await db.delete(categories).where(eq(categories.key, row.key));
+      // A spending limit on the category goes with it; rolled back if the
+      // category turns out to be in use and can't be deleted.
+      await db.transaction(async (tx) => {
+        await tx.delete(budgets).where(and(eq(budgets.userId, req.userId!), eq(budgets.categoryKey, row.key)));
+        await tx.delete(categories).where(eq(categories.key, row.key));
+      });
     } catch (err) {
       // Postgres foreign_key_violation — the category is still referenced
       // by at least one of the user's own transactions. Drizzle wraps the
       // real pg error (with .code) inside a DrizzleQueryError's .cause.
       const pgCode = (err as { code?: string; cause?: { code?: string } }).cause?.code ?? (err as { code?: string }).code;
       if (pgCode === '23503') {
-        throw conflict('This category is used by existing transactions and cannot be deleted.');
+        throw conflict('This category is used by existing transactions or repeating entries and cannot be deleted.');
       }
       throw err;
     }

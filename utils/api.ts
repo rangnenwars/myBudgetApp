@@ -1,12 +1,18 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './tokenStorage';
+import { getAccessToken, getRefreshToken, setTokens, clearTokens, REFRESH_VIA_COOKIE } from './tokenStorage';
 
 // Falls back to localhost for local dev if EXPO_PUBLIC_API_URL isn't set —
 // works for the web build and the Android emulator's host-loopback alias,
 // but a physical device needs the LAN URL set explicitly.
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
-export const api = axios.create({ baseURL: BASE_URL });
+// On web the refresh token is an httpOnly cookie (path /api/v1/auth), so the
+// browser must be allowed to send and store it; native has no cookies to send.
+export const api = axios.create({ baseURL: BASE_URL, withCredentials: REFRESH_VIA_COOKIE });
+
+// Tells the server to use the cookie instead of the JSON body for the
+// refresh token (see server/src/routes/auth.ts). Only sent to /auth/*.
+const COOKIE_TRANSPORT_HEADER = { 'X-Refresh-Transport': 'cookie' };
 
 // Called once, by AuthContext, so a failed silent refresh can clear the
 // user out of app state — api.ts itself has no navigation/UI to redirect
@@ -21,6 +27,9 @@ api.interceptors.request.use(async (config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (REFRESH_VIA_COOKIE && config.url?.startsWith('/auth/')) {
+    config.headers.set(COOKIE_TRANSPORT_HEADER);
+  }
   return config;
 });
 
@@ -30,9 +39,11 @@ let refreshPromise: Promise<string | null> | null = null;
 
 const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = await getRefreshToken();
-  if (!refreshToken) return null;
+  if (!refreshToken && !REFRESH_VIA_COOKIE) return null;
   try {
-    const res = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
+    const res = REFRESH_VIA_COOKIE
+      ? await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true, headers: COOKIE_TRANSPORT_HEADER })
+      : await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
     await setTokens(res.data.accessToken, res.data.refreshToken);
     return res.data.accessToken as string;
   } catch {

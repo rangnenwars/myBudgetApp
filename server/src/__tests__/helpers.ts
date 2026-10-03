@@ -12,6 +12,8 @@ export const app = createApp();
 // Tests reach into the database directly, the same way a real operator
 // would seed the very first admin (see db/seed-accounts.ts).
 export const promoteToAdmin = (userId: number) => db.update(users).set({ role: 'admin' }).where(eq(users.id, userId));
+export const promoteToSupport = (userId: number) => db.update(users).set({ role: 'support' }).where(eq(users.id, userId));
+export const promoteToSystemManager = (userId: number) => db.update(users).set({ role: 'system_manager' }).where(eq(users.id, userId));
 export const setUserActive = (userId: number, isActive: boolean) => db.update(users).set({ isActive }).where(eq(users.id, userId));
 
 // crypto.randomUUID(), not a per-module counter — Jest runs test files in

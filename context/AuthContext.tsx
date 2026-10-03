@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api, apiErrorMessage, registerSessionExpiredHandler } from '../utils/api';
-import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '../utils/tokenStorage';
+import { getAccessToken, getRefreshToken, setTokens, clearTokens, REFRESH_VIA_COOKIE } from '../utils/tokenStorage';
 
 export type Tier = 'standard' | 'pro';
-export type Role = 'user' | 'admin';
+export type Role = 'user' | 'admin' | 'support' | 'system_manager';
 
 interface SessionUser {
   id: number;
@@ -13,6 +13,7 @@ interface SessionUser {
   budgetClass: string | null;
   role: Role;
   isActive: boolean;
+  emailVerified: boolean;
 }
 
 interface AuthContextValue {
@@ -23,8 +24,19 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   refreshBudgetClass: () => Promise<void>;
   setTier: (tier: Tier) => Promise<void>;
+  /** Re-reads the profile (e.g. after the user confirms their email elsewhere). */
+  reloadUser: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /** Ends every session, this one included. */
+  logoutEverywhere: () => Promise<void>;
+  /** Permanently deletes the account (password required), then signs out. */
+  deleteMyAccount: (password: string) => Promise<void>;
   isPro: boolean;
   isAdmin: boolean;
+  /** admin or support — can open the account list (support: activate/deactivate users only). */
+  isStaff: boolean;
+  /** admin or system_manager — can see aggregate system metrics. */
+  canViewMetrics: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -43,7 +55,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (async () => {
       try {
         const [accessToken, refreshToken] = await Promise.all([getAccessToken(), getRefreshToken()]);
-        if (!accessToken && !refreshToken) return;
+        // Web can't see its refresh token (httpOnly cookie), so it always
+        // tries — a missing cookie just means a 401 and staying logged out.
+        if (!accessToken && !refreshToken && !REFRESH_VIA_COOKIE) return;
         // If the access token has expired, api.ts's response interceptor
         // transparently refreshes it on this very request — no separate
         // "is my token still valid" check needed here.
@@ -84,10 +98,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(async () => {
     const refreshToken = await getRefreshToken();
-    if (refreshToken) {
+    if (refreshToken || REFRESH_VIA_COOKIE) {
       // Best-effort — even if this fails (offline, server down), the
       // local tokens still get cleared below so the app logs out either way.
-      await api.post('/auth/logout', { refreshToken }).catch(() => {});
+      // On web the body is empty: the server revokes and clears the cookie.
+      await api.post('/auth/logout', refreshToken ? { refreshToken } : {}).catch(() => {});
     }
     await clearTokens();
     setUser(null);
@@ -113,6 +128,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(data);
   }, []);
 
+  const reloadUser = useCallback(async () => {
+    if (!userRef.current) return;
+    const { data } = await api.get('/auth/me');
+    setUser(data);
+  }, []);
+
+  // The server signs out every other device and returns a fresh session for this one.
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const { data } = await api.post('/auth/me/password', { currentPassword, newPassword });
+    await setTokens(data.accessToken, data.refreshToken);
+  }, []);
+
+  const logoutEverywhere = useCallback(async () => {
+    await api.post('/auth/me/logout-all').catch(() => {});
+    await clearTokens();
+    setUser(null);
+  }, []);
+
+  // Errors (wrong password, last admin) propagate so the screen can show them.
+  const deleteMyAccount = useCallback(async (password: string) => {
+    await api.delete('/auth/me', { data: { password } });
+    await clearTokens();
+    setUser(null);
+  }, []);
+
   const value: AuthContextValue = {
     user,
     isLoading,
@@ -121,8 +161,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     refreshBudgetClass,
     setTier,
+    reloadUser,
+    changePassword,
+    logoutEverywhere,
+    deleteMyAccount,
     isPro: user?.tier === 'pro',
     isAdmin: user?.role === 'admin',
+    isStaff: user?.role === 'admin' || user?.role === 'support',
+    canViewMetrics: user?.role === 'admin' || user?.role === 'system_manager',
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

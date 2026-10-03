@@ -219,3 +219,21 @@ describe('savings goals CRUD', () => {
     expect((await request(app).delete(`/api/v1/goals/${created.body.id}`).set(auth(userA.accessToken))).status).toBe(204);
   });
 });
+
+describe('POST /api/v1/goals/:id/contributions under concurrency', () => {
+  it('ten simultaneous adds all land — none overwrite another', async () => {
+    const { accessToken } = await registerUser();
+    const goal = await request(app).post('/api/v1/goals').set(auth(accessToken)).send({ name: 'Race', target_amount: 100000 });
+
+    await Promise.all(
+      Array.from({ length: 10 }, () =>
+        request(app).post(`/api/v1/goals/${goal.body.id}/contributions`).set(auth(accessToken)).send({ amount: 100, type: 'add' })
+      )
+    );
+
+    const goals = await request(app).get('/api/v1/goals').set(auth(accessToken));
+    expect(goals.body.find((g: { id: number }) => g.id === goal.body.id).saved_amount).toBe(1000);
+    const history = await request(app).get(`/api/v1/goals/${goal.body.id}/contributions`).set(auth(accessToken));
+    expect(history.body).toHaveLength(10);
+  });
+});

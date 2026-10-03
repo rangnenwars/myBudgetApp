@@ -57,10 +57,11 @@ describe('end-to-end: a full user session', () => {
     const me = await request(app).get('/api/v1/auth/me').set(auth(accessToken));
     expect(me.body.budgetClass).toBe('low');
 
-    // 6. Reports reflect everything logged above.
+    // 6. Reports reflect everything logged above, including the Home loan's 22,000 EMI,
+    //    which is posted automatically as this month's expense (loans count as an expense by default).
     const rangeParams = { startMonth: now.getMonth() + 1, startYear: now.getFullYear(), endMonth: now.getMonth() + 1, endYear: now.getFullYear() };
     const summary = await request(app).get('/api/v1/reports/summary').query(rangeParams).set(auth(accessToken));
-    expect(summary.body).toEqual({ totalIncome: 60000, totalExpense: 26000, netSavings: 34000 });
+    expect(summary.body).toEqual({ totalIncome: 60000, totalExpense: 26000 + 22000, netSavings: 34000 - 22000 });
 
     const breakdown = await request(app).get('/api/v1/reports/category-breakdown').query({ ...rangeParams, type: 'expense' }).set(auth(accessToken));
     expect(breakdown.body).toEqual(
@@ -68,6 +69,7 @@ describe('end-to-end: a full user session', () => {
         { category: 'groceries_milk', total: 18000 },
         { category: 'fuel_petrol', total: 5000 },
         { category: 'internet', total: 3000 },
+        { category: 'loan_emi', total: 22000 },
       ])
     );
 
@@ -82,7 +84,7 @@ describe('end-to-end: a full user session', () => {
     // 8. Export as CSV.
     const csv = await request(app).get('/api/v1/reports/export.csv').query(rangeParams).set(auth(accessToken));
     expect(csv.status).toBe(200);
-    expect(csv.text.split('\n')).toHaveLength(1 + entries.length); // header + one row per transaction
+    expect(csv.text.split('\n')).toHaveLength(1 + entries.length + 1); // header + one row per transaction + the auto-posted loan EMI
 
     // 9. "Try Pro" toggle unlocks nothing server-enforced yet, but the flag itself must persist.
     const upgrade = await request(app).patch('/api/v1/auth/me/tier').set(auth(accessToken)).send({ tier: 'pro' });

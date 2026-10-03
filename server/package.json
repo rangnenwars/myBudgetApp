@@ -13,15 +13,21 @@
     "db:seed:accounts": "tsx src/db/seed-accounts.ts",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "quality": "npm run typecheck && npm test"
+    "quality": "npm run typecheck && npm test",
+    "issues:digest": "tsx src/jobs/run-issue-digest.ts",
+    "issues:analyze": "tsx src/jobs/run-issue-analysis.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.1",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.10.1",
     "pg": "^8.13.1",
     "zod": "^3.23.8"
   },
@@ -32,6 +38,7 @@
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^6.4.24",
     "@types/pg": "^8.11.10",
     "@types/supertest": "^6.0.2",
     "drizzle-kit": "^0.31.10",

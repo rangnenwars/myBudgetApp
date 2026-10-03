@@ -12,7 +12,20 @@ export const errorHandler = (err: unknown, _req: Request, res: Response, _next: 
     res.status(400).json({ error: err.issues.map((i) => i.message).join('; ') });
     return;
   }
-  console.error(err);
+  // express.json() errors (malformed JSON, body over the limit) carry their own 4xx status.
+  const bodyErr = err as { type?: string; status?: number };
+  if (bodyErr?.type === 'entity.too.large') {
+    res.status(413).json({ error: 'Request is too large. Screenshots must be 2 MB or smaller.' });
+    return;
+  }
+  if (bodyErr?.type === 'entity.parse.failed') {
+    res.status(400).json({ error: 'Malformed JSON body.' });
+    return;
+  }
+  // Never log the raw error: Drizzle's message embeds the failed SQL and its
+  // parameters (amounts, notes, emails). Log only the driver code/message.
+  const e = err as { name?: string; message?: string; code?: string; cause?: { code?: string; message?: string } };
+  console.error('[500]', e?.cause?.code ?? e?.code ?? e?.name ?? 'Error', e?.cause?.message ?? (e?.cause ? '' : e?.message?.split('\n')[0].replace(/params:.*$/s, '')));
   res.status(500).json({ error: 'Internal server error' });
 };
 

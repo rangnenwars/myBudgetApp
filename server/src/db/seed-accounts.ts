@@ -17,6 +17,9 @@ const ACCOUNTS = [
 ];
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to seed demo accounts with published passwords in production. Use src/db/create-admin.ts instead.');
+  }
   for (const acc of ACCOUNTS) {
     const passwordHash = await bcrypt.hash(acc.password, BCRYPT_COST);
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, acc.email));
@@ -24,11 +27,11 @@ async function main() {
     if (existing) {
       await db
         .update(users)
-        .set({ passwordHash, role: acc.role, isActive: true, updatedAt: new Date() })
+        .set({ passwordHash, role: acc.role, isActive: true, emailVerifiedAt: new Date(), updatedAt: new Date() })
         .where(eq(users.id, existing.id));
       console.log(`Updated ${acc.role} account: ${acc.email}`);
     } else {
-      await db.insert(users).values({ name: acc.name, email: acc.email, passwordHash, role: acc.role });
+      await db.insert(users).values({ name: acc.name, email: acc.email, passwordHash, role: acc.role, emailVerifiedAt: new Date() });
       console.log(`Created ${acc.role} account: ${acc.email}`);
     }
   }

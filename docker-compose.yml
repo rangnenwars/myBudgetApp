@@ -38,6 +38,18 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       PORT: 4000
+      # Report-issue nightly digest + SMTP — all optional; put the values in a
+      # .env file next to this compose file (see server/.env.example).
+      ISSUE_DIGEST_ENABLED: ${ISSUE_DIGEST_ENABLED:-false}
+      ISSUE_DIGEST_TIME: ${ISSUE_DIGEST_TIME:-02:00}
+      ISSUE_DIGEST_TO: ${ISSUE_DIGEST_TO:-}
+      TZ: ${TZ:-Asia/Kolkata}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     ports:
       - "4000:4000"
     restart: unless-stopped

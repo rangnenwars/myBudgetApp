@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { useAuth } from '../context/AuthContext';
-import { addTransaction } from '../utils/database';
+import { addTransactionsBatch } from '../utils/database';
+import { todayLocalIso } from '../utils/dates';
 import { bucketForGroup, monthlyEquivalent, EntryPeriod, CategoryBucket } from '../utils/calculations';
 import { useCategories } from '../context/CategoriesContext';
 import { showAlert } from '../utils/alert';
@@ -56,23 +57,22 @@ export default function InputExpensesScreen() {
       return;
     }
     setSaving(true);
-    const now = new Date();
-    const date = now.toISOString().slice(0, 10);
+    // The device's local date — toISOString() is UTC, which in India is
+    // still yesterday until 5:30 am and would file the entries in the wrong month.
+    const date = todayLocalIso();
     try {
-      await Promise.all(
+      // One all-or-nothing request: a failure saves nothing, so retrying can't duplicate rows.
+      await addTransactionsBatch(
         valid.map((row) => {
           const original = parseFloat(row.amount);
-          const amount = monthlyEquivalent(original, period);
-          return addTransaction({
-            amount,
-            type: 'expense',
+          return {
+            amount: monthlyEquivalent(original, period),
+            type: 'expense' as const,
             category: row.category!,
             subcategory: null,
             note: period === 'monthly' ? null : `${period} entry — original ${fmt(original)}`,
             date,
-            month: now.getMonth() + 1,
-            year: now.getFullYear(),
-          });
+          };
         })
       );
       showAlert('Saved', `Logged ${valid.length} expense${valid.length === 1 ? '' : 's'} for this month.`, () => router.back());
@@ -108,7 +108,7 @@ export default function InputExpensesScreen() {
         </View>
         {period !== 'monthly' && (
           <Text style={styles.hint}>
-            Amounts are divided ({period === 'quarterly' ? '÷3' : '÷12'}) and logged as this month's equivalent expense.
+            Amounts are divided ({period === 'quarterly' ? '÷3' : '÷12'}) and logged as this month’s equivalent expense.
           </Text>
         )}
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,18 @@ import {
   FlatList,
   Pressable,
   Modal,
+  Switch,
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { CategoryPicker } from '../../components/CategoryPicker';
+import { DateField } from '../../components/DateField';
+import { RepeatingEntries } from '../../components/RepeatingEntries';
 import { useAuth } from '../../context/AuthContext';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
@@ -21,16 +25,45 @@ import {
   addTransaction,
   updateTransaction,
   deleteTransaction,
-  getTransactions,
+  getTransactionsPage,
+  getRecurring,
+  repeatTransactionMonthly,
   Transaction,
+  RecurringTransaction,
+  RepeatFrequency,
   TxnType,
 } from '../../utils/database';
 import { monthlyEquivalent, EntryPeriod } from '../../utils/calculations';
+import { todayLocalIso, entryDateError, monthYearOf } from '../../utils/dates';
 import { useCategories } from '../../context/CategoriesContext';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const PERIOD_OPTIONS: { key: EntryPeriod; label: string }[] = [
+// 'once' logs the exact amount on the chosen date; the others convert a recurring bill to its monthly equivalent.
+type TxnPeriod = 'once' | EntryPeriod;
+
+const FREQUENCY_OPTIONS: { key: RepeatFrequency; label: string }[] = [
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'quarterly', label: 'Quarterly' },
+  { key: 'yearly', label: 'Yearly' },
+];
+
+type TypeFilter = 'all' | TxnType;
+const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'expense', label: 'Expenses' },
+  { key: 'income', label: 'Income' },
+];
+
+const PAGE_SIZE = 50;
+
+const ordinal = (n: number) => {
+  const v = n % 100;
+  return n + (v >= 11 && v <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+};
+
+const PERIOD_OPTIONS: { key: TxnPeriod; label: string }[] = [
+  { key: 'once', label: 'Once' },
   { key: 'monthly', label: 'Monthly' },
   { key: 'quarterly', label: 'Quarterly' },
   { key: 'yearly', label: 'Yearly' },
@@ -40,32 +73,84 @@ export default function TransactionsScreen() {
   const { user } = useAuth();
   const { getCategory } = useCategories();
   const [items, setItems] = useState<Transaction[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  // Bumped per reload so a slow response for an older search can't overwrite a newer one.
+  const requestId = useRef(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [type, setType] = useState<TxnType>('expense');
-  const [period, setPeriod] = useState<EntryPeriod>('monthly');
+  const [period, setPeriod] = useState<TxnPeriod>('once');
+  const [date, setDate] = useState(todayLocalIso());
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [frequency, setFrequency] = useState<RepeatFrequency>('monthly');
+  const [rules, setRules] = useState<RecurringTransaction[]>([]);
+  const [repeatingOpen, setRepeatingOpen] = useState(false);
 
+  // First page for the current search/filter. Searching and filtering run on
+  // the server, so only one page is ever held, however long the history.
   const load = useCallback(async () => {
     if (!user) return;
-    setItems(await getTransactions());
-  }, [user]);
+    const id = ++requestId.current;
+    setListLoading(true);
+    try {
+      // Transactions first: the server posts any due repeating entries while serving this request.
+      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, limit: PAGE_SIZE });
+      if (id !== requestId.current) return;
+      setItems(page.items);
+      setNextCursor(page.nextCursor);
+      setRules(await getRecurring());
+    } finally {
+      if (id === requestId.current) setListLoading(false);
+    }
+  }, [user, search, typeFilter]);
+
+  const loadMore = async () => {
+    if (!nextCursor || listLoading) return;
+    const id = requestId.current;
+    setListLoading(true);
+    try {
+      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, limit: PAGE_SIZE, cursor: nextCursor });
+      if (id !== requestId.current) return;
+      setItems((prev) => [...prev, ...page.items]);
+      setNextCursor(page.nextCursor);
+    } finally {
+      if (id === requestId.current) setListLoading(false);
+    }
+  };
+
+  // Typing waits 300 ms for a pause before asking the server.
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadRef.current().catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, typeFilter]);
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load])
+      loadRef.current().catch(() => {});
+    }, [])
   );
 
   const resetForm = () => {
     setEditingId(null);
     setType('expense');
-    setPeriod('monthly');
+    setPeriod('once');
+    setRepeat(false);
+    setFrequency('monthly');
+    setDate(todayLocalIso());
     setAmount('');
     setCategory(null);
     setNote('');
@@ -80,7 +165,9 @@ export default function TransactionsScreen() {
   const openEdit = (item: Transaction) => {
     setEditingId(item.id);
     setType(item.type);
-    setPeriod('monthly'); // editing works on the amount as stored — see the period note below
+    setPeriod('once'); // editing works on the amount as stored — see the period note below
+    setDate(item.date);
+    setRepeat(false);
     setAmount(String(item.amount));
     setCategory(item.category);
     setNote(item.note ?? '');
@@ -99,6 +186,11 @@ export default function TransactionsScreen() {
       setError('Choose a category.');
       return;
     }
+    const dateError = entryDateError(date, todayLocalIso());
+    if (dateError) {
+      setError(dateError);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -110,19 +202,22 @@ export default function TransactionsScreen() {
           type,
           category,
           note: note.trim() || null,
+          date,
         });
+        if (repeat) await repeatTransactionMonthly(editingId, frequency);
       } else {
-        const now = new Date();
-        const monthlyAmount = monthlyEquivalent(value, period);
+        // A repeating entry is logged at its full amount and posted again each
+        // period; the monthly-equivalent split only applies to one-off logging.
+        const spread = !repeat && period !== 'once' && period !== 'monthly';
         await addTransaction({
-          amount: monthlyAmount,
+          amount: spread ? monthlyEquivalent(value, period as EntryPeriod) : value,
           type,
           category,
           subcategory: null,
-          note: note.trim() || (period !== 'monthly' ? `${period} entry — original ${fmt(value)}` : null),
-          date: now.toISOString().slice(0, 10),
-          month: now.getMonth() + 1,
-          year: now.getFullYear(),
+          note: note.trim() || (spread ? `${period} entry — original ${fmt(value)}` : null),
+          date,
+          ...monthYearOf(date),
+          repeat_frequency: repeat ? frequency : undefined,
         });
       }
       resetForm();
@@ -142,26 +237,24 @@ export default function TransactionsScreen() {
     });
   };
 
-  const query = search.trim().toLowerCase();
-  const filteredItems = query
-    ? items.filter((item) => {
-        const cat = getCategory(item.category);
-        return (
-          (cat?.label ?? item.category).toLowerCase().includes(query) ||
-          (item.note ?? '').toLowerCase().includes(query) ||
-          item.date.includes(query) ||
-          String(item.amount).includes(query)
-        );
-      })
-    : items;
+  const query = search.trim();
+  const repeatDay = Number(date.slice(8, 10)) || 1;
 
   return (
     <View style={styles.flex}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Transactions</Text>
-        <Pressable style={styles.addBtn} onPress={openAdd}>
-          <Ionicons name="add" size={22} color="#04140D" />
-        </Pressable>
+        <View style={styles.headerActions}>
+          {rules.length > 0 && (
+            <Pressable style={styles.repeatChip} onPress={() => setRepeatingOpen(true)}>
+              <Ionicons name="repeat" size={14} color={COLORS.textMuted} />
+              <Text style={styles.repeatChipText}>Repeating · {rules.length}</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.addBtn} onPress={openAdd}>
+            <Ionicons name="add" size={22} color="#04140D" />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>
@@ -170,7 +263,7 @@ export default function TransactionsScreen() {
           style={styles.searchInput}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search transactions"
+          placeholder="Search notes, categories or amounts"
           placeholderTextColor={COLORS.textDim}
         />
         {search.length > 0 && (
@@ -180,14 +273,27 @@ export default function TransactionsScreen() {
         )}
       </View>
 
+      <View style={styles.filterRow}>
+        {TYPE_FILTERS.map((f) => (
+          <Pressable key={f.key} style={[styles.filterChip, typeFilter === f.key && styles.filterChipActive]} onPress={() => setTypeFilter(f.key)}>
+            <Text style={[styles.filterChipText, typeFilter === f.key && styles.filterChipTextActive]}>{f.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
       <FlatList
-        data={filteredItems}
+        data={items}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={listLoading && items.length > 0 ? <ActivityIndicator color={COLORS.textMuted} style={styles.listFooter} /> : null}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {query ? `No transactions match "${search.trim()}"` : 'No transactions yet. Tap + to add one.'}
-          </Text>
+          listLoading ? null : (
+            <Text style={styles.emptyText}>
+              {query || typeFilter !== 'all' ? `No transactions match${query ? ` "${query}"` : ' this filter'}` : 'No transactions yet. Tap + to add one.'}
+            </Text>
+          )
         }
         renderItem={({ item }) => {
           const cat = getCategory(item.category);
@@ -243,7 +349,10 @@ export default function TransactionsScreen() {
               ))}
             </View>
 
-            {editingId == null && (
+            <Text style={styles.label}>Date</Text>
+            <DateField value={date} onChange={setDate} />
+
+            {editingId == null && !repeat && (
               <>
                 <Text style={styles.label}>Period</Text>
                 <View style={styles.typeToggle}>
@@ -257,9 +366,9 @@ export default function TransactionsScreen() {
                     </Pressable>
                   ))}
                 </View>
-                {period !== 'monthly' && (
+                {period !== 'once' && period !== 'monthly' && (
                   <Text style={styles.hint}>
-                    Logged as this month's equivalent ({period === 'quarterly' ? '÷3' : '÷12'}) — the original amount is kept in the note.
+                    Logged as the monthly equivalent ({period === 'quarterly' ? '÷3' : '÷12'}) — the original amount is kept in the note.
                   </Text>
                 )}
               </>
@@ -287,6 +396,33 @@ export default function TransactionsScreen() {
               placeholderTextColor={COLORS.textDim}
             />
 
+            <View style={styles.repeatRow}>
+              <View style={styles.repeatText}>
+                <Text style={styles.repeatLabel}>Repeat</Text>
+                <Text style={styles.hint}>
+                  {repeat
+                    ? `Added again on the ${ordinal(repeatDay)} ${frequency === 'monthly' ? 'of every month' : frequency === 'quarterly' ? 'every 3 months' : 'of this month every year'}, until you stop it under "Repeating".`
+                    : 'Turn on for salary, rent, insurance or any fixed amount that comes back.'}
+                </Text>
+              </View>
+              <Switch
+                value={repeat}
+                onValueChange={setRepeat}
+                trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
+            {repeat && (
+              <View style={styles.typeToggle}>
+                {FREQUENCY_OPTIONS.map((opt) => (
+                  <Pressable key={opt.key} style={[styles.typeBtn, frequency === opt.key && styles.typeBtnActive]} onPress={() => setFrequency(opt.key)}>
+                    <Text style={[styles.typeBtnText, frequency === opt.key && styles.typeBtnTextActive]}>{opt.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
@@ -295,6 +431,13 @@ export default function TransactionsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <RepeatingEntries
+        visible={repeatingOpen}
+        rules={rules}
+        onClose={() => setRepeatingOpen(false)}
+        onChanged={load}
+      />
     </View>
   );
 }
@@ -309,6 +452,12 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.sm,
   },
   headerTitle: { color: COLORS.text, fontSize: 22, fontWeight: '700' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  repeatChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
+  repeatChipText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
+  repeatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md, marginTop: SPACING.xs },
+  repeatText: { flex: 1 },
+  repeatLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   addBtn: {
     backgroundColor: COLORS.accent,
     width: 36,
@@ -329,6 +478,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
   },
   searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 9 },
+  filterRow: { flexDirection: 'row', gap: SPACING.xs, marginHorizontal: SPACING.lg, marginTop: SPACING.sm },
+  filterChip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 5 },
+  filterChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  filterChipText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
+  filterChipTextActive: { color: '#04140D' },
+  listFooter: { paddingVertical: SPACING.md },
   listContent: { padding: SPACING.lg, paddingTop: SPACING.sm, gap: SPACING.xs },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', marginTop: SPACING.xl },
   row: {
