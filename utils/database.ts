@@ -73,8 +73,9 @@ export const updateTransaction = async (
   return data;
 };
 
-export const deleteTransaction = async (id: number): Promise<void> => {
-  await api.delete(`/transactions/${id}`);
+/** `stopRepeat` also deletes the repeating rule the entry belongs to. */
+export const deleteTransaction = async (id: number, stopRepeat = false): Promise<void> => {
+  await api.delete(`/transactions/${id}`, { params: stopRepeat ? { stop_repeat: true } : undefined });
 };
 
 export const getTransactions = async (month?: number, year?: number): Promise<Transaction[]> => {

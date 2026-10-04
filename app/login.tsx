@@ -100,11 +100,6 @@ export default function LoginScreen() {
           </Link>
         </View>
 
-        <View style={styles.footerBox}>
-          <Text style={styles.footerText}>
-            Your data is securely stored on the server and synced across every device you sign in on.
-          </Text>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -148,13 +143,4 @@ const styles = StyleSheet.create({
   },
   registerText: { color: COLORS.textMuted, fontSize: 14 },
   registerLink: { color: COLORS.accent, fontSize: 14, fontWeight: '600' },
-  footerBox: {
-    borderWidth: 1,
-    borderColor: `${COLORS.accent}55`,
-    borderStyle: 'dashed',
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginTop: SPACING.xl,
-  },
-  footerText: { color: COLORS.accentDim, fontSize: 12, textAlign: 'center' },
 });

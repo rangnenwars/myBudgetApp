@@ -292,14 +292,34 @@ router.patch(
   })
 );
 
+// `stop_repeat=true` also removes the repeating rule this entry belongs to (same
+// type, category and amount), so deleting a repeating entry leaves nothing behind
+// — otherwise the rule lives on, keeps posting, and blocks re-adding the entry
+// with "already repeats".
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = idParam(req);
-    const [deleted] = await db
-      .delete(transactions)
-      .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId!)))
-      .returning({ id: transactions.id });
+    const stopRepeat = req.query.stop_repeat === 'true';
+    const deleted = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .delete(transactions)
+        .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId!)))
+        .returning({ type: transactions.type, category: transactions.category, amount: transactions.amount });
+      if (row && stopRepeat) {
+        await tx
+          .delete(recurringTransactions)
+          .where(
+            and(
+              eq(recurringTransactions.userId, req.userId!),
+              eq(recurringTransactions.type, row.type),
+              eq(recurringTransactions.category, row.category),
+              eq(recurringTransactions.amount, row.amount)
+            )
+          );
+      }
+      return row;
+    });
     if (!deleted) throw notFound('Transaction not found.');
     // Same as POST/PATCH: removing an expense can change the budget class.
     await recomputeBudgetClass(req.userId!);

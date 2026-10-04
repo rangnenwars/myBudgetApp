@@ -19,11 +19,13 @@ export const STATUS_COLOR: Record<BudgetStatus['status'], string> = { ok: COLORS
 // against each. The dashboard shows the ones at 80%+ as alerts.
 export default function BudgetsScreen() {
   const { user, isLoading } = useAuth();
-  const { getCategory } = useCategories();
+  const { getCategory, groupCategories } = useCategories();
   const [items, setItems] = useState<BudgetStatus[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState<BudgetStatus | 'new' | null>(null);
   const [category, setCategory] = useState<string | null>(null);
+  // New budgets can cover several categories at once (same limit for each).
+  const [selected, setSelected] = useState<string[]>([]);
   const [limit, setLimit] = useState('');
   const [error, setError] = useState<string | null>(null);
   // Separate from `editing` so the sheet keeps its title while it animates closed.
@@ -48,14 +50,18 @@ export default function BudgetsScreen() {
   const monthLabel = new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
   const totalLimit = items.reduce((s, b) => s + b.monthly_limit, 0);
   const totalSpent = items.reduce((s, b) => s + b.spent, 0);
+  const budgeted = new Set(items.map((b) => b.category));
 
   const openNew = () => {
     setEditing('new');
     setIsNew(true);
     setCategory(null);
+    setSelected([]);
     setLimit('');
     setError(null);
   };
+
+  const toggle = (key: string) => setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
   const openEdit = (b: BudgetStatus) => {
     setEditing(b);
@@ -67,8 +73,9 @@ export default function BudgetsScreen() {
 
   const onSave = async () => {
     const value = Number(limit);
-    if (!category) {
-      setError('Choose a category.');
+    const keys = isNew ? selected : category ? [category] : [];
+    if (keys.length === 0) {
+      setError(isNew ? 'Choose at least one category.' : 'Choose a category.');
       return;
     }
     if (!value || value <= 0) {
@@ -80,10 +87,11 @@ export default function BudgetsScreen() {
     try {
       // Changing the category of an existing limit = remove the old one, set the new one.
       if (editing && editing !== 'new' && editing.category !== category) await deleteBudget(editing.category);
-      await setBudget(category, value);
+      for (const key of keys) await setBudget(key, value);
       setEditing(null);
       await load();
     } catch (err) {
+      await load().catch(() => {}); // some of the selected categories may already be saved
       setError(apiErrorMessage(err, 'Could not save the budget.'));
     } finally {
       setBusy(false);
@@ -156,9 +164,34 @@ export default function BudgetsScreen() {
                 <Ionicons name="close" size={22} color={COLORS.text} />
               </Pressable>
             </View>
-            <Text style={kit.muted}>Category</Text>
-            <CategoryPicker type="expense" value={category} onChange={setCategory} />
-            <Field label="Monthly limit" value={limit} onChangeText={setLimit} placeholder="0" keyboardType="numeric" />
+            <Text style={kit.muted}>{isNew ? 'Categories (tick one or more)' : 'Category'}</Text>
+            {isNew ? (
+              <ScrollView style={styles.checkList} nestedScrollEnabled>
+                {groupCategories('expense').map((g) => {
+                  const free = g.items.filter((c) => !budgeted.has(c.key));
+                  if (free.length === 0) return null;
+                  return (
+                    <View key={g.group}>
+                      <Text style={styles.groupTitle}>{g.group}</Text>
+                      {free.map((c) => {
+                        const on = selected.includes(c.key);
+                        return (
+                          <Pressable key={c.key} style={styles.checkRow} onPress={() => toggle(c.key)} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
+                            <Ionicons name={on ? 'checkbox' : 'square-outline'} size={22} color={on ? COLORS.accent : COLORS.textMuted} />
+                            <Text style={styles.checkLabel}>
+                              {c.icon} {c.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <CategoryPicker type="expense" value={category} onChange={setCategory} />
+            )}
+            <Field label={isNew && selected.length > 1 ? `Monthly limit (applied to each of ${selected.length})` : 'Monthly limit'} value={limit} onChangeText={setLimit} placeholder="0" keyboardType="numeric" />
             <ErrorText message={error} />
             <Button label={busy ? 'Saving…' : 'Save'} onPress={onSave} disabled={busy} />
             {!isNew && <Button label="Remove budget" variant="danger" onPress={onRemove} />}
@@ -174,6 +207,10 @@ const styles = StyleSheet.create({
   summary: { gap: SPACING.xs },
   summaryValue: { color: COLORS.text, fontSize: 20, fontWeight: '700' },
   row: { gap: SPACING.xs },
+  checkList: { maxHeight: 260 },
+  groupTitle: { color: COLORS.textMuted, fontSize: 12, fontWeight: '700', marginTop: SPACING.sm, marginBottom: 2 },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 8 },
+  checkLabel: { color: COLORS.text, fontSize: 14 },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between' },
   rowLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   rowStatus: { fontSize: 14, fontWeight: '700' },

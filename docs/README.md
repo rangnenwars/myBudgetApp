@@ -18,6 +18,14 @@ Personal budgeting app, built from `DESIGN_SPEC_v2.md` / `MASTER_BUILD_PROMPT_v2
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | PostgreSQL schema design — implemented, matches `server/src/db/schema.ts` |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Step-by-step guide to deploying this app on a cloud Linux server — provisioning, Docker, TLS, hardening, backups |
 | [DEPLOYMENT_DIGITALOCEAN.md](DEPLOYMENT_DIGITALOCEAN.md) | Production plan for prapanji.in on a DigitalOcean Droplet with GitHub Actions CI/CD — GHCR images, Caddy TLS, approval-gated deploys, rollback, backups |
+| [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) | **Manual** deployment to the DigitalOcean Droplet (registry path and image-transfer path), rollback, backups/restore, everyday commands, troubleshooting |
+| [INFRASTRUCTURE_REFERENCE.md](INFRASTRUCTURE_REFERENCE.md) | Production vs local inventory — IPs, ports, database details, Cloud Firewall rules, DNS/TLS, where each secret and env var lives |
+| [SYSTEM_ARCHITECTURE_GUIDE.md](SYSTEM_ARCHITECTURE_GUIDE.md) | How the stack works end to end, request flow, roles, repo map, and a "which file do I edit to change X" table |
+| [DB_ADMIN_QUERIES.md](DB_ADMIN_QUERIES.md) | SQL cookbook: make a user admin, grant Pro, deactivate, reset a password, delete test accounts, audit log, usage and issue-report queries |
+| [CONFIGURATION_STATE.md](CONFIGURATION_STATE.md) | Dated change log (2026-10-03), configuration matrix of what is in the repo vs what must be confirmed in external accounts, known gaps |
+| [USER_MANUAL.md](USER_MANUAL.md) | End-user guide to every screen, plus a section for staff accounts |
+| [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (20 total, Mermaid) — almost no prose; renders on GitHub |
+| [USER_DISTRIBUTION.md](USER_DISTRIBUTION.md) | How to get the app and manual to end users — web first, Android APK / Play / TestFlight later — with onboarding message and rollout plan |
 | [MASTER_BUILD_PROMPT_v3_BACKEND.md](MASTER_BUILD_PROMPT_v3_BACKEND.md) | Server structure, API endpoints, auth flow, Docker changes, client integration — implemented and verified |
 | [pro-roadmap.html](pro-roadmap.html) · [live](https://claude.ai/code/artifact/80837269-945e-4a79-b5da-678c946641a1) | Rendered version of the Pro roadmap |
 | [architecture-flows.html](architecture-flows.html) · [live](https://claude.ai/code/artifact/3787e434-ead3-4e0a-881d-119411b2a53d) | Layered architecture, debt-payoff simulation, bulk-entry/bucketing, Docker deployment, test coverage map |

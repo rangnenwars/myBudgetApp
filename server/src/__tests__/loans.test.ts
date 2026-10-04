@@ -249,6 +249,21 @@ describe('loans CRUD', () => {
       expect(await listTxns(accessToken)).toHaveLength(0);
     });
 
+    it("corrects this month's posted EMI when the loan's EMI or name is edited", async () => {
+      const { accessToken } = await registerUser();
+      const loan = await createLoan(accessToken, { name: 'Car', emi: 20000 });
+      expect((await listTxns(accessToken))[0].amount).toBe(20000);
+
+      const patch = await request(app).patch(`/api/v1/loans/${loan.id}`).set(auth(accessToken)).send({ emi: 15000, name: 'Car loan' });
+      expect(patch.status).toBe(200);
+
+      const txns = await listTxns(accessToken);
+      expect(txns).toHaveLength(1);
+      expect(txns[0]).toMatchObject({ amount: 15000, note: 'EMI - Car loan' });
+      const summary = await request(app).get('/api/v1/reports/summary').query({ startMonth: CUR_MONTH, startYear: CUR_YEAR, endMonth: CUR_MONTH, endYear: CUR_YEAR }).set(auth(accessToken));
+      expect(summary.body.totalExpense).toBe(15000);
+    });
+
     it('does not double-post when several requests arrive at once', async () => {
       const { accessToken } = await registerUser();
       await createLoan(accessToken);

@@ -1,6 +1,6 @@
 # Deploying My Budget to a Cloud Linux Server
 
-Step-by-step guide for taking this repo from a laptop to a running instance on a Linux VPS (DigitalOcean, AWS EC2, Linode, Hetzner, etc.). It expands on [FAQ.md](FAQ.md) question 8 with concrete commands. Everything runs from the single `docker-compose.yml` at the repo root — three containers: `mybudget-web` (static build behind nginx), `server` (Express API), `postgres`.
+Step-by-step guide for taking this repo from a laptop to a running instance on a Linux VPS (DigitalOcean, AWS EC2, Linode, Hetzner, etc.). It expands on [FAQ.md](FAQ.md) question 8 with concrete commands. Everything runs from the single `docker-compose.yml` at the repo root — three containers: `mybudget-web` (static build behind nginx), `server` (Express API), `postgres`. For the CI-built, GHCR-image production stack (Caddy + `deploy/docker-compose.prod.yml`), see [DEPLOYMENT_DIGITALOCEAN.md](DEPLOYMENT_DIGITALOCEAN.md) instead.
 
 > This app has not been load-tested. It's sized for personal/small-scale use (see [FAQ.md](FAQ.md) question 7 for hardware guidance). Follow the hardening steps in section 6 before exposing it to real users.
 
@@ -83,7 +83,24 @@ Edit both files (`nano .env`, `nano server/.env`) and set `JWT_ACCESS_SECRET` / 
 These gaps are called out in [FAQ.md](FAQ.md) question 8 and are **not** optional for anything beyond a private/personal deployment:
 
 1. **TLS.** Neither `nginx.conf` (port 80) nor the API (port 4000) terminates TLS. Put a reverse proxy with a real certificate in front — see section 7 for the two supported paths.
-2. **Remove or change the seeded demo accounts.** `admin@mybudget.local` / `Admin@12345` and `user@mybudget.local` / `User@12345` are seeded automatically on first boot and their passwords are public in this repo's docs (see [FAQ.md](FAQ.md) question 10). Log in and change both passwords immediately, or delete the accounts via the Admin screen once you have a real admin account.
+2. **Don't seed the demo accounts, and set the production switches.** `admin@mybudget.local` and `user@mybudget.local` have public passwords (see [FAQ.md](FAQ.md) question 10). `server/docker-entrypoint.sh` seeds them on every boot **unless** `NODE_ENV=production` or `SEED_DEMO_ACCOUNTS=false` — and the root `docker-compose.yml` sets neither. Before the first `docker compose up`, add these to the `server` service's `environment:` block:
+
+   ```yaml
+         NODE_ENV: production
+         SEED_DEMO_ACCOUNTS: "false"
+         CORS_ORIGIN: https://budget.example.com   # required in production; comma-separate multiple origins
+         TRUST_PROXY: "1"                          # one reverse-proxy hop (section 7)
+   ```
+
+   `NODE_ENV=production` also makes the server refuse to start unless the two JWT secrets differ and are at least 32 characters, and turns off the self-service "Try Pro" toggle (see `server/.env.example`). The production stack in `deploy/docker-compose.prod.yml` already sets all of this — see [DEPLOYMENT_DIGITALOCEAN.md](DEPLOYMENT_DIGITALOCEAN.md).
+
+   **Creating the first admin.** With demo accounts off, no user exists yet. Register normally in the app, then promote that account once (no password is passed on the command line):
+
+   ```bash
+   docker compose exec server npx tsx src/db/create-admin.ts you@example.com
+   ```
+
+   **If the demo accounts were already seeded** (stack started before these settings), register and promote your own admin as above, then delete both `@mybudget.local` accounts from the Admin screen.
 3. **Never publish the Postgres port.** The default `docker-compose.yml` maps `5433:5432` for local dev convenience. On a public server, remove that `ports:` mapping from the `postgres` service entirely — only the `server` container needs to reach it, over the internal Docker network at `postgres:5432`.
 4. **Don't publish port 4000 either** once the reverse proxy is in place — the client should only ever talk to the proxy (port 80/443), which forwards `/api/` to the `server` container internally. Remove the `server` service's `ports:` mapping the same way.
 
@@ -163,7 +180,7 @@ docker compose ps          # all three should show "healthy"/"running"
 curl -s http://localhost:4000/health   # or through the proxy: curl -s https://budget.example.com/api/health
 ```
 
-First boot runs Postgres migrations, seeds the 61 system categories, and seeds the two demo accounts automatically (`server/docker-entrypoint.sh`) — this is why step 6.2 (changing those passwords) matters immediately after first login.
+First boot runs Postgres migrations and seeds the 61 system categories (`server/docker-entrypoint.sh`). With the step 6.2 settings in place, demo accounts are skipped — the log shows `Skipping demo accounts.` — so the user list starts empty: register your account in the app, then promote it with `create-admin.ts` (step 6.2). If you skipped 6.2, the two public-password demo accounts were seeded; fix that before exposing the server.
 
 Open `https://budget.example.com` (or `http://<server-ip>:8080` if you skipped the reverse proxy for a private/internal deployment).
 
