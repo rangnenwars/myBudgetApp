@@ -45,6 +45,24 @@ describe('repeat every month', () => {
     expect(await listTxns(accessToken)).toHaveLength(1);
   });
 
+  it('deleting a repeating entry with stop_repeat removes its rule, so it can be added again', async () => {
+    const { accessToken } = await registerUser();
+    const created = await addRepeating(accessToken, { date: dayIn(0, 1) });
+    expect((await addRepeating(accessToken, { date: dayIn(0, 1) })).status).toBe(409);
+
+    const del = await request(app).delete(`/api/v1/transactions/${created.body.id}`).query({ stop_repeat: 'true' }).set(auth(accessToken));
+    expect(del.status).toBe(204);
+    expect(await listRules(accessToken)).toHaveLength(0);
+    expect((await addRepeating(accessToken, { date: dayIn(0, 1) })).status).toBe(201);
+  });
+
+  it('a plain delete leaves the rule alone', async () => {
+    const { accessToken } = await registerUser();
+    const created = await addRepeating(accessToken, { date: dayIn(0, 1) });
+    await request(app).delete(`/api/v1/transactions/${created.body.id}`).set(auth(accessToken));
+    expect(await listRules(accessToken)).toHaveLength(1);
+  });
+
   it('does not create a rule unless asked to', async () => {
     const { accessToken } = await registerUser();
     await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 100, type: 'expense', category_key: 'fuel_petrol', date: dayIn(0, 1) });

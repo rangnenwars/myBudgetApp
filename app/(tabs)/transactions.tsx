@@ -230,9 +230,11 @@ export default function TransactionsScreen() {
     }
   };
 
-  const onDelete = (id: number) => {
-    confirmAction('Delete transaction', 'Remove this transaction?', 'Delete', async () => {
-      await deleteTransaction(id);
+  const onDelete = (item: Transaction) => {
+    const repeats = rules.some((r) => r.type === item.type && r.category === item.category && r.amount === item.amount);
+    const message = repeats ? 'Remove this transaction? It repeats automatically, so the repeat is stopped too.' : 'Remove this transaction?';
+    confirmAction('Delete transaction', message, 'Delete', async () => {
+      await deleteTransaction(item.id, repeats);
       await load();
     });
   };
@@ -312,7 +314,7 @@ export default function TransactionsScreen() {
                 style={styles.rowDeleteBtn}
                 onPress={(e) => {
                   e.stopPropagation();
-                  onDelete(item.id);
+                  onDelete(item);
                 }}
               >
                 <Ionicons name="trash-outline" size={16} color={COLORS.red} />

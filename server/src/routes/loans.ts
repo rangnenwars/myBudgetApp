@@ -105,12 +105,37 @@ router.patch(
       }
     }
 
-    const [row] = await db
-      .update(loans)
-      .set(updateData)
-      .where(and(eq(loans.id, id), eq(loans.userId, req.userId!)))
-      .returning();
-    if (!row) throw notFound('Loan not found.');
+    const row = await db.transaction(async (tx) => {
+      const [before] = await tx
+        .select()
+        .from(loans)
+        .where(and(eq(loans.id, id), eq(loans.userId, req.userId!)))
+        .for('update');
+      if (!before) throw notFound('Loan not found.');
+
+      const [updated] = await tx.update(loans).set(updateData).where(eq(loans.id, id)).returning();
+
+      // This month's EMI was already posted as an expense from the old values;
+      // correcting the loan must correct that entry too, or Home and Reports
+      // keep showing the stale figure. (Earlier months are history and stay.)
+      if (updated.counts_as_expense && (updated.emi !== before.emi || updated.name !== before.name)) {
+        const today = localToday();
+        const thisMonth = monthStart(today.year, today.month);
+        await tx
+          .update(transactions)
+          .set({ amount: Math.min(updated.emi, updated.outstanding > 0 ? updated.outstanding : updated.emi), note: `EMI - ${updated.name}` })
+          .where(
+            and(
+              eq(transactions.userId, req.userId!),
+              eq(transactions.category, 'loan_emi'),
+              eq(transactions.date, thisMonth),
+              eq(transactions.note, `EMI - ${before.name}`)
+            )
+          );
+      }
+      return updated;
+    });
+    await recomputeBudgetClass(req.userId!);
     res.json(row);
   })
 );

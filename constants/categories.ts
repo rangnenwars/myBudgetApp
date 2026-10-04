@@ -14,7 +14,8 @@ export interface Category {
 
 export const EXPENSE_CATEGORIES: Category[] = [
   // Household
-  { key: 'maid_car_wash', label: 'Maid & car wash', icon: '🧹', color: '#34D399', group: 'Household', type: 'expense' },
+  { key: 'maid', label: 'Maid', icon: '🧹', color: '#34D399', group: 'Household', type: 'expense' },
+  { key: 'car_wash', label: 'Car wash', icon: '🚗', color: '#38BDF8', group: 'Household', type: 'expense' },
   { key: 'electricity_laundry', label: 'Electricity & laundry', icon: '⚡', color: '#FCD34D', group: 'Household', type: 'expense' },
   { key: 'mobile_recharge', label: 'Mobile recharge', icon: '📱', color: '#F9A8D4', group: 'Household', type: 'expense' },
   { key: 'internet', label: 'Internet', icon: '📶', color: '#818CF8', group: 'Household', type: 'expense' },
