@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { useAuth } from '../context/AuthContext';
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   periodBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.sm },
   periodBtnActive: { backgroundColor: COLORS.accent },
   periodBtnText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 13 },
-  periodBtnTextActive: { color: '#04140D' },
+  periodBtnTextActive: { color: COLORS.onAccent },
   hint: { color: COLORS.textDim, fontSize: 12, marginTop: SPACING.xs },
   row: {
     backgroundColor: COLORS.card,
@@ -232,5 +232,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: SPACING.lg,
   },
-  saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },
+  saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
 });

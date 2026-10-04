@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { app, uniqueEmail, registerUser } from './helpers';
+import { app, uniqueEmail, registerUser, uniquePhone } from './helpers';
 
 // The limiters skip under NODE_ENV=test (see middleware/rateLimit.ts) so the
 // rest of the suite can register/log in freely; switched on per test here.
@@ -34,10 +34,10 @@ describe('auth rate limiting', () => {
 
   it('the 6th registration from one IP in the window is refused with 429', async () => {
     for (let i = 0; i < 5; i++) {
-      const res = await request(app).post('/api/v1/auth/register').send({ name: 'R', email: uniqueEmail('reg-limit'), password: 'password123' });
+      const res = await request(app).post('/api/v1/auth/register').send({ name: 'R', email: uniqueEmail('reg-limit'), phone: uniquePhone(), password: 'password123' });
       expect(res.status).toBe(201);
     }
-    const blocked = await request(app).post('/api/v1/auth/register').send({ name: 'R', email: uniqueEmail('reg-limit'), password: 'password123' });
+    const blocked = await request(app).post('/api/v1/auth/register').send({ name: 'R', email: uniqueEmail('reg-limit'), phone: uniquePhone(), password: 'password123' });
     expect(blocked.status).toBe(429);
   });
 });

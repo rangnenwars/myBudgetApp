@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "My Budget",
+    "name": "Prapanji",
     "slug": "mybudgetapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "mybudget",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#0A0F1E",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F5F6F2",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -24,10 +24,23 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "name": "Prapanji",
+      "shortName": "Prapanji",
+      "lang": "en",
+      "description": "Prapanji: split bills with friends, track every rupee, and see where your month actually goes. Nothing forgotten, nothing hidden.",
+      "themeColor": "#0F5C4A",
+      "backgroundColor": "#F5F6F2",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": true
+          }
+        }
+      ],
       "expo-sqlite",
       "expo-status-bar",
       "expo-splash-screen",
@@ -36,7 +49,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "My Budget needs access to your photos so you can attach a screenshot when reporting an issue.",
+          "photosPermission": "Prapanji needs access to your photos so you can attach a screenshot when reporting an issue.",
           "cameraPermission": false,
           "microphonePermission": false
         }

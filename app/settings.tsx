@@ -74,7 +74,7 @@ export default function SettingsScreen() {
   };
 
   const onLogoutEverywhere = () => {
-    confirmAction('Sign out everywhere', 'Sign out of My Budget on every device, including this one?', 'Sign out', async () => {
+    confirmAction('Sign out everywhere', 'Sign out of Prapanji on every device, including this one?', 'Sign out', async () => {
       await logoutEverywhere();
       router.replace('/login');
     });
@@ -110,6 +110,7 @@ export default function SettingsScreen() {
         <Card>
           <Text style={styles.name}>{user.name}</Text>
           <Text style={kit.muted}>{user.email}</Text>
+          {user.phone && <Text style={kit.muted}>{user.phone.replace(/^\+91(\d{5})(\d{5})$/, '+91 $1 $2')}</Text>}
           <Text style={[kit.dim, styles.role]}>
             {ROLE_LABEL[user.role] ?? user.role} · {user.tier === 'pro' ? 'Pro' : 'Standard'} plan
           </Text>

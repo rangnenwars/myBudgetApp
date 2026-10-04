@@ -2,7 +2,7 @@
 // API + real Postgres — the "does the whole system actually work together"
 // counterpart to the focused per-route tests in the other files here.
 import request from 'supertest';
-import { app, uniqueEmail } from './helpers';
+import { app, uniqueEmail, uniquePhone } from './helpers';
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -13,7 +13,7 @@ describe('end-to-end: a full user session', () => {
     const today = now.toISOString().slice(0, 10);
 
     // 1. Register.
-    const register = await request(app).post('/api/v1/auth/register').send({ name: 'E2E User', email, password: 'password123' });
+    const register = await request(app).post('/api/v1/auth/register').send({ name: 'E2E User', email, phone: uniquePhone(), password: 'password123' });
     expect(register.status).toBe(201);
     let { accessToken, refreshToken } = register.body;
 
@@ -104,8 +104,8 @@ describe('end-to-end: a full user session', () => {
 
   it('two independent users never see each other\'s data across the whole flow', async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const alice = await request(app).post('/api/v1/auth/register').send({ name: 'Alice', email: uniqueEmail('alice'), password: 'password123' });
-    const bob = await request(app).post('/api/v1/auth/register').send({ name: 'Bob', email: uniqueEmail('bob'), password: 'password123' });
+    const alice = await request(app).post('/api/v1/auth/register').send({ name: 'Alice', email: uniqueEmail('alice'), phone: uniquePhone(), password: 'password123' });
+    const bob = await request(app).post('/api/v1/auth/register').send({ name: 'Bob', email: uniqueEmail('bob'), phone: uniquePhone(), password: 'password123' });
 
     await request(app).post('/api/v1/transactions').set(auth(alice.body.accessToken)).send({ amount: 1000, type: 'expense', category_key: 'fuel_petrol', date: today });
     await request(app).post('/api/v1/loans').set(auth(alice.body.accessToken)).send({ name: 'Alice loan', principal: 1000, outstanding: 1000, emi: 100 });

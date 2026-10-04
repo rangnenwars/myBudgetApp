@@ -34,6 +34,9 @@ const migrateLegacyTokens = (): Promise<void> => {
   return migration;
 };
 
+/** Web-only optimisation (see tokenStorage.web.ts); native reads the stored tokens instead. */
+export const hasSessionHint = (): boolean | null => null;
+
 export const getAccessToken = async (): Promise<string | null> => {
   await migrateLegacyTokens();
   return SecureStore.getItemAsync(ACCESS_TOKEN_KEY);

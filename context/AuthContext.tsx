@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api, apiErrorMessage, registerSessionExpiredHandler } from '../utils/api';
-import { getAccessToken, getRefreshToken, setTokens, clearTokens, REFRESH_VIA_COOKIE } from '../utils/tokenStorage';
+import { getAccessToken, getRefreshToken, setTokens, clearTokens, hasSessionHint, REFRESH_VIA_COOKIE } from '../utils/tokenStorage';
 
 export type Tier = 'standard' | 'pro';
 export type Role = 'user' | 'admin' | 'support' | 'system_manager';
@@ -9,6 +9,8 @@ interface SessionUser {
   id: number;
   name: string;
   email: string;
+  /** E.164 (+91XXXXXXXXXX); null for accounts made before sign-up asked for it. */
+  phone: string | null;
   tier: Tier;
   budgetClass: string | null;
   role: Role;
@@ -20,7 +22,7 @@ interface AuthContextValue {
   user: SessionUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  register: (name: string, email: string, phone: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshBudgetClass: () => Promise<void>;
   setTier: (tier: Tier) => Promise<void>;
@@ -55,15 +57,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (async () => {
       try {
         const [accessToken, refreshToken] = await Promise.all([getAccessToken(), getRefreshToken()]);
-        // Web can't see its refresh token (httpOnly cookie), so it always
-        // tries — a missing cookie just means a 401 and staying logged out.
+        // Web can't see its refresh token (httpOnly cookie), so it tries
+        // unless this browser is known to be signed out — that skips two
+        // guaranteed 401s (/auth/me, /auth/refresh) on every signed-out visit.
         if (!accessToken && !refreshToken && !REFRESH_VIA_COOKIE) return;
+        if (REFRESH_VIA_COOKIE && !accessToken && hasSessionHint() === false) return;
         // If the access token has expired, api.ts's response interceptor
         // transparently refreshes it on this very request — no separate
         // "is my token still valid" check needed here.
         const { data } = await api.get('/auth/me');
         setUser(data);
-      } catch {
+      } catch (err) {
+        // The server said "no session": record it so the next visit skips
+        // this check. A network failure doesn't count — the session may be fine.
+        if ((err as { response?: { status?: number } }).response?.status === 401) await clearTokens().catch(() => {});
         // No valid session — stay logged out. Local data never persisted
         // in this build anyway (everything lives server-side now), so
         // there's nothing to preserve here the way the old local-only
@@ -85,9 +92,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
+  const register = useCallback(async (name: string, email: string, phone: string, password: string) => {
     try {
-      const { data } = await api.post('/auth/register', { name: name.trim(), email, password });
+      const { data } = await api.post('/auth/register', { name: name.trim(), email, phone, password });
       await setTokens(data.accessToken, data.refreshToken);
       setUser(data.user);
       return { ok: true };

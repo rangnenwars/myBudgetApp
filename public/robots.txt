@@ -1,0 +1,5 @@
+# Prapanji is a signed-in app: only the sign-in page is worth indexing.
+User-agent: *
+Allow: /$
+Allow: /login
+Disallow: /

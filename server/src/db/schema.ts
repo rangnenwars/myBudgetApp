@@ -27,8 +27,12 @@ export const users = pgTable('users', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull(),
+  // Mobile number in E.164 form (+91XXXXXXXXXX), captured at sign-up. NULL
+  // for accounts created before it was asked for. Unique so it can later
+  // serve as a login (OTP) identifier.
+  phone: text('phone'),
   passwordHash: text('password_hash').notNull(),
-  tier: text('tier').notNull().default('standard'),
+  tier: text('tier').notNull().default('pro'),
   budgetClass: text('budget_class'),
   // 'admin' can manage every account via /api/v1/admin/users; 'support' can
   // only activate/deactivate one (routes/admin.ts enforces the split, not
@@ -54,6 +58,8 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex('idx_users_email_lower').on(sql`lower(${table.email})`),
+  uniqueIndex('idx_users_phone').on(table.phone).where(sql`${table.phone} IS NOT NULL`),
+  check('users_phone_check', sql`${table.phone} ~ '^[+][1-9][0-9]{7,14}$'`),
   check('users_tier_check', sql`${table.tier} IN ('standard', 'pro')`),
   check('users_role_check', sql`${table.role} IN ('user', 'admin', 'support', 'system_manager')`),
   check('users_budget_class_check', sql`${table.budgetClass} IN ('low', 'middle', 'high', 'ultra_high', 'rich')`),

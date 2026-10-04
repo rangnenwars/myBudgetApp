@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { MiniBar } from '../../components/MiniBar';
 import { ProGate } from '../../components/ProGate';
@@ -164,7 +164,7 @@ export default function GoalsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Savings goals</Text>
         <Pressable style={styles.addBtn} onPress={openAdd}>
-          <Ionicons name="add" size={22} color="#04140D" />
+          <Ionicons name="add" size={22} color={COLORS.onAccent} />
         </Pressable>
       </View>
 
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '700' },
   contributeBtn: { backgroundColor: `${COLORS.accent}22`, borderRadius: RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
   contributeBtnText: { color: COLORS.accent, fontWeight: '600', fontSize: 12 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   error: { color: COLORS.red, fontSize: 13 },
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.sm },
   saveBtnRemove: { backgroundColor: COLORS.red },
-  saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },
+  saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
   modeToggle: { flexDirection: 'row', backgroundColor: COLORS.input, borderRadius: RADIUS.md, padding: 4, gap: 4 },
   modeBtn: { flex: 1, borderRadius: RADIUS.sm, paddingVertical: 10, alignItems: 'center' },
   modeBtnActiveAdd: { backgroundColor: `${COLORS.accent}33` },

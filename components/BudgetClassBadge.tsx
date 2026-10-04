@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { CLASS_COLORS, CLASS_LABELS, RADIUS, SPACING } from '../constants/theme';
+import { CLASS_COLORS, CLASS_LABELS, COLORS, RADIUS, SPACING } from '../constants/theme';
 
 interface Props {
   budgetClass: string | null;
@@ -8,7 +8,7 @@ interface Props {
 
 export const BudgetClassBadge: React.FC<Props> = ({ budgetClass }) => {
   if (!budgetClass) return null;
-  const color = CLASS_COLORS[budgetClass] ?? '#9CA3AF';
+  const color = CLASS_COLORS[budgetClass] ?? COLORS.textMuted;
   const label = CLASS_LABELS[budgetClass] ?? budgetClass;
   return (
     <View style={[styles.badge, { borderColor: color, backgroundColor: `${color}22` }]}>

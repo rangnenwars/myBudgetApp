@@ -58,11 +58,11 @@ These are the code/config changes the pipeline depends on. §2.1–§2.3 are don
 
 ```dockerfile
 # in the builder stage, before `npx expo export`
-ARG EXPO_PUBLIC_API_URL=http://localhost:4000/api/v1
+ARG EXPO_PUBLIC_API_URL=/api/v1
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 ```
 
-CI passes `--build-arg EXPO_PUBLIC_API_URL=https://prapanji.in/api/v1`. Local `docker compose up` keeps working unchanged because of the default.
+CI passes `--build-arg EXPO_PUBLIC_API_URL=https://prapanji.in/api/v1`. The default is same-origin `/api/v1`, which local `docker compose up` serves through the web container's nginx (`/api/` → `server:4000`), so the CSP only needs `connect-src 'self'`.
 
 ### 2.2 Don't seed demo accounts in production — `server/docker-entrypoint.sh`
 

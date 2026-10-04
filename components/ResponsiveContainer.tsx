@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, T } from '../constants/theme';
 
 // On native (phone/tablet) this is a passthrough. On web it centers content
 // in a phone-width column on wide viewports (laptop) so the mobile-first
@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
   outer: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: COLORS.adminBg === COLORS.bg ? COLORS.bg : '#05070E',
+    backgroundColor: T.frame,
   },
   inner: {
     flex: 1,
@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     maxWidth: 520,
     backgroundColor: COLORS.bg,
     ...(Platform.OS === 'web'
-      ? ({ boxShadow: '0 0 40px rgba(0,0,0,0.4)' } as any)
+      ? ({ boxShadow: '0 0 40px rgba(0,0,0,0.12)' } as any)
       : {}),
   },
 });

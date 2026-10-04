@@ -22,18 +22,23 @@ export const setUserActive = (userId: number, isActive: boolean) => db.update(us
 // @test.local domain — globalTeardown.ts deletes every account under it after the suite runs.
 export const uniqueEmail = (prefix: string): string => `${prefix}-${crypto.randomUUID()}@test.local`;
 
+// A random valid Indian mobile number (10 digits, starting 9), so sign-ups
+// never collide on the unique phone index across test runs.
+export const uniquePhone = (): string => `9${crypto.randomInt(0, 1e9).toString().padStart(9, '0')}`;
+
 export interface RegisteredUser {
   accessToken: string;
   refreshToken: string;
   user: { id: number; name: string; email: string; tier: string; budgetClass: string | null; role: string; isActive: boolean };
 }
 
-export const registerUser = async (overrides: { name?: string; email?: string; password?: string } = {}): Promise<RegisteredUser> => {
+export const registerUser = async (overrides: { name?: string; email?: string; phone?: string; password?: string } = {}): Promise<RegisteredUser> => {
   const res = await request(app)
     .post('/api/v1/auth/register')
     .send({
       name: overrides.name ?? 'Test User',
       email: overrides.email ?? uniqueEmail('user'),
+      phone: overrides.phone ?? uniquePhone(),
       password: overrides.password ?? 'password123',
     });
   if (res.status !== 201) {

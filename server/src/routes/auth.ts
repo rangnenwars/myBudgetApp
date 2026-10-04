@@ -31,9 +31,18 @@ export const passwordSchema = z
   .min(8, 'Password must be at least 8 characters')
   .max(72, 'Password must be at most 72 characters');
 
+// Indian mobile number: 10 digits starting 6–9, with an optional +91 / 91 /
+// 0 prefix and any spaces or dashes. Stored as E.164 (+91XXXXXXXXXX).
+export const indianMobileSchema = z
+  .string()
+  .transform((v) => v.replace(/[\s-]/g, '').replace(/^(\+91|91|0)(?=\d{10}$)/, ''))
+  .refine((v) => /^[6-9]\d{9}$/.test(v), 'Enter a valid 10-digit mobile number')
+  .transform((v) => `+91${v}`);
+
 const registerSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(80),
   email: z.string().trim().toLowerCase().email('Enter a valid email'),
+  phone: indianMobileSchema,
   password: passwordSchema,
 });
 
@@ -55,14 +64,16 @@ router.post(
 
     const [existing] = await db.select({ id: users.id }).from(users).where(emailMatches(body.email));
     if (existing) throw conflict('An account with that email already exists.');
+    const [phoneTaken] = await db.select({ id: users.id }).from(users).where(eq(users.phone, body.phone));
+    if (phoneTaken) throw conflict('An account with that mobile number already exists.');
 
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_COST);
     let user: typeof users.$inferSelect;
     try {
-      [user] = await db.insert(users).values({ name: body.name, email: body.email, passwordHash, lastLoginAt: new Date() }).returning();
+      [user] = await db.insert(users).values({ name: body.name, email: body.email, phone: body.phone, passwordHash, lastLoginAt: new Date() }).returning();
     } catch (err) {
-      // Two sign-ups for the same email racing past the check above.
-      if (pgErrorCode(err) === '23505') throw conflict('An account with that email already exists.');
+      // Two sign-ups for the same email or number racing past the checks above.
+      if (pgErrorCode(err) === '23505') throw conflict('An account with that email or mobile number already exists.');
       throw err;
     }
 

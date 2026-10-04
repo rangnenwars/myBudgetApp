@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
 import { BudgetClassBadge } from '../../components/BudgetClassBadge';
@@ -12,8 +12,6 @@ import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 import { getMonthSummary, getCategoryBreakdown, getBudgets, BudgetStatus, CategoryTotal } from '../../utils/database';
 import { computeCategoryDeltas, computeSavingsRate, bucketForGroup, CategoryDelta, CategoryBucket } from '../../utils/calculations';
 import { shiftMonth } from '../../utils/dates';
-import { showAlert } from '../../utils/alert';
-import { apiErrorMessage } from '../../utils/api';
 
 const BUCKET_LABEL: Record<CategoryBucket, string> = { expense: 'Expenses', loan: 'Loan payments', investment: 'Investments' };
 const BUCKET_COLOR: Record<CategoryBucket, string> = { expense: COLORS.red, loan: COLORS.blue, investment: COLORS.purple };
@@ -22,7 +20,7 @@ const fmt = (n: number) =>
   '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 export default function DashboardScreen() {
-  const { user, logout, refreshBudgetClass, isPro, isStaff, canViewMetrics, setTier } = useAuth();
+  const { user, logout, refreshBudgetClass, isPro, isStaff, canViewMetrics } = useAuth();
   const { categories, getCategory } = useCategories();
   const now = new Date();
   const currentMonth = { month: now.getMonth() + 1, year: now.getFullYear() };
@@ -136,15 +134,9 @@ export default function DashboardScreen() {
 
       <View style={styles.badgeRow}>
         <BudgetClassBadge budgetClass={user?.budgetClass ?? null} />
-        <Pressable
-          style={styles.tierChip}
-          onPress={() =>
-            // The test-mode toggle is switched off on the server in production — say so instead of failing silently.
-            setTier(isPro ? 'standard' : 'pro').catch((err) => showAlert('Plan', apiErrorMessage(err, 'Plan changes are not available yet.')))
-          }
-        >
-          <Text style={styles.tierChipText}>{isPro ? 'Pro (test mode) · tap to reset' : 'Standard'}</Text>
-        </Pressable>
+        <View style={styles.tierChip}>
+          <Text style={styles.tierChipText}>{isPro ? 'Pro' : 'Standard'}</Text>
+        </View>
       </View>
 
       {user && !user.emailVerified && (

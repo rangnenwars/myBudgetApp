@@ -49,6 +49,7 @@ export const toUserResponse = (user: typeof users.$inferSelect) => ({
   id: user.id,
   name: user.name,
   email: user.email,
+  phone: user.phone,
   tier: user.tier,
   budgetClass: user.budgetClass,
   role: user.role,

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, Modal, Switch, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { getAdminUsers, updateAdminUser, deleteAdminUser, AdminUser, AdminRole } from '../../utils/database';
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   chipPro: { backgroundColor: `${COLORS.accent}33` },
   chipActive: { backgroundColor: `${COLORS.accent}22` },
   chipInactive: { backgroundColor: `${COLORS.red}22` },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   roleOptionBtn: { width: '48%', alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.cardBorder },
   optionBtnActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   optionBtnText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  optionBtnTextActive: { color: '#04140D' },
+  optionBtnTextActive: { color: COLORS.onAccent },
   error: { color: COLORS.red, fontSize: 13, marginTop: SPACING.sm },
   deleteBtn: {
     flexDirection: 'row',

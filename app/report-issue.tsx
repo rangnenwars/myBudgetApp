@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Image, Platform, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import Constants from 'expo-constants';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
@@ -280,12 +280,12 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: COLORS.cardBorder, backgroundColor: COLORS.input, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 8 },
   chipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   chipText: { color: COLORS.textMuted, fontSize: 13 },
-  chipTextActive: { color: '#04140D', fontWeight: '600' },
+  chipTextActive: { color: COLORS.onAccent, fontWeight: '600' },
   segment: { flexDirection: 'row', backgroundColor: COLORS.input, borderRadius: RADIUS.md, padding: 4 },
   segmentBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.sm },
   segmentBtnActive: { backgroundColor: COLORS.accent },
   segmentText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 13 },
-  segmentTextActive: { color: '#04140D' },
+  segmentTextActive: { color: COLORS.onAccent },
   input: {
     backgroundColor: COLORS.input,
     borderColor: COLORS.cardBorder,
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   hint: { color: COLORS.textDim, fontSize: 11.5, marginTop: SPACING.md, lineHeight: 16 },
   error: { color: COLORS.red, fontSize: 13, marginTop: SPACING.sm },
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.lg },
-  saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },
+  saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
   mineRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   mineTitle: { color: COLORS.text, fontSize: 13 },
   mineMeta: { color: COLORS.textDim, fontSize: 11, marginTop: 2 },

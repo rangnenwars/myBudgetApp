@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { Redirect, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card } from '../components/Card';
 import { ScreenHeader, Field, Button, ErrorText, Segmented, fmtInr, kit } from '../components/ScreenKit';
 import { useAuth } from '../context/AuthContext';
@@ -118,7 +118,7 @@ export default function AccountsScreen() {
         title="Accounts"
         right={
           <Pressable style={styles.addBtn} onPress={openNew} accessibilityLabel="Add account">
-            <Ionicons name="add" size={22} color="#04140D" />
+            <Ionicons name="add" size={22} color={COLORS.onAccent} />
           </Pressable>
         }
       />
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   rowMid: { flex: 1 },
   rowLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   rowAmount: { fontSize: 15, fontWeight: '700' },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   sheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sheetTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },

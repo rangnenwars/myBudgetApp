@@ -69,7 +69,7 @@ Root `docker-compose.yml`, project name `mybudgetapp`:
 
 | Service | Container | Host port | Notes |
 |---|---|---|---|
-| `mybudget-web` | `mybudgetapp-mybudget-web-1` | **8080** → 80 | static build, API URL baked as `http://localhost:4000/api/v1` |
+| `mybudget-web` | `mybudgetapp-mybudget-web-1` | **8080** → 80 | static build, API URL baked as same-origin `/api/v1`; its nginx proxies `/api/` to `server:4000` |
 | `server` | `mybudgetapp-server-1` | **4000** → 4000 | |
 | `postgres` | `mybudgetapp-postgres-1` | **5433** → 5432 | host 5433 because the dev PC already runs a native Postgres on 5432 |
 
@@ -145,7 +145,7 @@ Attached to the Droplet `mybudget-prod`.
 | Security headers | Caddy (HSTS etc.) + nginx (CSP, `X-Frame-Options`, `Permissions-Policy`) + `helmet` in Express | `deploy/Caddyfile`, `nginx.conf`, `server/src/app.ts` |
 | Startup guard | In production the server refuses to start unless the two JWT secrets differ, are ≥ 32 chars, and `CORS_ORIGIN` is set | `server/src/index.ts` (see `server/.env.example`) |
 
-> The web `Content-Security-Policy` in `nginx.conf` allows `connect-src 'self' http://localhost:4000` — `'self'` covers the production same-origin API; the `localhost` entry is for local Docker. If you ever host the API on a different origin (e.g. `api.prapanji.in`), add it to `connect-src` and to `CORS_ORIGIN`.
+> The web `Content-Security-Policy` in `nginx.conf` allows only `connect-src 'self'`. The API is same-origin everywhere: Caddy routes `/api/*` to the server in production, and the web container's nginx proxies `/api/` to `server:4000` for local Docker (the server sets `TRUST_PROXY=1` there). If you ever host the API on a different origin (e.g. `api.prapanji.in`), add it to `connect-src` and to `CORS_ORIGIN`.
 
 ---
 

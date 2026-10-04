@@ -79,6 +79,7 @@ CREATE TABLE users (
   id             BIGSERIAL PRIMARY KEY,
   name           TEXT NOT NULL,
   email          TEXT NOT NULL,
+  phone          TEXT CHECK (phone ~ '^[+][1-9][0-9]{7,14}$'), -- E.164 (+91…), required at sign-up since 0014; NULL for older accounts; unique where not null (idx_users_phone)
   password_hash  TEXT NOT NULL,           -- bcrypt, server-side (see §5)
   tier           TEXT NOT NULL DEFAULT 'standard' CHECK (tier IN ('standard', 'pro')),
   budget_class   TEXT CHECK (budget_class IN ('low', 'middle', 'high', 'ultra_high', 'rich')),

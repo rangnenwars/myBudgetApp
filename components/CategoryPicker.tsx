@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, SectionList, Pressable, TextInput, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { useCategories } from '../context/CategoriesContext';
 import { confirmAction, showAlert } from '../utils/alert';
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   placeholder: { color: COLORS.textDim, fontSize: 14 },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: COLORS.backdrop,
     justifyContent: 'flex-end',
   },
   modalSheet: {
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   addCancelBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.cardBorder },
   addCancelBtnText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
   addSaveBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: RADIUS.md, backgroundColor: COLORS.accent },
-  addSaveBtnText: { color: '#04140D', fontSize: 13, fontWeight: '700' },
+  addSaveBtnText: { color: COLORS.onAccent, fontSize: 13, fontWeight: '700' },
   sectionHeader: {
     color: COLORS.textMuted,
     fontSize: 12,

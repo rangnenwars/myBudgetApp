@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { addInvestment, updateInvestment, deleteInvestment, getInvestments, Investment } from '../../utils/database';
@@ -106,7 +106,7 @@ export default function InvestmentsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Investments</Text>
         <Pressable style={styles.addBtn} onPress={openAdd}>
-          <Ionicons name="add" size={22} color="#04140D" />
+          <Ionicons name="add" size={22} color={COLORS.onAccent} />
         </Pressable>
       </View>
 
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700' },
   cardMuted: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
   gainText: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
@@ -242,8 +242,8 @@ const styles = StyleSheet.create({
   typeChip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
   typeChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   typeChipText: { color: COLORS.textMuted, fontSize: 12 },
-  typeChipTextActive: { color: '#04140D', fontWeight: '600' },
+  typeChipTextActive: { color: COLORS.onAccent, fontWeight: '600' },
   error: { color: COLORS.red, fontSize: 13 },
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.sm },
-  saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },
+  saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
 });
