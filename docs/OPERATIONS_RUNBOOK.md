@@ -224,6 +224,18 @@ The user table starts empty in production (demo accounts are not seeded).
 3. Sign out and back in; the shield icon on the Dashboard opens the Admin screen.
 4. Confirm no demo accounts exist (DB_ADMIN_QUERIES §1) and ports 5432/4000/8080 are closed: `nmap -Pn prapanji.in` shows only 80/443 (22 per the firewall).
 
+### 5.3 One-off data migration: private categories (run once per database)
+
+The release that trimmed `constants/categories.ts` removed 21 personal categories from the list every user sees. Existing databases still hold them, and users' transactions point at them, so after deploying that release run `server/scripts/privatize-personal-categories.sql` once. For each user who actually used one of them it creates a **private** copy (same label, icon, colour and group), re-points that user's transactions, repeating entries and budgets, then deletes the shared rows. No amounts or dates change, and a second run does nothing. Take a backup first.
+
+```bash
+deploy@droplet$ cd /opt/mybudget && alias dc='docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env'
+deploy@droplet$ # copy server/scripts/privatize-personal-categories.sql to the Droplet first (scp), then:
+deploy@droplet$ dc exec -T postgres psql -U mybudget -d mybudget -v ON_ERROR_STOP=1 < privatize-personal-categories.sql
+```
+
+Run it **after** the new image is live. If you run it before, the next server start re-seeds the old rows. Verify: `SELECT count(*) FROM categories WHERE user_id IS NULL;` returns 45.
+
 ---
 
 ## 6. Rollback

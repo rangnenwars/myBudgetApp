@@ -89,7 +89,7 @@ Dev tooling: `npx expo start --web --port 8090` (hot-reload client).
 | Reachable from outside the host? | **No** — no `ports:` mapping; access via `docker compose exec postgres psql` over SSH | Yes, `localhost:5433` |
 | Data volume | Docker named volume `mybudget_pgdata` | `mybudgetapp_pgdata` |
 | Schema management | Drizzle migrations in `server/drizzle/*.sql` (0000–0011 at time of writing), applied **automatically** by `docker-entrypoint.sh` on every server start | same |
-| Seed data | 61 system categories on every start (idempotent). **Demo accounts are NOT seeded in production** (`NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`) | demo accounts seeded: `admin@mybudget.local` / `user@mybudget.local` |
+| Seed data | 45 system categories on every start (idempotent). **Demo accounts are NOT seeded in production** (`NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`) | demo accounts seeded: `admin@mybudget.local` / `user@mybudget.local` |
 | Pool size | `PG_POOL_MAX` (default 10) | same |
 | Backups | nightly `pg_dump` cron → `/opt/mybudget/backups` → Spaces; weekly Droplet snapshot | Windows Scheduled Task "MyBudgetApp DB Backup", Sundays 02:00, 60-day retention → `D:\MyBudgetApp\backups` |
 
