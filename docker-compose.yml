@@ -38,6 +38,9 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       PORT: 4000
+      # The web container's nginx proxies /api/ here, so trust one hop of
+      # X-Forwarded-For for per-IP rate limits.
+      TRUST_PROXY: 1
       # Report-issue nightly digest + SMTP — all optional; put the values in a
       # .env file next to this compose file (see server/.env.example).
       ISSUE_DIGEST_ENABLED: ${ISSUE_DIGEST_ENABLED:-false}

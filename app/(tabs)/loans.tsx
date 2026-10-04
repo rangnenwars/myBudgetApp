@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { MiniBar } from '../../components/MiniBar';
 import { ProGate } from '../../components/ProGate';
@@ -186,7 +186,7 @@ export default function LoansScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Loans & EMIs</Text>
         <Pressable style={styles.addBtn} onPress={openAdd}>
-          <Ionicons name="add" size={22} color="#04140D" />
+          <Ionicons name="add" size={22} color={COLORS.onAccent} />
         </Pressable>
       </View>
 
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   typeChip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 6 },
   typeChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   typeChipText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
-  typeChipTextActive: { color: '#04140D' },
+  typeChipTextActive: { color: COLORS.onAccent },
   twoCol: { flexDirection: 'row', gap: SPACING.sm },
   col: { flex: 1, gap: SPACING.xs },
   autoNote: { alignSelf: 'center', fontSize: 11.5 },
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   previewBox: { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.xs },
   previewValue: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
   paidOffText: { color: COLORS.accent, fontSize: 13, fontWeight: '600', textAlign: 'center', paddingVertical: 8 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   typeBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.sm },
   typeBtnActive: { backgroundColor: COLORS.accent },
   typeBtnText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 13 },
-  typeBtnTextActive: { color: '#04140D' },
+  typeBtnTextActive: { color: COLORS.onAccent },
   catRow: { paddingVertical: SPACING.sm },
   catRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   input: { backgroundColor: COLORS.input, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12, color: COLORS.text, fontSize: 15 },
@@ -525,5 +525,5 @@ const styles = StyleSheet.create({
   toggleHint: { color: COLORS.textDim, fontSize: 12, marginTop: 2 },
   error: { color: COLORS.red, fontSize: 13 },
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.sm },
-  saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },
+  saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
 });

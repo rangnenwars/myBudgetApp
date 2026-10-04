@@ -18,7 +18,7 @@ Base URL: `http://localhost:4000` locally (`EXPO_PUBLIC_API_URL` on the client).
 | 401 | Missing/invalid/expired access token, or (login only) wrong credentials |
 | 403 | Authenticated, but not allowed to do this (deactivated account at login, non-admin on an admin route, deleting a system category) |
 | 404 | Resource doesn't exist, or exists but isn't yours — the two are deliberately indistinguishable to the caller |
-| 409 | Conflict — duplicate email, or a category still referenced by a transaction |
+| 409 | Conflict — duplicate email or mobile number, or a category still referenced by a transaction |
 | 429 | Rate limited — sign-in, sign-up, refresh and email endpoints per IP; password checks (change password, delete account) per account |
 | 500 | Unexpected server error (generic message to the client; the server logs only the error code and message, never the failed query's values) |
 
@@ -38,10 +38,11 @@ No auth. Pings the database: **200** `{ "status": "ok" }`, or **503** `{ "status
 ## Auth — `/api/v1/auth`
 
 ### `POST /auth/register`
-Body: `{ name: string, email: string, password: string (8–72 chars) }`
+Body: `{ name: string, email: string, phone: string, password: string (8–72 chars) }`
+`phone` is a 10-digit Indian mobile number (starting 6–9). Spaces, dashes and a `+91`/`91`/`0` prefix are accepted; it is stored and returned as `+91XXXXXXXXXX`.
 Also emails a confirmation link (see **Your account** below); a mail failure never blocks sign-up.
 → **201** `{ user: UserProfile, accessToken: string, refreshToken: string }`
-Errors: 400 invalid input · 409 email already registered (case-insensitive) · 429 more than 5 registrations from one IP in 15 minutes
+Errors: 400 invalid input (including a missing or invalid mobile number) · 409 email already registered (case-insensitive) or mobile number already registered · 429 more than 5 registrations from one IP in 15 minutes
 
 New accounts always start `role: 'user'`, `isActive: true`, `tier: 'standard'`. There is no self-service way to become an admin — see [README.md §3a](README.md#3a-custom-categories--access-control--how-they-actually-work).
 

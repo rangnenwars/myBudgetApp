@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { CategoryPicker } from '../../components/CategoryPicker';
 import { DateField } from '../../components/DateField';
@@ -254,7 +254,7 @@ export default function TransactionsScreen() {
             </Pressable>
           )}
           <Pressable style={styles.addBtn} onPress={openAdd}>
-            <Ionicons name="add" size={22} color="#04140D" />
+            <Ionicons name="add" size={22} color={COLORS.onAccent} />
           </Pressable>
         </View>
       </View>
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   filterChip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 5 },
   filterChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   filterChipText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
-  filterChipTextActive: { color: '#04140D' },
+  filterChipTextActive: { color: COLORS.onAccent },
   listFooter: { paddingVertical: SPACING.md },
   listContent: { padding: SPACING.lg, paddingTop: SPACING.sm, gap: SPACING.xs },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', marginTop: SPACING.xl },
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   rowDate: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
   rowAmount: { fontSize: 14, fontWeight: '700' },
   rowDeleteBtn: { marginLeft: SPACING.sm, padding: 4 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: COLORS.bg,
     borderTopLeftRadius: RADIUS.lg,
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   typeBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.sm },
   typeBtnActive: { backgroundColor: COLORS.accent },
   typeBtnText: { color: COLORS.textMuted, fontWeight: '600' },
-  typeBtnTextActive: { color: '#04140D' },
+  typeBtnTextActive: { color: COLORS.onAccent },
   label: { color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.xs },
   hint: { color: COLORS.textDim, fontSize: 11.5, marginTop: -SPACING.xs },
   input: {
@@ -538,5 +538,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: SPACING.sm,
   },
-  saveBtnText: { color: '#04140D', fontWeight: '700', fontSize: 16 },
+  saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
 });

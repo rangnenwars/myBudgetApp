@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, TextInputProps, ViewStyle, StyleProp } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 
@@ -112,14 +112,14 @@ const styles = StyleSheet.create({
   btnDanger: { borderWidth: 1, borderColor: COLORS.red },
   btnDisabled: { opacity: 0.5 },
   btnText: { fontWeight: '700', fontSize: 15 },
-  btnTextPrimary: { color: '#04140D' },
+  btnTextPrimary: { color: COLORS.onAccent },
   btnTextOutline: { color: COLORS.text },
   btnTextDanger: { color: COLORS.red },
   segment: { flexDirection: 'row', backgroundColor: COLORS.input, borderRadius: RADIUS.md, padding: 4 },
   segmentBtn: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: RADIUS.sm },
   segmentBtnActive: { backgroundColor: COLORS.accent },
   segmentText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 13 },
-  segmentTextActive: { color: '#04140D' },
+  segmentTextActive: { color: COLORS.onAccent },
   error: { color: COLORS.red, fontSize: 13 },
   notice: { borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md, backgroundColor: COLORS.card },
   noticeText: { color: COLORS.text, fontSize: 13, lineHeight: 19 },

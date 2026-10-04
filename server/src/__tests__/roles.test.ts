@@ -181,7 +181,7 @@ describe('GET /api/v1/admin/audit-log', () => {
     await request(app)
       .patch(`/api/v1/admin/users/${target.user.id}`)
       .set('Authorization', `Bearer ${admin.accessToken}`)
-      .send({ tier: 'pro' });
+      .send({ tier: 'standard' });
 
     const res = await request(app).get('/api/v1/admin/audit-log').set('Authorization', `Bearer ${admin.accessToken}`);
     expect(res.status).toBe(200);
@@ -189,7 +189,7 @@ describe('GET /api/v1/admin/audit-log', () => {
     expect(entry).toBeTruthy();
     expect(entry.actorEmail).toBe(admin.user.email);
     expect(entry.action).toBe('account_updated');
-    expect(entry.details).toContain('tier: standard -> pro');
+    expect(entry.details).toContain('tier: pro -> standard');
   });
 
   it('keeps a readable entry after the target account is deleted', async () => {

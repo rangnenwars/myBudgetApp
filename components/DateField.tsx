@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { entryDateError, isValidIsoDate, shiftIsoDate, todayLocalIso } from '../utils/dates';
 
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 8 },
   chipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   chipText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  chipTextActive: { color: '#04140D' },
+  chipTextActive: { color: COLORS.onAccent },
   customRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   stepBtn: { backgroundColor: COLORS.input, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: 10 },
   stepBtnDisabled: { opacity: 0.4 },

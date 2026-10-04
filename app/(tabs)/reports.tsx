@@ -6,7 +6,7 @@ import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
 import { ProGate } from '../../components/ProGate';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { COLORS, RADIUS, SPACING, withAlpha } from '../../constants/theme';
 import {
   getMonthlySeriesForRange,
   getRangeSummary,
@@ -41,9 +41,9 @@ const RANGE_OPTIONS: { key: RangePreset; label: string }[] = [
 ];
 
 const METRIC_OPTIONS: { key: TrendMetric; label: string; color: string; rgba: (opacity: number) => string }[] = [
-  { key: 'income', label: 'Income', color: COLORS.accent, rgba: (o) => `rgba(16, 185, 129, ${o})` },
-  { key: 'expense', label: 'Expense', color: COLORS.red, rgba: (o) => `rgba(248, 113, 113, ${o})` },
-  { key: 'net', label: 'Net', color: COLORS.blue, rgba: (o) => `rgba(96, 165, 250, ${o})` },
+  { key: 'income', label: 'Income', color: COLORS.positive, rgba: (o) => withAlpha(COLORS.positive, o) },
+  { key: 'expense', label: 'Expense', color: COLORS.red, rgba: (o) => withAlpha(COLORS.red, o) },
+  { key: 'net', label: 'Net', color: COLORS.blue, rgba: (o) => withAlpha(COLORS.blue, o) },
 ];
 
 const getRangeBounds = (preset: RangePreset, now: Date) => {
@@ -67,8 +67,8 @@ const chartConfig = {
   backgroundGradientFrom: COLORS.card,
   backgroundGradientTo: COLORS.card,
   decimalPlaces: 0,
-  color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`,
+  color: (opacity = 1) => withAlpha(COLORS.accent, opacity),
+  labelColor: (opacity = 1) => withAlpha(COLORS.textMuted, opacity),
   propsForDots: { r: '3' },
   propsForBackgroundLines: { stroke: COLORS.cardBorder },
 };
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
   chipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   chipText: { color: COLORS.textMuted, fontSize: 12 },
-  chipTextActive: { color: '#04140D', fontWeight: '600' },
+  chipTextActive: { color: COLORS.onAccent, fontWeight: '600' },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   summaryCell: { flexBasis: '47%', flexGrow: 1 },
   summaryValue: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginTop: 4 },
