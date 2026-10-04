@@ -180,7 +180,7 @@ docker compose ps          # all three should show "healthy"/"running"
 curl -s http://localhost:4000/health   # or through the proxy: curl -s https://budget.example.com/api/health
 ```
 
-First boot runs Postgres migrations and seeds the 61 system categories (`server/docker-entrypoint.sh`). With the step 6.2 settings in place, demo accounts are skipped — the log shows `Skipping demo accounts.` — so the user list starts empty: register your account in the app, then promote it with `create-admin.ts` (step 6.2). If you skipped 6.2, the two public-password demo accounts were seeded; fix that before exposing the server.
+First boot runs Postgres migrations and seeds the 45 system categories (`server/docker-entrypoint.sh`). With the step 6.2 settings in place, demo accounts are skipped — the log shows `Skipping demo accounts.` — so the user list starts empty: register your account in the app, then promote it with `create-admin.ts` (step 6.2). If you skipped 6.2, the two public-password demo accounts were seeded; fix that before exposing the server.
 
 Open `https://budget.example.com` (or `http://<server-ip>:8080` if you skipped the reverse proxy for a private/internal deployment).
 

@@ -250,7 +250,7 @@ SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size;
 SELECT relname, pg_size_pretty(pg_total_relation_size(relid)) AS size
 FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 10;
 
--- system categories seeded (expected 61) and which migrations have run
+-- system categories seeded (expected 45) and which migrations have run
 SELECT count(*) FROM categories WHERE user_id IS NULL;
 SELECT id, created_at FROM drizzle.__drizzle_migrations ORDER BY id;
 

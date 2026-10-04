@@ -89,7 +89,7 @@ Steps on a fresh Linux host:
 1. Install Docker Engine and the Docker Compose plugin (`docker compose version` should work).
 2. Copy the repo to the host (`git clone` or `rsync`).
 3. Create `.env` (repo root) and `server/.env` from `.env.example` in each location, with **real, unique** `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` — never reuse the values from local dev.
-4. `docker compose up --build -d` from the repo root. This builds all three images and, on first start, automatically runs Postgres migrations, seeds the 61 system categories, and seeds the two demo accounts (`server/docker-entrypoint.sh`).
+4. `docker compose up --build -d` from the repo root. This builds all three images and, on first start, automatically runs Postgres migrations, seeds the 45 system categories, and seeds the two demo accounts (`server/docker-entrypoint.sh`).
 5. Open the mapped web port (`8080` by default — change the left-hand side of the `mybudget-web` port mapping in `docker-compose.yml` if that's taken or if you want to serve on `80`/`443`).
 
 **Can the database be split onto a separate host?** Yes — point `DATABASE_URL` at any reachable Postgres 16 instance (a managed service, a separate VM) and drop the `postgres` service from `docker-compose.yml`. The app doesn't care where Postgres physically runs, only that `DATABASE_URL` can reach it. The default setup keeps everything on one host under one `docker compose up` because that's sufficient for personal/small-scale use, not because anything requires it.

@@ -42,7 +42,7 @@ users ──┬─< transactions >── categories
   >──   = "many rows reference one"
 ```
 
-`categories` is mostly a global lookup table — seeded once from `constants/categories.ts` (61 rows), `user_id NULL` — but a user can add their own on top via `POST /api/v1/categories`, which is where the second `users ── categories` edge above comes from. Every other table listed is still fully per-account data.
+`categories` is mostly a global lookup table — seeded once from `constants/categories.ts` (45 rows), `user_id NULL` — but a user can add their own on top via `POST /api/v1/categories`, which is where the second `users ── categories` edge above comes from. Every other table listed is still fully per-account data.
 
 ---
 
