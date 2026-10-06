@@ -44,6 +44,12 @@ export const ruleScheduleFor = (entryDate: string, frequency: RepeatFrequency) =
   return { frequency, day_of_month: d, posted_through: postedThrough, next_due: nextDueAfter(postedThrough, frequency, d) };
 };
 
+// Loan EMIs come from the loan itself (lib/loanEmiExpenses.ts). A repeating
+// Loan EMI entry would be a second copy of the same payment — counted twice
+// in spending and in the free-money day — so it can't be created.
+export const NO_REPEAT_CATEGORIES = new Set(['loan_emi']);
+export const NO_REPEAT_MESSAGE = "A Loan EMI can't be set to repeat. Add the loan under Loans instead; its EMI is added every month automatically.";
+
 const todayLocal = (now: Date): string => localToday(now).iso;
 
 /** Posts any due entries for the user's repeating rules. Returns how many transactions were created. */

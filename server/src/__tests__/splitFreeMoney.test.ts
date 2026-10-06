@@ -1,8 +1,8 @@
 import request from 'supertest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { app, registerUser } from './helpers';
 import { db } from '../db/client';
-import { freeMoneySnapshots } from '../db/schema';
+import { freeMoneySnapshots, userFeatures } from '../db/schema';
 import { localToday } from '../lib/clock';
 import { weekStartOf } from '../lib/freeMoneyDay';
 import { computeFreeMoneyDay } from '../calculations';
@@ -176,13 +176,75 @@ describe('GET /reports/free-money-day', () => {
     expect(res.body).toMatchObject({ incomeSource: 'average', income: 60000 });
   });
 
-  it('looks back six months and averages the three most recent that had income', async () => {
+  it('averages the last three full months, ignoring anything older', async () => {
     const { accessToken } = await registerUser();
     for (const [delta, amount] of [[-5, 10000], [-3, 20000], [-2, 30000], [-1, 40000]] as const) {
       await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount, type: 'income', category_key: 'salary_1', date: monthStart(delta) });
     }
     const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
     expect(res.body).toMatchObject({ incomeSource: 'average', income: 30000 });
+  });
+
+  it('counts a tracked month with no income as zero, so an irregular earner is not overstated', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 60000, type: 'income', category_key: 'business_income', date: monthStart(-3) });
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 500, type: 'expense', category_key: 'shopping', date: monthStart(-1) });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ incomeSource: 'average', income: 20000 });
+  });
+
+  it('only counts months since the first entry, so a new user is not averaged with empty months', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 45000, type: 'income', category_key: 'salary_1', date: monthStart(-1) });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ incomeSource: 'average', income: 45000 });
+  });
+
+  it('reports no_income when nothing was earned in the last three tracked months', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 60000, type: 'income', category_key: 'business_income', date: monthStart(-4) });
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 500, type: 'expense', category_key: 'shopping', date: monthStart(-1) });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ status: 'no_income', income: 0 });
+  });
+
+  it('a small repeating income does not hide the salary logged by hand', async () => {
+    const { accessToken } = await registerUser();
+    for (const delta of [-3, -2, -1]) {
+      await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 80000, type: 'income', category_key: 'salary_1', date: monthStart(delta) });
+    }
+    await addRule(accessToken, { amount: 10000, type: 'income', category_key: 'rent_income' });
+    await addRule(accessToken, { amount: 20000, type: 'expense', category_key: 'internet', note: 'Rent' });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ status: 'ok', incomeSource: 'average', income: 80000, committed: 20000, share: 0.25 });
+  });
+
+  it('still counts EMIs that keep posting while Loans is switched off, without naming the loan', async () => {
+    const { accessToken, user } = await registerUser();
+    await addRule(accessToken, { amount: 50000, type: 'income', category_key: 'salary_1' });
+    await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ name: 'Home loan', principal: 1000000, outstanding: 900000, emi: 20000 });
+    await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ name: 'Not posted', principal: 100000, outstanding: 90000, emi: 4000, counts_as_expense: false });
+    await db.update(userFeatures).set({ status: 'off' }).where(and(eq(userFeatures.userId, user.id), eq(userFeatures.featureKey, 'loans')));
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ committed: 20000, share: 0.4, loans: [] });
+    expect(res.body.items).toEqual([{ kind: 'loan', label: 'Loan EMI', amount: 20000 }]);
+  });
+
+  it('counts every active loan while Loans is on, even one whose EMI is not posted', async () => {
+    const { accessToken } = await registerUser();
+    await addRule(accessToken, { amount: 50000, type: 'income', category_key: 'salary_1' });
+    await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ name: 'Not posted', principal: 100000, outstanding: 90000, emi: 4000, counts_as_expense: false });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body.items).toEqual([{ kind: 'loan', label: 'Not posted', amount: 4000 }]);
+  });
+
+  it('spreads a quarterly repeating bill over three months', async () => {
+    const { accessToken } = await registerUser();
+    await addRule(accessToken, { amount: 60000, type: 'income', category_key: 'salary_1' });
+    const created = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ date: TODAY, amount: 30000, type: 'expense', category_key: 'internet', repeat_frequency: 'quarterly', note: 'Insurance' });
+    expect(created.status).toBe(201);
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ committed: 10000 });
   });
 
   it('still reports no_income when the user has logged no income at all', async () => {

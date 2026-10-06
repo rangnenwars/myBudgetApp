@@ -6,8 +6,8 @@ import { recurringTransactions, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { idParam, money, optionalText } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
-import { conflict, notFound } from '../lib/errors';
-import { nextDueAfter, ruleScheduleFor, RepeatFrequency } from '../lib/recurringTransactions';
+import { badRequest, conflict, notFound } from '../lib/errors';
+import { nextDueAfter, NO_REPEAT_CATEGORIES, NO_REPEAT_MESSAGE, ruleScheduleFor, RepeatFrequency } from '../lib/recurringTransactions';
 
 // New entries get a rule via POST /transactions with repeat_monthly: true (the
 // entry and its rule are written together); POST here does the same for a
@@ -54,6 +54,7 @@ router.post(
       .from(transactions)
       .where(and(eq(transactions.id, body.transaction_id), eq(transactions.userId, req.userId!)));
     if (!txn) throw notFound('Transaction not found.');
+    if (NO_REPEAT_CATEGORIES.has(txn.category)) throw badRequest(NO_REPEAT_MESSAGE);
 
     const [duplicate] = await db
       .select({ id: recurringTransactions.id })
