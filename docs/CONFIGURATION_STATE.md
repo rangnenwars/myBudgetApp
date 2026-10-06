@@ -67,7 +67,7 @@ None of this is deployed until committed, merged to `main`, and approved in the 
 | Host hardening | `deploy` user, key-only SSH, no root password, fail2ban, unattended-upgrades, 2 GB swap | 📝 Confirm bootstrap script (runbook §2) was run |
 | Compose stack | caddy + web + server + postgres; only Caddy publishes 80/443/443-udp | ✅ In repo (`deploy/docker-compose.prod.yml`) |
 | Images | GHCR `mybudget-web`, `mybudget-server`, tagged by commit SHA | ✅ In repo (`deploy.yml`) · 📝 Confirm packages exist and are private |
-| Runtime secrets | `/opt/mybudget/.env`: `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` (+ SMTP) | 📝 Confirm file exists, mode 600, values ≥ 32 chars and different |
+| Runtime secrets | `/opt/mybudget/.env`: `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` (+ `RESEND_API_KEY`, `MAIL_FROM`) | 📝 Confirm file exists, mode 600, values ≥ 32 chars and different |
 | Server flags | `NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`, `CORS_ORIGIN`, `TRUST_PROXY=1`, `APP_URL` | ✅ In repo |
 | Demo accounts | not seeded in production | ✅ In repo (entrypoint + `seed-accounts.ts` guard) · 📝 Confirm with `SELECT email FROM users WHERE email LIKE '%@mybudget.local'` → 0 rows. **Only true if production runs `deploy/docker-compose.prod.yml`**; the root `docker-compose.yml` seeds them. |
 | First admin | via `create-admin.ts` after self-registering | 📝 Confirm an admin exists (`SELECT … WHERE role='admin'`) |
@@ -77,7 +77,7 @@ None of this is deployed until committed, merged to `main`, and approved in the 
 | Dependabot | weekly; actions SHA-pinned; minor/patch grouped per ecosystem | ✅ In repo |
 | Backups | nightly `pg_dump` cron + `rclone` to Spaces `mybudget-backups`; weekly Droplet snapshots | 📝 Confirm cron, rclone config, bucket lifecycle (90 d); restore drill done once |
 | Monitoring | DO Uptime check on `/health` (+ SSL expiry), CPU/mem/disk alerts | 📝 Confirm |
-| E-mail (SMTP) | `SMTP_*` in `.env` | 📝 Confirm — without it, password-reset and e-mail confirmation mails are **not sent** |
+| E-mail (Resend) | `RESEND_API_KEY` + `MAIL_FROM` in `/opt/mybudget/.env`; `prapanji.in` verified in Resend | 📝 Confirm — without it, password-reset and e-mail confirmation mails are **not sent** |
 | Web → API URL | `https://prapanji.in/api/v1` baked at build (`PUBLIC_API_URL` variable, default) | ✅ In repo |
 
 ---
