@@ -46,9 +46,12 @@ services:
       CORS_ORIGIN: https://prapanji.in,https://www.prapanji.in
       TRUST_PROXY: "1"
       APP_URL: https://prapanji.in   # base of password-reset / email-confirmation links
-      # Account emails (and the issue digest) need SMTP — without it, reset and
-      # confirmation emails are not sent (a warning is logged). Put the values
-      # in /opt/mybudget/.env next to the other secrets.
+      # Account emails (and the issue digest) go out through Resend's HTTPS API —
+      # DigitalOcean blocks outbound SMTP. Without RESEND_API_KEY + MAIL_FROM,
+      # reset and confirmation emails are not sent (a warning is logged). Put
+      # the values in /opt/mybudget/.env next to the other secrets.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}
       SMTP_USER: ${SMTP_USER:-}

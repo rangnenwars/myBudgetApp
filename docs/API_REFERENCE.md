@@ -83,7 +83,7 @@ Errors: 400 invalid tier, or if the account behind the token has since been dele
 
 ## Your account — `/api/v1/auth` (`routes/account.ts`)
 
-Emails are sent over SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM`, shared with the issue digest in `lib/mailer.ts`); links point at `APP_URL` (default `http://localhost:8080`). Without SMTP, development prints each email to the server log and production logs only a warning (never the link). Emailed tokens are single-use, stored only as a SHA-256 hash (`user_tokens`), and requesting a new one invalidates the previous one.
+Emails are sent by `lib/mailer.ts`, shared with the issue digest: through Resend's HTTPS API when `RESEND_API_KEY` + `MAIL_FROM` are set (production — DigitalOcean blocks outbound SMTP), otherwise over SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM`; `MAIL_FROM` falls back to `SMTP_FROM`); links point at `APP_URL` (default `http://localhost:8080`). With neither configured, development prints each email to the server log and production logs only a warning (never the link). Emailed tokens are single-use, stored only as a SHA-256 hash (`user_tokens`), and requesting a new one invalidates the previous one.
 
 ### `POST /auth/forgot-password`
 Body: `{ email }` → **204** always, whether or not the email is registered (no account discovery). An active account gets a reset link valid for **1 hour**: `APP_URL/reset-password?token=…`. Rate-limited with the other email endpoints (5 per IP per 15 min → 429).

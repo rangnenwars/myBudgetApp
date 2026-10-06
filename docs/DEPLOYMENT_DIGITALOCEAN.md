@@ -209,7 +209,7 @@ These are real files in the repo — read them there rather than a copy here:
 
 | File | What it does |
 |---|---|
-| [deploy/docker-compose.prod.yml](../deploy/docker-compose.prod.yml) | Image-based prod stack: `caddy` (the only service with host ports: 80, 443, 443/udp), `web`, `server`, `postgres`. Images are `ghcr.io/rangnenwars/mybudget-{web,server}:${IMAGE_TAG}`; secrets come from `/opt/mybudget/.env`; sets `NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`, `CORS_ORIGIN`, `TRUST_PROXY=1`, `APP_URL`, optional `SMTP_*`. Log rotation on every service. |
+| [deploy/docker-compose.prod.yml](../deploy/docker-compose.prod.yml) | Image-based prod stack: `caddy` (the only service with host ports: 80, 443, 443/udp), `web`, `server`, `postgres`. Images are `ghcr.io/rangnenwars/mybudget-{web,server}:${IMAGE_TAG}`; secrets come from `/opt/mybudget/.env`; sets `NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`, `CORS_ORIGIN`, `TRUST_PROXY=1`, `APP_URL`, optional `RESEND_API_KEY` / `MAIL_FROM` (see §8.1). Log rotation on every service. |
 | [deploy/Caddyfile](../deploy/Caddyfile) | Automatic HTTPS for `prapanji.in` + `www` (redirects to the apex); `/api/*` and `/health` → `server:4000`, everything else → `web:80`; HSTS and basic security headers. |
 | [deploy/remote-deploy.sh](../deploy/remote-deploy.sh) | Runs on the Droplet as `deploy`. Logs in to GHCR with the token piped on stdin, **pulls first** (a failed pull leaves the running release untouched), then saves the old tag to `release.env.prev`, switches `release.env`, runs `up -d --wait` (fails if a service isn't healthy within 180 s), prunes images older than a week, appends to `deploy-history.log`. |
 | [.github/workflows/ci.yml](../.github/workflows/ci.yml) | On PRs and non-`main` pushes, and called by `deploy.yml`. Jobs: `client` (`npm run quality`), `server` (Postgres 16 service container → `db:migrate` → `db:seed` → `npm run quality`), `docker-build` (both images, no push; skipped when called from `deploy`). Superseded PR runs are cancelled; `main` runs never are. |
@@ -243,6 +243,27 @@ Choices made while implementing:
 ---
 
 ## 8. Backups, monitoring, operations
+
+### 8.1 Email (Resend)
+
+DigitalOcean blocks outbound SMTP (ports 25, 465, 587) on every Droplet and has no email service of its own, so the server sends through [Resend](https://resend.com)'s HTTPS API (`lib/mailer.ts`). Free tier: 3,000 emails/month, 100/day, 3 domains. It carries password-reset and email-confirmation links and the admin issue digest.
+
+1. Create a Resend account → **Domains → Add Domain** → `prapanji.in` (region: closest available to India).
+2. Resend shows DNS records (an SPF `TXT` + `MX` on a `send` subdomain, and a DKIM `TXT` at `resend._domainkey`). Add each exactly as shown in DigitalOcean → Networking → Domains → `prapanji.in` → **Create a record**. Click **Verify** in Resend until the domain shows *Verified*.
+3. **API Keys → Create API Key** → permission *Sending access*, domain `prapanji.in`. Copy the `re_…` key once.
+4. On the Droplet, append to `/opt/mybudget/.env` (keeps mode 600):
+   ```bash
+   ssh prapanji-deploy
+   cd /opt/mybudget
+   printf 'RESEND_API_KEY=re_xxxxxxxx
+MAIL_FROM="Prapanji <no-reply@prapanji.in>"
+' >> .env
+   docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env up -d
+   ```
+   The sender address must be on the verified domain.
+5. Test: use **Forgot password?** on https://prapanji.in with a registered address; check `docker compose … logs server` if nothing arrives (a failed send logs `Resend rejected the email (HTTP …: reason)`).
+
+Delivery stays within the free tier's 100/day cap — if the app grows past that, move to Resend's $20/month plan (50,000/month) with no code change.
 
 **Backups (three layers):**
 
