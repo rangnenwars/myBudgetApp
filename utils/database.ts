@@ -25,6 +25,11 @@ import {
   Account,
   AccountType,
   BudgetStatus,
+  FreeMoneyDayInfo,
+  Person,
+  PeopleSummary,
+  LedgerEntry,
+  LedgerKind,
 } from './types';
 import { Category, CategoryType } from '../constants/categories';
 
@@ -54,6 +59,44 @@ export const addTransaction = async (
 export const addTransactionsBatch = async (entries: Omit<Transaction, 'id' | 'created_at' | 'month' | 'year'>[]): Promise<Transaction[]> => {
   const { data } = await api.post('/transactions/batch', {
     entries: entries.map((t) => ({ amount: t.amount, type: t.type, category_key: t.category, subcategory: t.subcategory, note: t.note, date: t.date })),
+  });
+  return data;
+};
+
+/** One payment shared across categories: saves a linked entry per line, all or nothing. The lines must add up to `total`. */
+export const addSplitTransaction = async (input: {
+  type: TxnType;
+  date: string;
+  total: number;
+  note?: string | null;
+  lines: { category: string; amount: number }[];
+}): Promise<{ splitGroup: string; entries: Transaction[] }> => {
+  const { data } = await api.post('/transactions/split', {
+    type: input.type,
+    date: input.date,
+    total: input.total,
+    note: input.note,
+    lines: input.lines.map((l) => ({ category_key: l.category, amount: l.amount })),
+  });
+  return data;
+};
+
+/** A bill you paid for several people: your share becomes the one spending entry, each friend's share what they owe you. */
+export const addSplitWithPeople = async (input: {
+  date: string;
+  total: number;
+  category: string;
+  note?: string | null;
+  method: 'equal' | 'custom';
+  people: { personId: number; amount?: number }[];
+}): Promise<{ transaction: Transaction | null; myShare: number; shares: { personId: number; name: string; amount: number }[] }> => {
+  const { data } = await api.post('/transactions/split-people', {
+    date: input.date,
+    total: input.total,
+    category_key: input.category,
+    note: input.note,
+    method: input.method,
+    people: input.people.map((p) => ({ person_id: p.personId, amount: p.amount })),
   });
   return data;
 };
@@ -133,6 +176,11 @@ export const getCategoryBreakdownForRange = async (
 
 export const getMonthlySeriesForRange = async (startMonth: number, startYear: number, endMonth: number, endYear: number) => {
   const { data } = await api.get('/reports/monthly-series', { params: { startMonth, startYear, endMonth, endYear } });
+  return data;
+};
+
+export const getFreeMoneyDay = async (): Promise<FreeMoneyDayInfo> => {
+  const { data } = await api.get('/reports/free-money-day');
   return data;
 };
 
@@ -462,4 +510,44 @@ export interface SystemMetrics {
 export const getSystemMetrics = async (): Promise<SystemMetrics> => {
   const { data } = await api.get('/system/metrics');
   return data;
+};
+
+// ---------- People (lending, borrowing, shared bills) ----------
+
+export const getPeople = async (): Promise<PeopleSummary> => {
+  const { data } = await api.get('/people');
+  return data;
+};
+
+export const addPerson = async (name: string): Promise<Person> => {
+  const { data } = await api.post('/people', { name });
+  return data;
+};
+
+export const getPerson = async (id: number): Promise<{ person: Person; entries: LedgerEntry[] }> => {
+  const { data } = await api.get(`/people/${id}`);
+  return data;
+};
+
+/** `due_date: null` clears the pay-back-by date. */
+export const updatePerson = async (id: number, patch: { name?: string; due_date?: string | null }): Promise<Person> => {
+  const { data } = await api.patch(`/people/${id}`, patch);
+  return data;
+};
+
+export const deletePerson = async (id: number): Promise<void> => {
+  await api.delete(`/people/${id}`);
+};
+
+/** A write-off clears the whole balance, so it takes no amount. */
+export const addPersonEntry = async (
+  id: number,
+  entry: { kind: LedgerKind; amount?: number; date?: string; note?: string | null; due_date?: string | null }
+): Promise<{ entry: LedgerEntry; person: Person }> => {
+  const { data } = await api.post(`/people/${id}/entries`, entry);
+  return data;
+};
+
+export const deletePersonEntry = async (id: number, entryId: number): Promise<void> => {
+  await api.delete(`/people/${id}/entries/${entryId}`);
 };

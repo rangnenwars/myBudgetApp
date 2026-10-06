@@ -1,6 +1,32 @@
 # Prapanji roadmap — money app for everyone, student-friendly
 
-Status: **draft for approval** · 2026-10-04 · replaces the old parent/student PLAN.md
+Status: **in progress** · drafted 2026-10-04 · progress last checked 2026-10-06 · replaces the old parent/student PLAN.md
+
+## Progress
+
+Keep this section up to date whenever an item is built, committed or changed.
+
+| Item | Status | Notes |
+|------|--------|-------|
+| A1 Generic categories | **Partly done, committed** (`30de1df`) | The family-specific categories are gone, and a migration gives each existing user a private copy of the ones they used. Still missing: new general categories (Rent, Eating out, Salary/Pocket money, student fees). The outcome of running the migration on production (runbook 5.3) hasn't been confirmed. |
+| A2 Category packs | Not started | |
+| A3 Simple / Full mode | Not started, **likely replaced** | Probably replaced by the per-user optional features design (Goals / Loans / Investments added on demand), which is waiting for approval. There are still 6 tabs. |
+| A4 First-run setup | Not started | |
+| A5 Remove Pro leftovers | Not started | The Pro/Standard chip is still on Home, and `ProGate` still shows "Try Pro (test mode)". |
+| B1 Quick-add | **Built, not committed** | A sheet opened from Home (`components/QuickAddSheet.tsx`) with a keypad and the 4 most-used categories. It isn't a centre ＋ tab, and it has no account picker until B6. |
+| B2 Safe-to-spend | **Built as "Free-money day", not committed** | The card and screen (`components/FreeMoneyCard.tsx`, `app/free-money-day.tsx`, migration 0015) show the day of the month by which your fixed bills are covered. There's no "₹X/day until payday" figure yet. |
+| B3 Upcoming bills | Not started | |
+| B4 Day / Week / Month view | Not started | Part of the planned "weekly review" (with Phase D look-back). Plan first, approval before building. |
+| B5 Weekly budgets | Not started | |
+| B6 Transactions ↔ accounts, transfers, prepaid cards | Not started | |
+| C1 Goal templates | Not started | |
+| C2 Lent & borrowed (People) | **Slices 1–2 built, not committed** | Slice 1: People page, person page, IOUs, settle/write-off/undo, Home "You get / You owe" card. Slice 2: split a bill with people, paid by me (migrations 0017–0018). Still to do: slice 3 (remind message + UPI link) and slice 4 (invite flow F/G/H, approved). |
+| C3 Event & term budgets | Not started | |
+| Phase D Habits | Not started | Weekly look-back is planned with B4. |
+| Phase E Later | Not started | Deferred by design. |
+| UX pass | Not started | Every row in the UX table below is still open. |
+
+**Waiting on the owner:** approval of the optional-features wireframes, answers to "Questions for you" at the end of this doc, and a wireframe approved before any UI change.
 
 ## Direction
 

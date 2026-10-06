@@ -47,7 +47,6 @@ services:
       ISSUE_DIGEST_TIME: ${ISSUE_DIGEST_TIME:-02:00}
       ISSUE_DIGEST_TO: ${ISSUE_DIGEST_TO:-}
       TZ: ${TZ:-Asia/Kolkata}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}
       SMTP_USER: ${SMTP_USER:-}

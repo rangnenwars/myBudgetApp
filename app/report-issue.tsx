@@ -210,6 +210,13 @@ export default function ReportIssueScreen() {
         <TextInput style={styles.input} value={expected} onChangeText={setExpected} placeholder="Optional" placeholderTextColor={COLORS.textDim} maxLength={2000} />
 
         <Text style={[styles.label, styles.gap]}>Screenshot (optional, max 2 MB)</Text>
+        <View style={styles.privacyNotice}>
+          <Ionicons name="eye-outline" size={16} color={COLORS.blue} style={styles.privacyIcon} />
+          <Text style={styles.privacyText}>
+            A screenshot can show your balances. Only you and the app's administrators can open it, and it's deleted 90 days after the problem is
+            fixed. Crop out anything you'd rather not share.
+          </Text>
+        </View>
         {screenshot ? (
           <View style={styles.shotRow}>
             <Image source={{ uri: screenshot.uri }} style={styles.shotThumb} resizeMode="cover" />
@@ -228,7 +235,13 @@ export default function ReportIssueScreen() {
           </Pressable>
         )}
 
-        <Text style={styles.hint}>Your app version and device type are included automatically to help us reproduce the problem.</Text>
+        <Text style={styles.hint}>
+          Your app version and device type are included automatically. Your report is read only by our team, to fix the
+          problem.{' '}
+          <Text style={styles.link} accessibilityRole="link" onPress={() => router.push('/legal/privacy')}>
+            Privacy policy
+          </Text>
+        </Text>
 
         {error && <Text style={styles.error}>{error}</Text>}
 
@@ -315,6 +328,10 @@ const styles = StyleSheet.create({
   removeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: SPACING.xs, alignSelf: 'flex-start', paddingVertical: 4 },
   removeText: { color: COLORS.red, fontSize: 13 },
   hint: { color: COLORS.textDim, fontSize: 11.5, marginTop: SPACING.md, lineHeight: 16 },
+  link: { color: COLORS.blue, textDecorationLine: 'underline' },
+  privacyNotice: { flexDirection: 'row', gap: SPACING.sm, borderWidth: 1, borderColor: COLORS.blue, borderRadius: RADIUS.md, padding: SPACING.sm, marginBottom: SPACING.sm },
+  privacyIcon: { marginTop: 1 },
+  privacyText: { flex: 1, color: COLORS.text, fontSize: 12.5, lineHeight: 18 },
   error: { color: COLORS.red, fontSize: 13, marginTop: SPACING.sm },
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.lg },
   saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },

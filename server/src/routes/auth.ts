@@ -24,6 +24,13 @@ import {
 const router = Router();
 export const BCRYPT_COST = 12;
 
+// Compared against when the email isn't registered, so an unknown email takes
+// as long as a wrong password — otherwise the skipped bcrypt check (~250 ms)
+// would reveal which emails have accounts. Same cost as real hashes; made
+// once, on first use.
+let dummyHash: Promise<string> | null = null;
+const getDummyHash = () => (dummyHash ??= bcrypt.hash('not-a-real-password', BCRYPT_COST));
+
 // bcrypt only reads the first 72 bytes, so longer passwords would silently
 // be truncated — cap them instead.
 export const passwordSchema = z
@@ -92,11 +99,10 @@ router.post(
     const body = loginSchema.parse(req.body);
 
     const [user] = await db.select().from(users).where(emailMatches(body.email));
-    // Same generic error whether the email doesn't exist or the password is wrong — don't reveal which.
-    if (!user) throw unauthorized('Invalid email or password.');
-
-    const valid = await bcrypt.compare(body.password, user.passwordHash);
-    if (!valid) throw unauthorized('Invalid email or password.');
+    // Same error, and the same bcrypt work, whether the email doesn't exist or
+    // the password is wrong — neither the message nor the timing reveals which.
+    const valid = await bcrypt.compare(body.password, user?.passwordHash ?? (await getDummyHash()));
+    if (!user || !valid) throw unauthorized('Invalid email or password.');
 
     // Checked after the password so a wrong password and a deactivated
     // account still give different messages only once credentials are

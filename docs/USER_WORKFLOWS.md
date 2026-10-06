@@ -14,7 +14,7 @@ flowchart LR
   classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-**Screens:** [App map](#map) · [Login](#login) · [Register](#register) · [Forgot password](#forgot) · [Reset password](#reset) · [Confirm email](#verify) · [Dashboard](#dashboard) · [Input expenses](#input) · [Transactions](#transactions) · [Loans](#loans) · [Investments](#investments) · [Goals](#goals) · [Accounts](#accounts) · [Budgets](#budgets) · [Reports](#reports) · [Settings](#settings) · [Report issue](#issue) · [Admin: Users](#users) · [Admin: Audit log](#audit) · [Admin: System metrics](#metrics)
+**Screens:** [App map](#map) · [Login](#login) · [Register](#register) · [Forgot password](#forgot) · [Reset password](#reset) · [Confirm email](#verify) · [Dashboard](#dashboard) · [Quick add](#quickadd) · [Input expenses](#input) · [Transactions](#transactions) · [Loans](#loans) · [People](#people) · [Person](#person) · [Investments](#investments) · [Goals](#goals) · [Accounts](#accounts) · [Budgets](#budgets) · [Free-money day](#freemoney) · [Reports](#reports) · [Settings](#settings) · [Report issue](#issue) · [Admin: Users](#users) · [Admin: Audit log](#audit) · [Admin: System metrics](#metrics)
 
 Words are kept to a minimum on purpose. Full explanations are in [USER_MANUAL.md](USER_MANUAL.md); the screen files are listed in [README.md](README.md) §5.
 
@@ -46,6 +46,10 @@ flowchart LR
     RP["Reports"]:::pro
   end
   DB --- TX --- LN --- IV --- GL --- RP
+  DB --> QA["Quick add"]
+  DB --> PP["People"]
+  PP --> PE["One person"]
+  DB --> FM["Free-money day"]
   DB --> IE["Input expenses"]
   DB --> BG["Budgets"]
   DB --> AC["Accounts"]
@@ -167,6 +171,9 @@ flowchart LR
 flowchart LR
   D(["Dashboard"]):::entry
   D --> M["Month arrows"] --> T["Income - Expense = Net savings"]
+  D --> FMC["Free-money card"] --> FMD["Free-money day"]
+  D -->|"orange plus"| QA["Quick add"]
+  D --> PC["You get / You owe card"] --> PL["People"]
   D --> TOP["Top 5 expense categories"]
   D --> BA{"Any budget at 80%+?"} -->|yes| BAL["Budget alerts card"]:::warn --> BUD["Budgets"]
   D --> PI["Pro insights"]:::pro
@@ -178,6 +185,29 @@ flowchart LR
   D -->|"gear icon"| SET
   D -->|"shield icon"| SH["Staff screens"]:::pro
   D -->|"log-out icon"| LO["Login"]
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+<a id="quickadd"></a>
+
+### Quick add
+
+`sheet on /(tabs)` · Signed in · `components/QuickAddSheet.tsx`
+
+```mermaid
+flowchart LR
+  A(["Orange plus"]):::entry --> B{"Expense or Income"}
+  B --> C["Amount on keypad"] --> D{"Category"}
+  D -->|"most-used chip"| E["Save"]
+  D -->|More| F["Pick from full list"] --> E
+  E --> G["Saved for today"]:::ok --> H["Dashboard totals refresh"]
+  C -.-> N["Add note"]
+  C -.->|"Split across categories"| S["Add form with Split on"]
+  E -.-> X["Enter an amount / pick a category"]:::bad
   classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
@@ -223,6 +253,11 @@ flowchart TB
   subgraph ADD["Add"]
     direction LR
     a1["Plus"] --> a2{"Income or Expense"} --> a3["Category: search or add custom"] --> a4["Amount"] --> a5["Date: today by default"] --> a6{"How often"}
+    a2 -.-> s1["Split switch"] --> s2["Lines: category + amount"] --> s3{"Left to assign = 0?"}
+    s3 -->|yes| s4["One entry per category"]:::ok
+    s3 -->|no| s5["Fix the amounts"]:::bad
+    s1 -.->|"With people"| w1["Pick friends: Equal or Custom"] --> w2["Your share = your spending"]:::ok
+    w1 --> w3["Each friend owes you, in People"]:::ok
     a6 -->|Once| a8["Exact amount"]
     a6 -->|"Monthly / Quarterly / Yearly"| a7["Monthly equivalent"]
     a8 --> a9{"Repeat switch"}
@@ -275,6 +310,58 @@ flowchart TB
     c4["What if + X per month"] --> c3
   end
   ADD ~~~ PART ~~~ PLAN
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+<a id="people"></a>
+
+### People
+
+`/people` · Signed in · `app/people/index.tsx`
+
+```mermaid
+flowchart LR
+  A(["Home card or People link"]):::entry --> B["You get / You owe totals"]
+  B --> C{"Filter"}
+  C -->|All| D["Everyone"]
+  C -->|"You get"| E["They owe you"]:::ok
+  C -->|"You owe"| F["You owe them"]:::bad
+  C -->|Overdue| G["Past pay-back date"]:::warn
+  D --> H["Tap a name"] --> I["One person"]
+  B --> J["Add person or IOU"] --> K{"I lent or I borrowed"}
+  K --> L["Person + amount + optional due date"] --> M["Save"]:::ok --> I
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+<a id="person"></a>
+
+### Person
+
+`/people/[id]` · Signed in · `app/people/[id].tsx`
+
+```mermaid
+flowchart LR
+  A(["Tap a name"]):::entry --> B{"Balance"}
+  B -->|"they owe you"| C["They paid: amount"]
+  B -->|"you owe them"| D["I paid: amount"]
+  B -->|zero| S["All settled"]:::ok
+  C --> E{"More than owed?"}
+  D --> E
+  E -->|yes| X["Refused with the figure"]:::bad
+  E -->|no| F["Balance goes down"]:::ok
+  A --> G["Lend or borrow more"] --> H["Balance changes"]
+  A --> I["Due date"] -.-> J["Overdue flag when past"]:::warn
+  A --> K["Write off"] --> L["Cleared, kept in history"]:::warn
+  A --> M["Trash on a line"] --> N["Balance recalculated"]
+  A --> O["Delete person"]:::bad
   classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
@@ -364,6 +451,31 @@ flowchart LR
   F -->|"over 100%"| I["Red"]:::bad
   H --> J["Alert on Dashboard"]
   I --> J
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+<a id="freemoney"></a>
+
+### Free-money day
+
+`/free-money-day` · Signed in · `app/free-money-day.tsx`
+
+```mermaid
+flowchart LR
+  A(["Dashboard card"]):::entry --> B{"Income known?"}
+  B -->|no| X["Add repeating income"]:::warn
+  B -->|yes| C{"Committed vs income"}
+  C -->|"under 100%"| D["Free-money day: date + days left"]:::ok
+  C -->|"100% or more"| E["No free days"]:::bad
+  D --> W["Change vs last week"]
+  A --> L["What you owe each month"]
+  L --> M["Loan EMIs"]
+  L --> R["Repeating bills"]
+  A --> P["Prepay a loan: amount"] --> Q["New EMI + new free-money day"]:::ok --> G["Preview only"]:::warn
   classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d

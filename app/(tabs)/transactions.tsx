@@ -7,28 +7,36 @@ import {
   Pressable,
   Modal,
   Switch,
+  ScrollView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { CategoryPicker } from '../../components/CategoryPicker';
 import { DateField } from '../../components/DateField';
 import { RepeatingEntries } from '../../components/RepeatingEntries';
+import { Segmented } from '../../components/ScreenKit';
+import { SplitWithPeople, PeopleSplitState, emptyPeopleSplit, peopleSplitProblem, planPeopleSplit } from '../../components/SplitWithPeople';
 import { useAuth } from '../../context/AuthContext';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 import {
   addTransaction,
+  addSplitTransaction,
+  addSplitWithPeople,
+  addPerson,
+  getPeople,
   updateTransaction,
   deleteTransaction,
   getTransactionsPage,
   getRecurring,
   repeatTransactionMonthly,
   Transaction,
+  Person,
   RecurringTransaction,
   RepeatFrequency,
   TxnType,
@@ -69,6 +77,34 @@ const PERIOD_OPTIONS: { key: TxnPeriod; label: string }[] = [
   { key: 'yearly', label: 'Yearly' },
 ];
 
+interface SplitLine {
+  id: number;
+  category: string | null;
+  amount: string;
+}
+
+let lineSeq = 0;
+const newLine = (): SplitLine => ({ id: ++lineSeq, category: null, amount: '' });
+const emptyLines = (): SplitLine[] => [newLine(), newLine()];
+
+const cents = (n: number) => Math.round(n * 100);
+
+/** Total minus the lines so far, in rupees (0 when the lines add up exactly). */
+const amountLeft = (total: number, lines: SplitLine[]): number =>
+  (cents(total) - lines.reduce((sum, l) => sum + cents(parseFloat(l.amount) || 0), 0)) / 100;
+
+/** Why the split lines can't be saved yet, or null when they can. */
+const splitProblem = (total: number, lines: SplitLine[]): string | null => {
+  if (lines.some((l) => !l.category)) return 'Choose a category for every line.';
+  if (lines.some((l) => !(parseFloat(l.amount) > 0))) return 'Enter an amount for every line.';
+  const keys = lines.map((l) => l.category);
+  if (new Set(keys).size !== keys.length) return 'Each category can be used only once.';
+  const left = amountLeft(total, lines);
+  if (left > 0) return `${fmt(left)} is still left to assign.`;
+  if (left < 0) return `The lines are ${fmt(-left)} over the total.`;
+  return null;
+};
+
 export default function TransactionsScreen() {
   const { user } = useAuth();
   const { getCategory } = useCategories();
@@ -93,6 +129,12 @@ export default function TransactionsScreen() {
   const [frequency, setFrequency] = useState<RepeatFrequency>('monthly');
   const [rules, setRules] = useState<RecurringTransaction[]>([]);
   const [repeatingOpen, setRepeatingOpen] = useState(false);
+  // "Split" shares one payment across categories; `amount` above is then the total paid.
+  const [split, setSplit] = useState(false);
+  const [splitMode, setSplitMode] = useState<'categories' | 'people'>('categories');
+  const [peopleSplit, setPeopleSplit] = useState<PeopleSplitState>(() => emptyPeopleSplit());
+  const [friendOptions, setFriendOptions] = useState<Person[]>([]);
+  const [lines, setLines] = useState<SplitLine[]>(() => emptyLines());
 
   // First page for the current search/filter. Searching and filtering run on
   // the server, so only one page is ever held, however long the history.
@@ -154,6 +196,10 @@ export default function TransactionsScreen() {
     setAmount('');
     setCategory(null);
     setNote('');
+    setSplit(false);
+    setSplitMode('categories');
+    setPeopleSplit(emptyPeopleSplit());
+    setLines(emptyLines());
     setError(null);
   };
 
@@ -161,6 +207,29 @@ export default function TransactionsScreen() {
     resetForm();
     setModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!modalOpen || !split || splitMode !== 'people') return;
+    let active = true;
+    getPeople()
+      .then((r) => active && setFriendOptions(r.people))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [modalOpen, split, splitMode]);
+
+  // Opened from the Home quick-add sheet's "Split across categories" link.
+  const params = useLocalSearchParams<{ add?: string; amount?: string }>();
+  useEffect(() => {
+    if (params.add !== 'split') return;
+    resetForm();
+    setSplit(true);
+    setAmount(typeof params.amount === 'string' ? params.amount : '');
+    setModalOpen(true);
+    router.setParams({ add: undefined, amount: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.add, params.amount]);
 
   const openEdit = (item: Transaction) => {
     setEditingId(item.id);
@@ -182,7 +251,27 @@ export default function TransactionsScreen() {
       setError('Enter a valid amount.');
       return;
     }
-    if (!category) {
+    const splitting = split && editingId == null && splitMode === 'categories';
+    const splittingPeople = split && editingId == null && splitMode === 'people';
+    if (splittingPeople) {
+      if (type !== 'expense') {
+        setError('Splitting with people is for expenses.');
+        return;
+      }
+      const problem = peopleSplitProblem(value, peopleSplit);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
+    if (splitting) {
+      const problem = splitProblem(value, lines);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
+    if (!splitting && !category) {
       setError('Choose a category.');
       return;
     }
@@ -194,27 +283,65 @@ export default function TransactionsScreen() {
     setSaving(true);
     setError(null);
     try {
-      if (editingId != null) {
+      if (splittingPeople) {
+        const plan = planPeopleSplit(value, peopleSplit);
+        const ids = [...peopleSplit.picked];
+        let newId: number | null = null;
+        if (peopleSplit.newName.trim()) {
+          try {
+            newId = (await addPerson(peopleSplit.newName.trim())).id;
+          } catch (err) {
+            // A name already in the list: use that person instead of failing.
+            const existing = (await getPeople()).people.find((p) => p.name.toLowerCase() === peopleSplit.newName.trim().toLowerCase());
+            if (!existing) throw err;
+            newId = existing.id;
+          }
+          ids.push(newId);
+        }
+        await addSplitWithPeople({
+          date,
+          total: value,
+          category: category!,
+          note: note.trim() || null,
+          method: peopleSplit.method,
+          people: ids.map((personId, i) => ({
+            personId,
+            amount: peopleSplit.method === 'custom' ? plan.shares[i < peopleSplit.picked.length ? personId : 0] : undefined,
+          })),
+        });
+      } else if (splitting) {
+        await addSplitTransaction({
+          type,
+          date,
+          total: value,
+          note: note.trim() || null,
+          lines: lines.map((l) => ({ category: l.category!, amount: parseFloat(l.amount) })),
+        });
+      } else if (editingId != null) {
         // Editing works on the amount exactly as stored — period only
         // applies when logging a new bill, not when fixing an existing row.
+        // Making it repeat quarterly/yearly stores the monthly equivalent, as when adding.
+        const repeatSpread = repeat && frequency !== 'monthly';
         await updateTransaction(editingId, {
-          amount: value,
+          amount: repeatSpread ? monthlyEquivalent(value, frequency as EntryPeriod) : value,
           type,
-          category,
-          note: note.trim() || null,
+          category: category!,
+          note: note.trim() || (repeatSpread ? `${frequency} entry — original ${fmt(value)}` : null),
           date,
         });
         if (repeat) await repeatTransactionMonthly(editingId, frequency);
       } else {
-        // A repeating entry is logged at its full amount and posted again each
-        // period; the monthly-equivalent split only applies to one-off logging.
-        const spread = !repeat && period !== 'once' && period !== 'monthly';
+        // Quarterly/yearly amounts are stored as their monthly equivalent (÷3 / ÷12) with the
+        // original in the note — whether logged once or set to repeat (the rule copies this
+        // amount, so every automatic posting is the monthly equivalent too).
+        const cadence: TxnPeriod = repeat ? frequency : period;
+        const spread = cadence !== 'once' && cadence !== 'monthly';
         await addTransaction({
-          amount: spread ? monthlyEquivalent(value, period as EntryPeriod) : value,
+          amount: spread ? monthlyEquivalent(value, cadence as EntryPeriod) : value,
           type,
-          category,
+          category: category!,
           subcategory: null,
-          note: note.trim() || (spread ? `${period} entry — original ${fmt(value)}` : null),
+          note: note.trim() || (spread ? `${cadence} entry — original ${fmt(value)}` : null),
           date,
           ...monthYearOf(date),
           repeat_frequency: repeat ? frequency : undefined,
@@ -241,6 +368,7 @@ export default function TransactionsScreen() {
 
   const query = search.trim();
   const repeatDay = Number(date.slice(8, 10)) || 1;
+  const left = amountLeft(parseFloat(amount) || 0, lines);
 
   return (
     <View style={styles.flex}>
@@ -329,7 +457,7 @@ export default function TransactionsScreen() {
           style={styles.modalBackdrop}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={styles.modalSheet}>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalSheet} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editingId != null ? 'Edit transaction' : 'Add transaction'}</Text>
               <Pressable onPress={() => { setModalOpen(false); resetForm(); }}>
@@ -342,7 +470,7 @@ export default function TransactionsScreen() {
                 <Pressable
                   key={t}
                   style={[styles.typeBtn, type === t && styles.typeBtnActive]}
-                  onPress={() => { setType(t); setCategory(null); }}
+                  onPress={() => { setType(t); setCategory(null); setLines((ls) => ls.map((l) => ({ ...l, category: null }))); }}
                 >
                   <Text style={[styles.typeBtnText, type === t && styles.typeBtnTextActive]}>
                     {t === 'expense' ? 'Expense' : 'Income'}
@@ -354,7 +482,7 @@ export default function TransactionsScreen() {
             <Text style={styles.label}>Date</Text>
             <DateField value={date} onChange={setDate} />
 
-            {editingId == null && !repeat && (
+            {editingId == null && !repeat && !split && (
               <>
                 <Text style={styles.label}>Period</Text>
                 <View style={styles.typeToggle}>
@@ -386,8 +514,78 @@ export default function TransactionsScreen() {
               keyboardType="numeric"
             />
 
-            <Text style={styles.label}>Category</Text>
-            <CategoryPicker type={type} value={category} onChange={setCategory} />
+            {editingId == null && !repeat && (
+              <View style={styles.repeatRow}>
+                <View style={styles.repeatText}>
+                  <Text style={styles.repeatLabel}>Split across categories</Text>
+                  <Text style={styles.hint}>One payment, shared between categories. The lines must add up to the amount.</Text>
+                </View>
+                <Switch value={split} onValueChange={setSplit} trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }} thumbColor="#FFFFFF" />
+              </View>
+            )}
+
+            {split && editingId == null ? (
+              <>
+                <Segmented
+                  options={[
+                    { key: 'categories', label: 'Across categories' },
+                    { key: 'people', label: 'With people' },
+                  ]}
+                  value={splitMode}
+                  onChange={(mode) => {
+                    setSplitMode(mode);
+                    if (mode === 'people' && type !== 'expense') {
+                      setType('expense');
+                      setCategory(null);
+                    }
+                  }}
+                />
+                {splitMode === 'people' ? (
+                  <>
+                    <Text style={styles.label}>Category</Text>
+                    <CategoryPicker type="expense" value={category} onChange={setCategory} />
+                    <SplitWithPeople total={parseFloat(amount) || 0} people={friendOptions} value={peopleSplit} onChange={setPeopleSplit} />
+                  </>
+                ) : (
+                  <>
+                {lines.map((l, i) => (
+                  <View key={l.id} style={styles.splitLine}>
+                    <View style={styles.splitCategory}>
+                      <CategoryPicker type={type} value={l.category} onChange={(key) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, category: key } : x)))} />
+                    </View>
+                    <TextInput
+                      style={[styles.input, styles.splitAmount]}
+                      value={l.amount}
+                      onChangeText={(v) => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, amount: v } : x)))}
+                      placeholder="0"
+                      placeholderTextColor={COLORS.textDim}
+                      keyboardType="numeric"
+                      accessibilityLabel={`Amount for line ${i + 1}`}
+                    />
+                    {lines.length > 2 && (
+                      <Pressable onPress={() => setLines((ls) => ls.filter((x) => x.id !== l.id))} hitSlop={8} accessibilityLabel={`Remove line ${i + 1}`}>
+                        <Ionicons name="close-circle-outline" size={20} color={COLORS.textMuted} />
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+                <Pressable onPress={() => setLines((ls) => [...ls, newLine()])} disabled={lines.length >= 20} style={styles.addLine}>
+                  <Ionicons name="add" size={16} color={COLORS.accent} />
+                  <Text style={styles.addLineText}>Add a line</Text>
+                </Pressable>
+                <View style={styles.leftRow}>
+                  <Text style={styles.hint}>Left to assign</Text>
+                  <Text style={[styles.leftValue, { color: left === 0 ? COLORS.positive : COLORS.red }]}>{fmt(left)}</Text>
+                </View>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>Category</Text>
+                <CategoryPicker type={type} value={category} onChange={setCategory} />
+              </>
+            )}
 
             <Text style={styles.label}>Note (optional)</Text>
             <TextInput
@@ -398,6 +596,7 @@ export default function TransactionsScreen() {
               placeholderTextColor={COLORS.textDim}
             />
 
+            {!split && (
             <View style={styles.repeatRow}>
               <View style={styles.repeatText}>
                 <Text style={styles.repeatLabel}>Repeat</Text>
@@ -414,8 +613,9 @@ export default function TransactionsScreen() {
                 thumbColor="#FFFFFF"
               />
             </View>
+            )}
 
-            {repeat && (
+            {repeat && !split && (
               <View style={styles.typeToggle}>
                 {FREQUENCY_OPTIONS.map((opt) => (
                   <Pressable key={opt.key} style={[styles.typeBtn, frequency === opt.key && styles.typeBtnActive]} onPress={() => setFrequency(opt.key)}>
@@ -425,12 +625,18 @@ export default function TransactionsScreen() {
               </View>
             )}
 
+            {repeat && !split && frequency !== 'monthly' && (
+              <Text style={styles.hint}>
+                Logged as the monthly equivalent ({frequency === 'quarterly' ? '÷3' : '÷12'}) each time — the original amount is kept in the note.
+              </Text>
+            )}
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
-              <Text style={styles.saveBtnText}>{saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Save transaction'}</Text>
+              <Text style={styles.saveBtnText}>{saving ? 'Saving…' : editingId != null ? 'Save changes' : split ? (splitMode === 'people' ? 'Save' : `Save ${lines.length} entries`) : 'Save transaction'}</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -504,6 +710,14 @@ const styles = StyleSheet.create({
   rowAmount: { fontSize: 14, fontWeight: '700' },
   rowDeleteBtn: { marginLeft: SPACING.sm, padding: 4 },
   modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
+  modalScroll: { maxHeight: '92%' },
+  splitLine: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  splitCategory: { flex: 1 },
+  splitAmount: { width: 96, textAlign: 'right' },
+  addLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: SPACING.xs },
+  addLineText: { color: COLORS.accent, fontWeight: '600', fontSize: 13 },
+  leftRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  leftValue: { fontWeight: '700', fontSize: 14 },
   modalSheet: {
     backgroundColor: COLORS.bg,
     borderTopLeftRadius: RADIUS.lg,

@@ -6,6 +6,9 @@ import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
 import { BudgetClassBadge } from '../../components/BudgetClassBadge';
 import { ProGate } from '../../components/ProGate';
+import { QuickAddSheet } from '../../components/QuickAddSheet';
+import { FreeMoneyCard } from '../../components/FreeMoneyCard';
+import { PeopleCard } from '../../components/PeopleCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCategories } from '../../context/CategoriesContext';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
@@ -34,6 +37,9 @@ export default function DashboardScreen() {
   // Budgets at 80% or more of their limit in the viewed month.
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
   const [hasBudgets, setHasBudgets] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  // Bumped after a quick add so the totals and the free-money card reload.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -84,13 +90,14 @@ export default function DashboardScreen() {
       // of leaving every category miscategorized as "expense" until the
       // next focus.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, categories.length, view.month, view.year])
+    }, [user?.id, categories.length, view.month, view.year, refreshKey])
   );
 
   const maxCategoryTotal = topCategories[0]?.total ?? 1;
   const savingsRate = computeSavingsRate(summary);
 
   return (
+    <View style={styles.flex}>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <View>
@@ -172,6 +179,10 @@ export default function DashboardScreen() {
         </View>
       </Card>
 
+      <PeopleCard refreshKey={refreshKey} />
+
+      {isCurrentMonth && <FreeMoneyCard refreshKey={refreshKey} />}
+
       <View style={styles.quickLinks}>
         <Pressable style={styles.quickLink} onPress={() => router.push('/budgets')}>
           <Ionicons name="pie-chart-outline" size={18} color={COLORS.accent} />
@@ -180,6 +191,10 @@ export default function DashboardScreen() {
         <Pressable style={styles.quickLink} onPress={() => router.push('/accounts')}>
           <Ionicons name="wallet-outline" size={18} color={COLORS.accent} />
           <Text style={styles.quickLinkText}>Accounts</Text>
+        </Pressable>
+        <Pressable style={styles.quickLink} onPress={() => router.push('/people')}>
+          <Ionicons name="people-outline" size={18} color={COLORS.accent} />
+          <Text style={styles.quickLinkText}>People</Text>
         </Pressable>
       </View>
 
@@ -282,12 +297,34 @@ export default function DashboardScreen() {
         </Card>
       </ProGate>
     </ScrollView>
+
+    <Pressable style={styles.fab} onPress={() => setQuickOpen(true)} accessibilityRole="button" accessibilityLabel="Add an entry">
+      <Ionicons name="add" size={30} color="#FFFFFF" />
+    </Pressable>
+    <QuickAddSheet visible={quickOpen} onClose={() => setQuickOpen(false)} onSaved={() => setRefreshKey((k) => k + 1)} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: COLORS.bg },
-  container: { padding: SPACING.lg, paddingBottom: SPACING.xl * 2, gap: SPACING.md },
+  container: { padding: SPACING.lg, paddingBottom: SPACING.xl * 3, gap: SPACING.md },
+  fab: {
+    position: 'absolute',
+    right: SPACING.lg,
+    bottom: SPACING.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.proGold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   greeting: { color: COLORS.text, fontSize: 22, fontWeight: '700' },
   monthLabel: { color: COLORS.textMuted, fontSize: 13 },

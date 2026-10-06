@@ -1,9 +1,11 @@
 import request from 'supertest';
 import { eq, inArray } from 'drizzle-orm';
-import { app, registerUser, promoteToSupport } from './helpers';
+import { app, registerUser, promoteToSupport, promoteToAdmin } from './helpers';
 import { db } from '../db/client';
 import { issueReports } from '../db/schema';
 import { runIssueDigest } from '../jobs/issueDigest';
+import { runNightlyJobs } from '../jobs/scheduler';
+import { purgeExpiredScreenshots, screenshotRetentionDays } from '../lib/issuePrivacy';
 import { MailMessage } from '../lib/mailer';
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -154,7 +156,6 @@ describe('GET /api/v1/issues/mine and staff triage', () => {
 describe('nightly digest', () => {
   const savedEnv = { ...process.env };
   beforeAll(() => {
-    delete process.env.ANTHROPIC_API_KEY; // never call the real API from tests
     process.env.ISSUE_DIGEST_TO = 'dev@test.local';
   });
   afterAll(() => {
@@ -162,7 +163,7 @@ describe('nightly digest', () => {
   });
 
   it('analyses, suggests, emails pending reports once, and marks them notified', async () => {
-    const { accessToken } = await registerUser();
+    const { accessToken, user } = await registerUser();
     const one = await request(app)
       .post('/api/v1/issues')
       .set(auth(accessToken))
@@ -177,10 +178,14 @@ describe('nightly digest', () => {
     expect(sent[0].to).toBe('dev@test.local');
     expect(sent[0].subject).toMatch(/new issue report/);
     expect(sent[0].text).toContain(`#${one.body.id} [`);
-    expect(sent[0].text).toContain('Suggested fix (heuristic');
+    expect(sent[0].text).toContain('Suggested fix:');
     expect(sent[0].html).toContain('Crash on &lt;script&gt;'); // user text is escaped
     expect(sent[0].html).not.toContain('<script>');
-    expect(sent[0].attachments?.some((a) => a.cid === `issue-${one.body.id}@mybudget`)).toBe(true);
+    // Private by default: no screenshot attached and the reporter is an id, not an email.
+    expect(sent[0].attachments).toHaveLength(0);
+    expect(sent[0].html).toContain('Has a screenshot — not attached');
+    expect(sent[0].text).toContain(`Reporter: user #${user.id}`);
+    expect(`${sent[0].text}${sent[0].html}`).not.toContain(user.email);
 
     const rows = await db.select().from(issueReports).where(inArray(issueReports.id, ids));
     for (const r of rows) {
@@ -222,5 +227,145 @@ describe('nightly digest', () => {
     const [row] = await db.select().from(issueReports).where(eq(issueReports.id, created.body.id));
     expect(row.notifiedAt).toBeNull();
     expect(row.suggestion).not.toBeNull();
+  });
+
+  it('attaches screenshots and names the reporter only when opted in', async () => {
+    process.env.ISSUE_DIGEST_ATTACH_SCREENSHOTS = 'true';
+    process.env.ISSUE_DIGEST_SHOW_REPORTER = 'true';
+    try {
+      const { accessToken, user } = await registerUser();
+      const created = await request(app)
+        .post('/api/v1/issues')
+        .set(auth(accessToken))
+        .send({ ...baseReport, screenshot: { data: PNG_1PX, mime_type: 'image/png' } });
+      const sent: MailMessage[] = [];
+      await runIssueDigest({ onlyIssueIds: [created.body.id], send: async (m) => void sent.push(m), log: () => {} });
+      expect(sent[0].attachments?.some((a) => a.cid === `issue-${created.body.id}@mybudget`)).toBe(true);
+      expect(sent[0].text).toContain(`Reporter: ${user.email}`);
+    } finally {
+      delete process.env.ISSUE_DIGEST_ATTACH_SCREENSHOTS;
+      delete process.env.ISSUE_DIGEST_SHOW_REPORTER;
+    }
+  });
+
+  it('without SMTP, logs only the subject (never the report text) and leaves reports pending', async () => {
+    const saved = { host: process.env.SMTP_HOST, from: process.env.SMTP_FROM };
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_FROM;
+    try {
+      const { accessToken } = await registerUser();
+      const created = await request(app)
+        .post('/api/v1/issues')
+        .set(auth(accessToken))
+        .send({ ...baseReport, description: 'Secret balance details here ₹123456' });
+      const lines: string[] = [];
+      const result = await runIssueDigest({ onlyIssueIds: [created.body.id], log: (l) => lines.push(l) });
+      expect(result.skippedReason).toBe('smtp not configured');
+      expect(lines.join('\n')).not.toContain('Secret balance');
+      const [row] = await db.select().from(issueReports).where(eq(issueReports.id, created.body.id));
+      expect(row.notifiedAt).toBeNull();
+    } finally {
+      if (saved.host !== undefined) process.env.SMTP_HOST = saved.host;
+      if (saved.from !== undefined) process.env.SMTP_FROM = saved.from;
+    }
+  });
+});
+
+describe('issue-report screenshot privacy', () => {
+  it("support staff cannot open another user's screenshot; admins can", async () => {
+    const reporter = await registerUser();
+    const support = await registerUser();
+    const admin = await registerUser();
+    await promoteToSupport(support.user.id);
+    await promoteToAdmin(admin.user.id);
+    const created = await request(app)
+      .post('/api/v1/issues')
+      .set(auth(reporter.accessToken))
+      .send({ ...baseReport, screenshot: { data: PNG_1PX, mime_type: 'image/png' } });
+
+    expect((await request(app).get(`/api/v1/issues/${created.body.id}/screenshot`).set(auth(support.accessToken))).status).toBe(404);
+    expect((await request(app).get(`/api/v1/issues/${created.body.id}/screenshot`).set(auth(admin.accessToken))).status).toBe(200);
+  });
+
+  it('answers 404 for a report with no screenshot, and 400 for a non-numeric id', async () => {
+    const { accessToken } = await registerUser();
+    const created = await request(app).post('/api/v1/issues').set(auth(accessToken)).send(baseReport);
+    const none = await request(app).get(`/api/v1/issues/${created.body.id}/screenshot`).set(auth(accessToken));
+    expect(none.status).toBe(404);
+    expect(none.body.error).toMatch(/no screenshot/);
+    expect((await request(app).get('/api/v1/issues/abc/screenshot').set(auth(accessToken))).status).toBe(400);
+  });
+
+  it('staff can filter the triage list by status; an unknown status is a 400 and an unknown report a 404', async () => {
+    const staff = await registerUser();
+    await promoteToSupport(staff.user.id);
+    const res = await request(app).get('/api/v1/issues?status=resolved').set(auth(staff.accessToken));
+    expect(res.status).toBe(200);
+    expect(res.body.every((r: { status: string }) => r.status === 'resolved')).toBe(true);
+    expect((await request(app).get('/api/v1/issues?status=bogus').set(auth(staff.accessToken))).status).toBe(400);
+    expect((await request(app).patch('/api/v1/issues/999999999').set(auth(staff.accessToken)).send({ status: 'resolved' })).status).toBe(404);
+  });
+});
+
+describe('screenshot retention', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const withShot = (token: string) =>
+    request(app)
+      .post('/api/v1/issues')
+      .set(auth(token))
+      .send({ ...baseReport, screenshot: { data: PNG_1PX, mime_type: 'image/png' } })
+      .then((r) => r.body.id as number);
+  const setRow = (id: number, values: { status?: string; updatedAt: Date }) => db.update(issueReports).set(values).where(eq(issueReports.id, id));
+
+  it('drops screenshots of reports closed longer ago than the retention period, keeping the text', async () => {
+    const { accessToken } = await registerUser();
+    const [old, recent, open] = [await withShot(accessToken), await withShot(accessToken), await withShot(accessToken)];
+    const now = new Date();
+    const longAgo = new Date(now.getTime() - (screenshotRetentionDays() + 1) * DAY);
+    await setRow(old, { status: 'resolved', updatedAt: longAgo });
+    await setRow(recent, { status: 'wont_fix', updatedAt: now });
+    await setRow(open, { updatedAt: longAgo }); // still 'new' — kept
+
+    await purgeExpiredScreenshots(now);
+    const rows = await db.select().from(issueReports).where(inArray(issueReports.id, [old, recent, open]));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(old)).toMatchObject({ screenshot: null, screenshotMimeType: null, screenshotSize: null, title: baseReport.title });
+    expect(byId.get(recent)!.screenshot).not.toBeNull();
+    expect(byId.get(open)!.screenshot).not.toBeNull();
+  });
+
+  it('reads the retention period from the environment, ignoring blank or invalid values', () => {
+    const saved = process.env.ISSUE_SCREENSHOT_RETENTION_DAYS;
+    try {
+      process.env.ISSUE_SCREENSHOT_RETENTION_DAYS = '30';
+      expect(screenshotRetentionDays()).toBe(30);
+      process.env.ISSUE_SCREENSHOT_RETENTION_DAYS = '';
+      expect(screenshotRetentionDays()).toBe(90);
+      process.env.ISSUE_SCREENSHOT_RETENTION_DAYS = '-5';
+      expect(screenshotRetentionDays()).toBe(90);
+      process.env.ISSUE_SCREENSHOT_RETENTION_DAYS = '0';
+      expect(screenshotRetentionDays()).toBe(0);
+    } finally {
+      if (saved === undefined) delete process.env.ISSUE_SCREENSHOT_RETENTION_DAYS;
+      else process.env.ISSUE_SCREENSHOT_RETENTION_DAYS = saved;
+    }
+  });
+
+  it('runs every night even when the digest email is switched off', async () => {
+    const saved = process.env.ISSUE_DIGEST_ENABLED;
+    process.env.ISSUE_DIGEST_ENABLED = 'false';
+    try {
+      const { accessToken } = await registerUser();
+      const id = await withShot(accessToken);
+      const now = new Date();
+      await setRow(id, { status: 'resolved', updatedAt: new Date(now.getTime() - (screenshotRetentionDays() + 1) * DAY) });
+      await runNightlyJobs(now);
+      const [row] = await db.select().from(issueReports).where(eq(issueReports.id, id));
+      expect(row.screenshot).toBeNull();
+      expect(row.notifiedAt).toBeNull(); // the digest itself didn't run
+    } finally {
+      if (saved === undefined) delete process.env.ISSUE_DIGEST_ENABLED;
+      else process.env.ISSUE_DIGEST_ENABLED = saved;
+    }
   });
 });

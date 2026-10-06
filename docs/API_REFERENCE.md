@@ -1,4 +1,4 @@
-# API Reference — My Budget backend
+# API Reference — Prapanji backend
 
 Every endpoint implemented in `server/src/routes/*.ts`, as of the admin/RBAC + custom-categories build. This is the single source of truth for the HTTP surface — if you add, remove, or change a route, update this doc **and** the corresponding test file in the same change (see "Keeping this honest" at the bottom).
 
@@ -71,7 +71,7 @@ Errors: 401 if the account behind the token has since been deleted
 
 ### `PATCH /auth/me/tier` 🔒
 Body: `{ tier: 'standard' | 'pro' }`
-→ **200** `UserProfile` — the "Try Pro" test toggle; not a real billing flow (see code comment in `routes/auth.ts`)
+→ **200** `UserProfile` — the old "Try Pro" development switch; not a billing flow. Since migration 0013 every account is already `pro`, so the app no longer shows it (see code comment in `routes/auth.ts`)
 Errors: 400 invalid tier, or if the account behind the token has since been deleted · 403 self-service plan changes are off — the default under `NODE_ENV=production` unless `ALLOW_SELF_TIER_CHANGE=true` (`ALLOW_SELF_TIER_CHANGE=false` turns it off anywhere). Admins can still set a tier via `PATCH /admin/users/:id`.
 
 **`UserProfile` shape** (returned by register/login/me/tier — never includes the password hash):
@@ -107,7 +107,7 @@ Errors: 400 wrong current password, or new password equals the current one
 → **204** — revokes every refresh token for the account (this device included; clears the web cookie). Each session ends within one access-token lifetime (15 min).
 
 ### `GET /auth/me/export` 🔒
-→ **200** JSON download (`Content-Disposition: attachment; filename="mybudget-export-YYYY-MM-DD.json"`) of everything the account owns: profile, transactions, repeating entries, loans, investments, goals with their contribution history, accounts, budgets, custom categories and net-worth history. Never includes the password hash or tokens.
+→ **200** JSON download (`Content-Disposition: attachment; filename="mybudget-export-YYYY-MM-DD.json"`) of everything the account owns: profile, transactions, repeating entries, loans, investments, goals with their contribution history, accounts, budgets, custom categories, net-worth history, free-money-day history (`freeMoneyHistory`) and the user's issue reports (`issueReports` — text and status, each with a `screenshotUrl` pointing at `GET /issues/:id/screenshot` instead of the image bytes). Never includes the password hash or tokens, or the internal analysis/suggestion the nightly digest stored on a report.
 
 ### `DELETE /auth/me` 🔒
 Body: `{ password }` → **204** — permanently deletes the account and everything it owns (FK cascades), then clears the web cookie.
@@ -167,6 +167,17 @@ Errors: 400 invalid body, or `category_key` doesn't exist / isn't a system categ
 Body: `{ entries: [ …1–50 POST bodies, without repeat options… ] }` — all-or-nothing: if any entry is invalid nothing is saved (used by Input Expenses, so a failed save can't leave a partial batch to be re-submitted as duplicates).
 → **201** `Transaction[]` · Errors: 400 if any entry is invalid
 
+### `POST /transactions/split` 🔒
+One payment shared across categories (the **Split across categories** switch). Body: `{ type: 'income'|'expense', date: 'YYYY-MM-DD', total: number, note?: string, lines: { category_key: string, amount: number }[] }` — 2–20 lines, each category at most once, and the lines must add up to `total` exactly (compared in paise, so `0.1 + 0.2` equals `0.3`). Saves one transaction per line, all dated `date` and sharing the optional `note`, in a single insert: if any line is invalid nothing is saved. Every entry carries the same `splitGroup` (a UUID); ordinary transactions have `splitGroup: null`. Recomputes `budgetClass`.
+→ **201** `{ splitGroup: string, entries: Transaction[] }`
+Errors: 400 fewer than 2 lines, duplicate category, lines don't add up to the total (message names both figures), a category that doesn't exist / isn't yours / is the wrong type, or an invalid date or amount
+
+### `POST /transactions/split-people` 🔒
+A bill you paid for several people (the **Split → With people** option). Body: `{ date, total, category_key, note?, method: 'equal'|'custom', people: { person_id, amount? }[] }` — 1–20 people from the caller's own People list, each at most once; `category_key` must be an expense category. With `equal`, `total` is shared between the user and the people (`splitEqually` in `utils/calculations.ts`): each friend's share is worked out in paise and any leftover paise stay with the user. With `custom`, every person needs an `amount` and the user's share is the rest.
+Only the user's own share is spending: it is saved as one `expense` transaction (note = the given note, or `Split with <names>`; none is created if the friends cover everything). Each friend gets a `split_share` line in their People ledger (positive, "owes you"), linked to that transaction (`transaction_id`, set to null if the transaction is later deleted). All or nothing. Recomputes `budgetClass`.
+→ **201** `{ transaction: Transaction|null, myShare: number, shares: { personId, name, amount }[] }`
+Errors: 400 duplicate person, custom shares missing or more than the total, a share under one paisa, invalid category / type / date · 404 a person that isn't the caller's
+
 ### `PATCH /transactions/:id` 🔒
 Body: any non-empty subset of the `POST` body above (all fields optional, but provide at least one)
 → **200** `Transaction` — recomputes `budgetClass` again, same as `POST`, since an edit can shift which month/amount counts
@@ -176,7 +187,7 @@ Errors: 400 empty body, invalid field, or `category_key` isn't valid/yours · 40
 → **204** — recomputes `budgetClass` like `POST`/`PATCH`
 Errors: 404 not found, or belongs to another user
 
-**`Transaction` shape:**
+**`Transaction` shape** (`splitGroup` is `null` unless the entry came from `POST /transactions/split`):
 ```json
 { "id": 1, "amount": 1500, "type": "expense", "category": "fuel_petrol", "subcategory": null, "note": "petrol", "date": "2026-08-29", "month": 8, "year": 2026, "created_at": "2026-08-29T10:00:00.000Z" }
 ```
@@ -361,6 +372,57 @@ Query: `strategy: 'snowball'|'avalanche'` (default `snowball`), `extraPerMonth: 
 ### `GET /reports/goal-eta` 🔒
 → **200** `{ avgMonthlySavings: number, goals: { goalId: number, name: string, monthsRemaining: number|null, etaDate: string|null }[] }` — projected from the caller's trailing 3-month average net savings
 
+### `GET /reports/free-money-day` 🔒
+No query. The day of the month by which this month's income has paid for everything fixed. Income is the sum of the caller's repeating income entries (quarterly ÷ 3, yearly ÷ 12); with none, it is the average of the last three full months that had income. Commitments are every active loan with a balance (its EMI, capped at what is still owed) plus every repeating expense entry (monthly equivalent). `day = ceil(committed ÷ income × days in month)`, so each day of the month stands for an equal share of income (`computeFreeMoneyDay` in `utils/calculations.ts`).
+→ **200**
+```json
+{ "year": 2026, "month": 10, "daysInMonth": 31, "income": 60000, "incomeSource": "repeating", "committed": 15000,
+  "items": [ { "kind": "loan", "label": "Home loan", "amount": 15000 } ],
+  "share": 0.25, "day": 8, "daysFree": 23, "status": "ok", "freeDate": "2026-10-08",
+  "previous": { "weekStart": "2026-09-28", "day": 10 }, "daysEarlier": 2,
+  "loans": [ { "id": 3, "name": "Home loan", "emi": 15000, "outstanding": 900000, "interest_rate": null } ] }
+```
+`status` is `ok`, `over` (commitments ≥ income, `daysFree` 0, no `freeDate`) or `no_income` (`day` null). `day` is 0 when nothing is committed. `previous` / `daysEarlier` compare with the first reading stored for the previous week (table `free_money_snapshots`, one row per user per Monday-start week, written the first time the endpoint is called in a week and never updated); both are null on a user's first week. `daysEarlier` is positive when the day moved earlier. `loans` feeds the "what if I prepay" preview, which the client works out with `computePartPayment`.
+
+---
+
+## People — `/api/v1/people`
+
+Money lent to, borrowed from or shared with people (`routes/people.ts`). A person is just a name the user types; they need no account. Each person has an append-only ledger of signed lines (**+** they owe the user more, **−** the user owes more or they paid back); the balance is the sum, so settling adds a line and history is never edited. Lending and repayments are **not** transactions: they never touch spending, income or reports. Everything is scoped to the caller; another user's person or line returns 404.
+
+### `GET /people` 🔒
+→ **200** `{ youGet: number, youOwe: number, people: Person[] }`, people sorted by name. `youGet` is the sum of positive balances, `youOwe` the sum of negative ones (as a positive number).
+`Person`: `{ id, name, balance, dueDate: 'YYYY-MM-DD'|null, overdue: boolean, lastActivity: 'YYYY-MM-DD'|null }` — `balance` > 0 means they owe the user; `overdue` is true when `balance` ≠ 0 and `dueDate` is before today (app time zone).
+
+### `POST /people` 🔒
+Body: `{ name }` (1–60 characters). → **201** `Person` with balance 0
+Errors: 400 blank/long name, or 500 people already · 409 a person with that name (any letter case) already exists
+
+### `GET /people/:id` 🔒
+→ **200** `{ person: Person, entries: { id, kind, amount, date, note }[] }`, newest first. `amount` is signed.
+
+### `PATCH /people/:id` 🔒
+Body: `{ name?, due_date? }` (at least one; `due_date: null` clears it). → **200** `Person`
+Errors: 400 empty body · 404 · 409 name already used
+
+### `DELETE /people/:id` 🔒
+→ **204**, removing the person and every line. Errors: 404
+
+### `POST /people/:id/entries` 🔒
+Body: `{ kind, amount?, date?, note?, due_date? }` where `kind` is
+- `lent` (+), `borrowed` (−): any amount; `due_date` (optional) sets the person's pay-back-by date;
+- `received` (−, they paid the user): at most what they owe;
+- `repaid` (+, the user paid them): at most what the user owes them;
+- `written_off` (−): clears the whole balance owed to the user; send no `amount`.
+
+A fifth kind, `split_share` (+), is created only by `POST /transactions/split-people` and can't be sent here; it appears in a person's `entries` as "Shared bill".
+
+`date` defaults to today. The balance is checked under a row lock, so two quick taps can't overpay. When a line brings the balance to 0 the person's `dueDate` is cleared. → **201** `{ entry, person }`
+Errors: 400 missing/zero/negative amount, an amount over what is owed (message names the figure), a write-off with nothing owed or with an amount, bad date · 404
+
+### `DELETE /people/:id/entries/:entryId` 🔒
+Undoes a mistaken line; the balance is recomputed (and `dueDate` cleared if it is now 0). → **204** · Errors: 404
+
 ---
 
 ## Net worth — `/api/v1/net-worth`
@@ -462,10 +524,10 @@ Errors: 400 validation · 400 screenshot over **2 MB** after decoding, not valid
 → **200** `IssueReport[]` — the caller's own, newest first, up to 50
 
 ### `GET /issues/:id/screenshot`
-→ **200** the image bytes with its `Content-Type` and `X-Content-Type-Options: nosniff`. Reporter or staff (`admin`/`support`) only; anyone else gets **404** (not 403, so it doesn't confirm the report exists). 404 also when the report has no screenshot.
+→ **200** the image bytes with its `Content-Type` and `X-Content-Type-Options: nosniff`. The reporter or an **admin** only — a screenshot shows the user's own balances, so `support` accounts get **404** like anyone else (not 403, so it doesn't confirm the report exists). 404 also when the report has no screenshot, or it was deleted by retention (`ISSUE_SCREENSHOT_RETENTION_DAYS`, default 90 days after the report is resolved or closed). 400 for a non-numeric `:id`.
 
 ### `GET /issues?status=` 🛡️
-Staff only (`requireStaff`). → **200** `IssueReport[]` plus `reporter_email`, `suggestion`, `notified_at`; newest first, up to 200. Optional `status` filter.
+Staff only (`requireStaff` — admin and support). → **200** `IssueReport[]` plus `reporter_email`, `suggestion`, `notified_at`; newest first, up to 200. Optional `status` filter (400 for an unknown status). Never includes screenshot bytes.
 
 ### `PATCH /issues/:id` 🛡️
 Staff only. Body `{ "status": "new|triaged|resolved|wont_fix" }` → **200** `IssueReport` · 404 not found

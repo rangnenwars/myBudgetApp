@@ -8,6 +8,7 @@ import { requireAuth } from '../middleware/auth';
 import { autoPostMiddleware } from '../lib/autoPost';
 import { getTotalsInRange, forEachTransactionBatch } from '../lib/queries';
 import { localToday, addMonths } from '../lib/clock';
+import { getFreeMoneyDay } from '../lib/freeMoneyDay';
 import {
   computeMonthSummary,
   computeMonthlySeries,
@@ -101,6 +102,13 @@ router.get(
     const userGoals = await db.select().from(savingsGoals).where(eq(savingsGoals.userId, req.userId!));
     const results = userGoals.map((g) => ({ goalId: g.id, name: g.name, ...computeGoalETA(g, avgMonthlySavings) }));
     res.json({ avgMonthlySavings, goals: results });
+  })
+);
+
+router.get(
+  '/free-money-day',
+  asyncHandler(async (req, res) => {
+    res.json(await getFreeMoneyDay(req.userId!));
   })
 );
 

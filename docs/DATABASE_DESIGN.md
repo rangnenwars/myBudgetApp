@@ -42,13 +42,85 @@ users ──┬─< transactions >── categories
   >──   = "many rows reference one"
 ```
 
-`categories` is mostly a global lookup table — seeded once from `constants/categories.ts` (45 rows), `user_id NULL` — but a user can add their own on top via `POST /api/v1/categories`, which is where the second `users ── categories` edge above comes from. Every other table listed is still fully per-account data.
+`categories` is mostly a global lookup table — seeded once from `constants/categories.ts` (44 rows), `user_id NULL` — but a user can add their own on top via `POST /api/v1/categories`, which is where the second `users ── categories` edge above comes from. Every other table listed is still fully per-account data.
 
 ---
 
 ## 3. Schema (DDL)
 
 This DDL matches what's actually running (`server/src/db/schema.ts` + `server/drizzle/*`), with one Drizzle-side deviation: the `transactions`, `loans`, `investments`, `savings_goals`, and `goal_contributions` tables use **snake_case JS property names** in Drizzle (instead of Drizzle's normal camelCase convention) so rows returned by a query structurally match `utils/types.ts`'s shared interfaces and flow straight into `utils/calculations.ts` with no mapping layer. The underlying SQL column names below are unaffected — this is purely a TypeScript-side naming choice. `users`, `refresh_tokens`, `net_worth_snapshots`, and `budgets` kept normal camelCase since nothing in `calculations.ts` consumes them directly. 61 categories are currently seeded (not 63, per an earlier estimate).
+
+Migration `0015` added `transactions.split_group` and the `free_money_snapshots` table:
+
+```sql
+ALTER TABLE transactions ADD COLUMN split_group text;   -- same UUID on every entry saved by POST /transactions/split; NULL otherwise
+
+CREATE TABLE free_money_snapshots (
+  id         bigserial PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  week_start date   NOT NULL,                  -- Monday of the week, app time zone
+  income     numeric(14,2) NOT NULL,
+  committed  numeric(14,2) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX idx_free_money_user_week ON free_money_snapshots (user_id, week_start);
+```
+
+Migration `0016_owner_integrity` makes the database itself refuse to link one user's rows to another's — before, only the routes checked this:
+
+```sql
+-- A goal contribution must belong to the same user as its goal.
+CREATE UNIQUE INDEX idx_goals_id_user ON savings_goals (id, user_id);   -- target of the FK below
+ALTER TABLE goal_contributions ADD CONSTRAINT goal_contributions_goal_owner_fk
+  FOREIGN KEY (goal_id, user_id) REFERENCES savings_goals (id, user_id) ON DELETE CASCADE
+  NOT VALID;   -- new rows are checked; existing rows are checked by VALIDATE CONSTRAINT (OPERATIONS_RUNBOOK.md)
+
+-- A transaction, repeating entry or budget may only use a system category
+-- (user_id NULL) or the same user's own. A foreign key can't say "system OR
+-- mine", so one trigger function guards all three tables; it raises
+-- foreign_key_violation (23503). Triggers aren't in schema.ts (Drizzle has no
+-- trigger support) — this migration is their only definition.
+CREATE FUNCTION enforce_category_owner() RETURNS trigger …;   -- full body in server/drizzle/0016_owner_integrity.sql
+CREATE TRIGGER transactions_category_owner BEFORE INSERT OR UPDATE OF category_key, user_id ON transactions           FOR EACH ROW EXECUTE FUNCTION enforce_category_owner();
+CREATE TRIGGER recurring_category_owner    BEFORE INSERT OR UPDATE OF category_key, user_id ON recurring_transactions FOR EACH ROW EXECUTE FUNCTION enforce_category_owner();
+CREATE TRIGGER budgets_category_owner      BEFORE INSERT OR UPDATE OF category_key, user_id ON budgets                FOR EACH ROW EXECUTE FUNCTION enforce_category_owner();
+```
+
+Migration `0017` added the People tables (lending, borrowing, shared bills):
+
+```sql
+CREATE TABLE people (
+  id         bigserial PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       text   NOT NULL CHECK (length(name) BETWEEN 1 AND 60),
+  due_date   date,                       -- "pay back by" for whatever is outstanding
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX idx_people_user_name ON people (user_id, lower(name));
+
+CREATE TABLE people_ledger (             -- append-only; balance = SUM(amount)
+  id         bigserial PRIMARY KEY,
+  user_id    bigint NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+  person_id  bigint NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  kind       text   NOT NULL CHECK (kind IN ('lent','borrowed','received','repaid','written_off')),
+  amount     numeric(12,2) NOT NULL CHECK (amount <> 0),   -- + they owe the user more, − the user owes more / they paid back
+  date       date   NOT NULL,
+  note       text   CHECK (length(note) <= 500),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_people_ledger_person ON people_ledger (person_id, date DESC, id DESC);
+CREATE INDEX idx_people_ledger_user   ON people_ledger (user_id);
+```
+
+Migration `0018` added the `split_share` kind (a friend's share of a bill the user paid) and a link from a ledger line to the user's own share:
+
+```sql
+ALTER TABLE people_ledger ADD COLUMN transaction_id bigint REFERENCES transactions(id) ON DELETE SET NULL;
+-- kind CHECK now also allows 'split_share'
+```
+
+Lending is deliberately kept out of `transactions`: it is not spending or income, so reports and budgets are unaffected. A split bill adds only the user's own share to `transactions`.
 
 `categories.user_id` and `users.role`/`users.isActive` were added after the initial migration (see `server/drizzle/0001_last_gamma_corps.sql`) to support user-created custom categories and admin-managed access control — both are covered below in place, not as a separate changelog, since this doc always describes the current shape.
 
@@ -262,6 +334,9 @@ CREATE TABLE goal_contributions (
 CREATE INDEX idx_goal_contributions_goal ON goal_contributions(goal_id, created_at);
 -- FK lookup for the ON DELETE CASCADE from users.
 CREATE INDEX idx_goal_contributions_user ON goal_contributions(user_id);
+-- Since 0016: the contribution's user must be the goal's user (see the note at the top of §3).
+ALTER TABLE goal_contributions ADD CONSTRAINT goal_contributions_goal_owner_fk
+  FOREIGN KEY (goal_id, user_id) REFERENCES savings_goals (id, user_id) ON DELETE CASCADE NOT VALID;
 
 -- ============================================================
 -- net_worth_snapshots
@@ -314,6 +389,11 @@ CREATE INDEX idx_admin_audit_created ON admin_audit_log(created_at);
 -- pg_dump; list queries never select it. notified_at NULL = the nightly
 -- digest hasn't emailed it yet. analysis/suggestion = what that job found,
 -- kept so a retry after a failed send doesn't regenerate it.
+-- Retention: the nightly job (server/src/lib/issuePrivacy.ts) sets screenshot,
+-- screenshot_mime_type and screenshot_size to NULL once a report has been
+-- resolved/wont_fix for ISSUE_SCREENSHOT_RETENTION_DAYS (default 90, measured
+-- from updated_at); the text is kept. Only the reporter and admins can read
+-- a screenshot through the API.
 -- ============================================================
 CREATE TABLE issue_reports (
   id                   BIGSERIAL PRIMARY KEY,
@@ -392,4 +472,4 @@ CREATE INDEX idx_issue_reports_pending ON issue_reports(created_at) WHERE notifi
 
 ## Status
 
-Fully implemented and verified: 142 server-side integration/e2e tests (Supertest against real Postgres, no mocking, coverage-enforced — see `docs/API_REFERENCE.md`) plus 47 client-side unit tests, all passing, run automatically before every commit via a Husky pre-commit hook. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.
+Fully implemented and verified (2026-10-06): 386 server tests (Supertest against real Postgres — the database is never mocked — plus unit tests; 88% branch coverage) and 109 client unit tests, all passing, run before every commit by a Husky pre-commit hook and again in GitHub Actions. `dbIntegrity.test.ts` writes straight to the database to prove the 0016 constraints hold even when the routes' own checks are bypassed. Run it with `docker compose up --build` from the repo root, or see [README.md](README.md) §7 for the dev-server option.

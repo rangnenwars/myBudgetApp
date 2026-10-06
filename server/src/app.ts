@@ -8,6 +8,7 @@ import transactionsRoutes from './routes/transactions';
 import recurringRoutes from './routes/recurring';
 import accountsRoutes from './routes/accounts';
 import budgetsRoutes from './routes/budgets';
+import peopleRoutes from './routes/people';
 import loansRoutes from './routes/loans';
 import investmentsRoutes from './routes/investments';
 import goalsRoutes from './routes/goals';
@@ -64,6 +65,7 @@ export const createApp = () => {
   app.use('/api/v1/recurring', recurringRoutes);
   app.use('/api/v1/accounts', accountsRoutes);
   app.use('/api/v1/budgets', budgetsRoutes);
+  app.use('/api/v1/people', peopleRoutes);
   app.use('/api/v1/loans', loansRoutes);
   app.use('/api/v1/investments', investmentsRoutes);
   app.use('/api/v1/goals', goalsRoutes);

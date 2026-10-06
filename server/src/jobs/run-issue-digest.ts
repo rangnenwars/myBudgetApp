@@ -1,6 +1,6 @@
 // Runs the nightly issue digest once, now:
 //   npm run issues:digest              # analyse, suggest, email, mark notified
-//   npm run issues:digest -- --dry-run # analyse and print the email; no Claude calls, sends or writes
+//   npm run issues:digest -- --dry-run # analyse and print the email; nothing sent or written
 // In Docker: docker compose exec server npm run issues:digest -- --dry-run
 
 import 'dotenv/config';

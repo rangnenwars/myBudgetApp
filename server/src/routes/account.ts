@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
-import { and, count, eq, inArray, ne } from 'drizzle-orm';
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   users,
@@ -15,6 +15,8 @@ import {
   netWorthSnapshots,
   budgets,
   accounts,
+  issueReports,
+  freeMoneySnapshots,
 } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { badRequest, conflict, unauthorized } from '../lib/errors';
@@ -147,7 +149,8 @@ router.post(
 );
 
 // Everything the account owns, as one JSON file. Excludes the password hash
-// and session tokens.
+// and session tokens. Issue-report screenshots are listed with the URL that
+// returns them rather than inlined (up to 2 MB each).
 router.get(
   '/me/export',
   requireAuth,
@@ -156,7 +159,7 @@ router.get(
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     if (!user) throw unauthorized('User no longer exists.');
 
-    const [txns, rules, userLoans, userInvestments, goals, userAccounts, userBudgets, customCategories, snapshots] = await Promise.all([
+    const [txns, rules, userLoans, userInvestments, goals, userAccounts, userBudgets, customCategories, snapshots, reports, freeMoney] = await Promise.all([
       db.select().from(transactions).where(eq(transactions.userId, userId)).orderBy(transactions.date, transactions.id),
       db.select().from(recurringTransactions).where(eq(recurringTransactions.userId, userId)),
       db.select().from(loans).where(eq(loans.userId, userId)),
@@ -166,6 +169,27 @@ router.get(
       db.select().from(budgets).where(eq(budgets.userId, userId)),
       db.select().from(categories).where(eq(categories.userId, userId)),
       db.select().from(netWorthSnapshots).where(eq(netWorthSnapshots.userId, userId)),
+      db
+        .select({
+          id: issueReports.id,
+          category: issueReports.category,
+          severity: issueReports.severity,
+          screen: issueReports.screen,
+          title: issueReports.title,
+          description: issueReports.description,
+          stepsToReproduce: issueReports.stepsToReproduce,
+          expectedBehavior: issueReports.expectedBehavior,
+          platform: issueReports.platform,
+          appVersion: issueReports.appVersion,
+          deviceInfo: issueReports.deviceInfo,
+          hasScreenshot: sql<boolean>`${issueReports.screenshot} IS NOT NULL`,
+          status: issueReports.status,
+          createdAt: issueReports.createdAt,
+        })
+        .from(issueReports)
+        .where(eq(issueReports.userId, userId))
+        .orderBy(issueReports.id),
+      db.select().from(freeMoneySnapshots).where(eq(freeMoneySnapshots.userId, userId)),
     ]);
     const contributions = goals.length
       ? await db.select().from(goalContributions).where(inArray(goalContributions.goal_id, goals.map((g) => g.id)))
@@ -184,6 +208,8 @@ router.get(
       budgets: strip(userBudgets),
       customCategories: strip(customCategories),
       netWorthHistory: strip(snapshots),
+      freeMoneyHistory: strip(freeMoney),
+      issueReports: reports.map(({ hasScreenshot, ...r }) => ({ ...r, screenshotUrl: hasScreenshot ? `/api/v1/issues/${r.id}/screenshot` : null })),
     };
 
     const date = new Date().toISOString().slice(0, 10);

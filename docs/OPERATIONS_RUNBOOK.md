@@ -234,7 +234,27 @@ deploy@droplet$ # copy server/scripts/privatize-personal-categories.sql to the D
 deploy@droplet$ dc exec -T postgres psql -U mybudget -d mybudget -v ON_ERROR_STOP=1 < privatize-personal-categories.sql
 ```
 
-Run it **after** the new image is live. If you run it before, the next server start re-seeds the old rows. Verify: `SELECT count(*) FROM categories WHERE user_id IS NULL;` returns 45.
+Run it **after** the new image is live. If you run it before, the next server start re-seeds the old rows. Verify: `SELECT count(*) FROM categories WHERE user_id IS NULL;` returns 44.
+
+### 5.4 After migration 0016: check existing rows against the new ownership rules (once per database)
+
+Migration `0016_owner_integrity` applies itself on server start like every migration. From then on the database rejects a goal contribution recorded under a different user than its goal, and a transaction, repeating entry or budget that uses another user's custom category. Existing rows aren't scanned by the migration (the goal foreign key is added `NOT VALID`), so check them once:
+
+```bash
+deploy@droplet$ dc exec -T postgres psql -U mybudget -d mybudget -c "
+  SELECT 'goal_contributions' AS t, count(*) FROM goal_contributions gc JOIN savings_goals g ON g.id = gc.goal_id WHERE gc.user_id <> g.user_id
+  UNION ALL SELECT 'transactions', count(*) FROM transactions x JOIN categories c ON c.key = x.category_key WHERE c.user_id IS NOT NULL AND c.user_id <> x.user_id
+  UNION ALL SELECT 'recurring', count(*) FROM recurring_transactions x JOIN categories c ON c.key = x.category_key WHERE c.user_id IS NOT NULL AND c.user_id <> x.user_id
+  UNION ALL SELECT 'budgets', count(*) FROM budgets x JOIN categories c ON c.key = x.category_key WHERE c.user_id IS NOT NULL AND c.user_id <> x.user_id;"
+```
+
+All four should be 0 (the app has always enforced this; the dev database was 0). Then mark the foreign key as fully checked:
+
+```bash
+deploy@droplet$ dc exec -T postgres psql -U mybudget -d mybudget -c "ALTER TABLE goal_contributions VALIDATE CONSTRAINT goal_contributions_goal_owner_fk;"
+```
+
+If any count isn't 0, don't validate. Take a backup and look at those rows first (a goal contribution whose user differs from its goal's user is almost certainly a data-entry bug; fix `user_id` to the goal's owner).
 
 ---
 
@@ -277,7 +297,7 @@ All commands from `/opt/mybudget` with `alias dc='docker compose -f docker-compo
 
 **Rotate secrets:** edit `/opt/mybudget/.env`, then `dc up -d`. Rotating `JWT_*` logs every user out. Rotating `POSTGRES_PASSWORD` requires `ALTER USER mybudget PASSWORD '<new>';` inside Postgres **before** changing `.env`.
 
-**Change a runtime setting** (e.g. enable the nightly digest, allow "Try Pro"): add the variable under `server.environment` in `deploy/docker-compose.prod.yml` (and its value to `.env` if secret), commit, then redeploy (CI copies the file) or `scp` it and run `dc up -d`. See INFRASTRUCTURE_REFERENCE §6 for the list of unwired variables.
+**Change a runtime setting** (e.g. enable the nightly digest, or opt in to screenshots in the digest email): add the variable under `server.environment` in `deploy/docker-compose.prod.yml` (and its value to `.env` if secret), commit, then redeploy (CI copies the file) or `scp` it and run `dc up -d`. See INFRASTRUCTURE_REFERENCE §6 for the list of unwired variables.
 
 ---
 

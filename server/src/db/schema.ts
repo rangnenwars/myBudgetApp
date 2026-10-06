@@ -17,6 +17,7 @@ import {
   integer,
   jsonb,
   customType,
+  foreignKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -161,6 +162,8 @@ export const transactions = pgTable('transactions', {
   date: date('date').notNull(),
   month: smallint('month').notNull(),
   year: smallint('year').notNull(),
+  // Entries saved together from one split payment share this id (POST /transactions/split); null for every other entry.
+  splitGroup: text('split_group'),
   // mode: 'string' — utils/types.ts's Transaction.created_at is a string
   // (ISO), matching the SQLite/localStorage convention; nothing in
   // calculations.ts parses it as a Date, so keep the wire format identical
@@ -296,6 +299,8 @@ export const savingsGoals = pgTable('savings_goals', {
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_goals_user').on(table.userId),
+  // Target of goal_contributions' (goal_id, user_id) foreign key below.
+  uniqueIndex('idx_goals_id_user').on(table.id, table.userId),
   check('goals_target_check', sql`${table.target_amount} > 0`),
   check('goals_saved_check', sql`${table.saved_amount} >= 0`),
 ]);
@@ -319,6 +324,10 @@ export const goalContributions = pgTable('goal_contributions', {
   index('idx_goal_contributions_user').on(table.userId),
   check('goal_contributions_amount_check', sql`${table.amount} > 0`),
   check('goal_contributions_type_check', sql`${table.type} IN ('add', 'remove')`),
+  // A contribution must belong to the same user as its goal — enforced by the
+  // database, not only by routes/goals.ts. Added NOT VALID in migration 0016
+  // (new rows are checked; see docs/OPERATIONS_RUNBOOK.md to validate old ones).
+  foreignKey({ name: 'goal_contributions_goal_owner_fk', columns: [table.goal_id, table.userId], foreignColumns: [savingsGoals.id, savingsGoals.userId] }).onDelete('cascade'),
 ]);
 
 // ============================================================
@@ -417,4 +426,61 @@ export const issueReports = pgTable('issue_reports', {
   check('issue_reports_status_check', sql`${table.status} IN ('new', 'triaged', 'resolved', 'wont_fix')`),
   check('issue_reports_screenshot_check', sql`(${table.screenshot} IS NULL) = (${table.screenshotMimeType} IS NULL)`),
   check('issue_reports_screenshot_size_check', sql`${table.screenshotSize} IS NULL OR ${table.screenshotSize} <= 2097152`),
+]);
+
+// ============================================================
+// free_money_snapshots — the first free-money-day figures a user sees in each
+// week (Monday start, app time zone), so GET /reports/free-money-day can say
+// how this week compares with last week. Inserted once per user per week and
+// never updated; only the share is needed, because the day it maps to depends
+// on the length of the month being shown.
+// ============================================================
+export const freeMoneySnapshots = pgTable('free_money_snapshots', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  weekStart: date('week_start').notNull(),
+  income: numeric('income', { precision: 14, scale: 2, mode: 'number' }).notNull(),
+  committed: numeric('committed', { precision: 14, scale: 2, mode: 'number' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex('idx_free_money_user_week').on(table.userId, table.weekStart),
+]);
+
+// ============================================================
+// people + people_ledger — who owes the user money and whom the user owes
+// (lending, borrowing, shared bills). A person is just a name the user types;
+// they don't need an account. The ledger is append-only: every event is a
+// signed line (+ they owe the user more, − the user owes more or they paid
+// back), and a person's balance is the sum of their lines. due_date is the
+// "pay back by" date for whatever is currently outstanding.
+// ============================================================
+export const people = pgTable('people', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  dueDate: date('due_date'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex('idx_people_user_name').on(table.userId, sql`lower(${table.name})`),
+  check('people_name_length', sql`length(${table.name}) BETWEEN 1 AND 60`),
+]);
+
+export const peopleLedger = pgTable('people_ledger', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  personId: bigint('person_id', { mode: 'number' }).notNull().references(() => people.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['lent', 'borrowed', 'received', 'repaid', 'written_off', 'split_share'] }).notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  date: date('date').notNull(),
+  note: text('note'),
+  // The user's own share of a split bill, when one was recorded (POST /transactions/split-people). Kept if that entry is deleted.
+  transactionId: bigint('transaction_id', { mode: 'number' }).references(() => transactions.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_people_ledger_person').on(table.personId, table.date.desc(), table.id.desc()),
+  index('idx_people_ledger_user').on(table.userId),
+  check('people_ledger_amount_nonzero', sql`${table.amount} <> 0`),
+  check('people_ledger_kind_check', sql`${table.kind} IN ('lent', 'borrowed', 'received', 'repaid', 'written_off', 'split_share')`),
+  check('people_ledger_note_length', sql`length(${table.note}) <= 500`),
 ]);

@@ -36,12 +36,12 @@ What the client also computes locally, for on-screen display only (never written
 
 ### 4. Is the test/branch/function/loop coverage documented?
 
-Statement, branch, function, and line coverage — yes, both documented and **enforced** (a build fails if it drops):
+Statement, branch, function, and line coverage — yes, documented, with minimum thresholds (measured 2026-10-06):
 
-| | Threshold (min) | Currently achieving |
-|---|---|---|
-| **Client** (`utils/calculations.ts`, `package.json`) | 85% branch, 100% function, 90% lines/statements | 100% stmts, 98.41% branch, 100% functions, 100% lines |
-| **Server** (`src/routes`, `src/middleware`, `src/lib`, `server/jest.config.js`) | 80% branch, 90% function/lines/statements | 99.41% stmts, 90.27% branch, 100% functions, 99.33% lines |
+| | Threshold (min) | Currently achieving | Enforced automatically? |
+|---|---|---|---|
+| **Client** (`utils/calculations.ts`, `utils/dates.ts`, `utils/issues.ts` — per file, `package.json`) | 85% branch, 100% function, 90% lines/statements | 99.6% stmts, 97% branch, 100% functions, 100% lines (109 tests) | **Yes** — `npm run quality` (pre-commit hook and CI) runs `test:coverage` |
+| **Server** (`src/routes`, `src/middleware`, `src/lib`, `src/jobs` — `server/jest.config.js`) | 80% branch, 90% function/lines/statements | 98.0% stmts, 88.0% branch, 97.7% functions, 98.9% lines (386 tests) | **Not yet** — the server's `npm run quality` runs `npm test`, not `test:coverage`; run `npm run test:coverage` to check (open item in [SECURITY_REVIEW.md](SECURITY_REVIEW.md)) |
 
 Documented in [README.md §6](README.md#6-testing--quality), [API_REFERENCE.md](API_REFERENCE.md#keeping-this-honest), and `architecture-flows.html` §C/D.
 
@@ -89,7 +89,7 @@ Steps on a fresh Linux host:
 1. Install Docker Engine and the Docker Compose plugin (`docker compose version` should work).
 2. Copy the repo to the host (`git clone` or `rsync`).
 3. Create `.env` (repo root) and `server/.env` from `.env.example` in each location, with **real, unique** `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` — never reuse the values from local dev.
-4. `docker compose up --build -d` from the repo root. This builds all three images and, on first start, automatically runs Postgres migrations, seeds the 45 system categories, and seeds the two demo accounts (`server/docker-entrypoint.sh`).
+4. `docker compose up --build -d` from the repo root. This builds all three images and, on first start, automatically runs Postgres migrations, seeds the 44 system categories, and seeds the two demo accounts (`server/docker-entrypoint.sh`).
 5. Open the mapped web port (`8080` by default — change the left-hand side of the `mybudget-web` port mapping in `docker-compose.yml` if that's taken or if you want to serve on `80`/`443`).
 
 **Can the database be split onto a separate host?** Yes — point `DATABASE_URL` at any reachable Postgres 16 instance (a managed service, a separate VM) and drop the `postgres` service from `docker-compose.yml`. The app doesn't care where Postgres physically runs, only that `DATABASE_URL` can reach it. The default setup keeps everything on one host under one `docker compose up` because that's sufficient for personal/small-scale use, not because anything requires it.
