@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api, apiErrorMessage, registerSessionExpiredHandler } from '../utils/api';
+import type { FeatureKey } from '../constants/features';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens, hasSessionHint, REFRESH_VIA_COOKIE } from '../utils/tokenStorage';
 
 export type Tier = 'standard' | 'pro';
@@ -16,6 +17,8 @@ interface SessionUser {
   role: Role;
   isActive: boolean;
   emailVerified: boolean;
+  /** Optional features staff have switched on for this account (goals, loans, investments). */
+  features: FeatureKey[];
 }
 
 interface AuthContextValue {
@@ -39,6 +42,8 @@ interface AuthContextValue {
   isStaff: boolean;
   /** admin or system_manager — can see aggregate system metrics. */
   canViewMetrics: boolean;
+  /** Whether an optional feature is switched on for this account. */
+  hasFeature: (key: FeatureKey) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -176,6 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAdmin: user?.role === 'admin',
     isStaff: user?.role === 'admin' || user?.role === 'support',
     canViewMetrics: user?.role === 'admin' || user?.role === 'system_manager',
+    hasFeature: (key: FeatureKey) => user?.features?.includes(key) ?? false,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

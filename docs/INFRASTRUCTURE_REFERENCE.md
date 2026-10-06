@@ -89,7 +89,7 @@ Dev tooling: `npx expo start --web --port 8090` (hot-reload client).
 | Reachable from outside the host? | **No** — no `ports:` mapping; access via `docker compose exec postgres psql` over SSH | Yes, `localhost:5433` |
 | Data volume | Docker named volume `mybudget_pgdata` | `mybudgetapp_pgdata` |
 | Schema management | Drizzle migrations in `server/drizzle/*.sql` (0000–0011 at time of writing), applied **automatically** by `docker-entrypoint.sh` on every server start | same |
-| Seed data | 45 system categories on every start (idempotent). **Demo accounts are NOT seeded in production** (`NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`) | demo accounts seeded: `admin@mybudget.local` / `user@mybudget.local` |
+| Seed data | 44 system categories on every start (idempotent). **Demo accounts are NOT seeded in production** (`NODE_ENV=production`, `SEED_DEMO_ACCOUNTS=false`) | demo accounts seeded: `admin@mybudget.local` / `user@mybudget.local` |
 | Pool size | `PG_POOL_MAX` (default 10) | same |
 | Backups | nightly `pg_dump` cron → `/opt/mybudget/backups` → Spaces; weekly Droplet snapshot | Windows Scheduled Task "MyBudgetApp DB Backup", Sundays 02:00, 60-day retention → `D:\MyBudgetApp\backups` |
 
@@ -198,7 +198,9 @@ Server environment variables (production compose sets the ✅ ones; the others a
 | `DATABASE_URL`, `JWT_*` | ✅ from `.env` | |
 | `SMTP_HOST/PORT/USER/PASS/FROM` | ✅ pass-through (empty if unset) | `SMTP_SECURE` is also read by the code but is not passed through |
 | `ALLOW_SELF_TIER_CHANGE` | ⚠ not set → **off** in production | the "Try Pro" button returns 403; admins grant Pro (see DB_ADMIN_QUERIES §3) |
-| `ISSUE_DIGEST_ENABLED`, `ISSUE_DIGEST_TO/TIME/MAX`, `TZ`, `ANTHROPIC_API_KEY`, `ISSUE_AI_MODEL` | ⚠ not set → nightly issue digest **off** | add to the compose file + `.env` to enable |
+| `ISSUE_DIGEST_ENABLED`, `ISSUE_DIGEST_TO/TIME/MAX`, `TZ` | ⚠ not set → nightly issue digest **off** | add to the compose file + `.env` to enable |
+| `ISSUE_DIGEST_SHOW_REPORTER`, `ISSUE_DIGEST_ATTACH_SCREENSHOTS` | not set → **private defaults** (digest names reporters as `user #id`, attaches no screenshots; Claude gets report text only) | set to `true` only if you accept that report screenshots (which show users' balances) or reporter emails leave the server |
+| `ISSUE_SCREENSHOT_RETENTION_DAYS` | not set → **90** | issue-report screenshots are deleted this many days after the report is resolved/closed. Runs nightly (at `ISSUE_DIGEST_TIME`, default 02:00 server time) even with the digest off |
 | `APP_TIMEZONE` | ⚠ not set → defaults to `Asia/Kolkata` | decides when a new month/day starts for EMIs, repeating entries, budgets |
 | `PG_POOL_MAX` | ⚠ not set → 10 | |
 

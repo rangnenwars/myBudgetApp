@@ -6,10 +6,11 @@ import { savingsGoals, goalContributions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { isoDate, idParam, money, MAX_AMOUNT } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
+import { requireFeature } from '../middleware/requireFeature';
 import { notFound, badRequest } from '../lib/errors';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireFeature('goals'));
 
 const GOAL_COLORS = ['#10B981', '#60A5FA', '#F59E0B', '#A78BFA', '#F472B6'];
 

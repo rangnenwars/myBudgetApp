@@ -10,6 +10,8 @@ export interface Transaction {
   date: string;
   month: number;
   year: number;
+  /** Shared by the entries saved together from one split payment; null/absent otherwise. */
+  splitGroup?: string | null;
   created_at: string;
 }
 
@@ -74,6 +76,25 @@ export interface Account {
 export type RepeatFrequency = 'monthly' | 'quarterly' | 'yearly';
 
 /** A category's monthly spending limit with what has been spent against it in the requested month. */
+/** The one overall monthly budget and this month's progress against it. Progress fields are null when no budget is set. */
+export interface OverallBudget {
+  month: number;
+  year: number;
+  amount: number | null;
+  /** Whether EMIs, credit-card bills and investments count toward it (off by default). */
+  include_commitments: boolean;
+  spent: number;
+  /** Sum of the optional category limits. */
+  allocated: number;
+  /** Average counted spending over the last 3 full months, rounded to ₹100; null without history. */
+  suggested: number | null;
+  left: number | null;
+  ratio: number | null;
+  status: 'ok' | 'warning' | 'over' | null;
+  days_left: number | null;
+  per_day: number | null;
+}
+
 export interface BudgetStatus {
   category: string;
   monthly_limit: number;
@@ -121,4 +142,55 @@ export interface MonthSummary {
 export interface CategoryTotal {
   category: string;
   total: number;
+}
+
+/** What the Home card and the free-money-day screen show; computed by GET /reports/free-money-day. */
+export interface FreeMoneyDayInfo {
+  year: number;
+  month: number;
+  daysInMonth: number;
+  income: number;
+  incomeSource: 'repeating' | 'average' | 'this_month';
+  committed: number;
+  items: { kind: 'loan' | 'repeating'; label: string; amount: number }[];
+  share: number;
+  day: number | null;
+  daysFree: number;
+  status: 'ok' | 'over' | 'no_income';
+  /** YYYY-MM-DD of the free-money day, null when there is none to show. */
+  freeDate: string | null;
+  /** Last week's reading laid over this month; null on the first week. */
+  previous: { weekStart: string; day: number } | null;
+  /** Days earlier than last week (negative = later); null without a previous reading. */
+  daysEarlier: number | null;
+  /** Active loans, for the "what if I prepay" preview. */
+  loans: { id: number; name: string; emi: number; outstanding: number; interest_rate: number | null }[];
+}
+
+export type LedgerKind = 'lent' | 'borrowed' | 'received' | 'repaid' | 'written_off' | 'split_share';
+
+/** Someone the user lends to, borrows from or shares bills with. `balance` > 0: they owe the user; < 0: the user owes them. */
+export interface Person {
+  id: number;
+  name: string;
+  balance: number;
+  /** YYYY-MM-DD "pay back by" for what is outstanding, or null. */
+  dueDate: string | null;
+  overdue: boolean;
+  lastActivity: string | null;
+}
+
+export interface PeopleSummary {
+  youGet: number;
+  youOwe: number;
+  people: Person[];
+}
+
+/** One line of a person's ledger; `amount` is signed like the balance. */
+export interface LedgerEntry {
+  id: number;
+  kind: LedgerKind;
+  amount: number;
+  date: string;
+  note: string | null;
 }

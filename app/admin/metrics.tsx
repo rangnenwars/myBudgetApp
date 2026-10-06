@@ -1,8 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
-import { ScreenHeader, SectionTitle, Notice, fmtInr, kit } from '../../components/ScreenKit';
+import { ScreenHeader, SectionTitle, Notice, Button, fmtInr, kit } from '../../components/ScreenKit';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, SPACING } from '../../constants/theme';
 import { apiErrorMessage } from '../../utils/api';
@@ -58,6 +58,7 @@ export default function MetricsScreen() {
       <ScreenHeader title="System metrics" />
       <ScrollView contentContainerStyle={kit.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
         {error && <Notice tone="warning">{error}</Notice>}
+        <Button label="Feature access" variant="outline" onPress={() => router.push('/admin/features')} />
         {m && (
           <>
             <SectionTitle>Users</SectionTitle>

@@ -6,6 +6,7 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
 import { computeNetWorth } from '../calculations';
 import { localToday } from '../lib/clock';
+import { getUserFeatures } from '../lib/features';
 
 const router = Router();
 router.use(requireAuth);
@@ -14,10 +15,14 @@ router.post(
   '/snapshot',
   asyncHandler(async (req, res) => {
     const userId = req.userId!;
+    // A feature that's switched off for the user doesn't count: net worth
+    // only adds up what they can see. Its data is kept and counts again once
+    // it's back on.
+    const on = new Set(await getUserFeatures(userId));
     const [userInvestments, userGoals, userLoans, userAccounts] = await Promise.all([
-      db.select().from(investments).where(eq(investments.userId, userId)),
-      db.select().from(savingsGoals).where(eq(savingsGoals.userId, userId)),
-      db.select().from(loans).where(eq(loans.userId, userId)),
+      on.has('investments') ? db.select().from(investments).where(eq(investments.userId, userId)) : [],
+      on.has('goals') ? db.select().from(savingsGoals).where(eq(savingsGoals.userId, userId)) : [],
+      on.has('loans') ? db.select().from(loans).where(eq(loans.userId, userId)) : [],
       db.select().from(accounts).where(eq(accounts.userId, userId)),
     ]);
 

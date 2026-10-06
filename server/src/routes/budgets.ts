@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, eq, isNull, or, sql, gte, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql, gte, lt } from 'drizzle-orm';
 import { db } from '../db/client';
-import { budgets, categories, transactions } from '../db/schema';
+import { budgets, categories, monthlyBudgets, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
 import { autoPostMiddleware } from '../lib/autoPost';
 import { badRequest, notFound } from '../lib/errors';
 import { money } from '../lib/validation';
-import { localToday, monthsDateRange } from '../lib/clock';
+import { addMonths, localToday, monthsDateRange } from '../lib/clock';
+import { getTotalsInRange } from '../lib/queries';
+import { computeOverallBudget, countsTowardBudget } from '../calculations';
 
 // Per-category monthly spending limits. GET returns each limit with what has
 // been spent against it in a month, plus an ok/warning/over status the app
@@ -25,6 +27,8 @@ const monthQuery = z.object({
 });
 
 const putSchema = z.object({ monthly_limit: money() });
+
+const overallSchema = z.object({ amount: money(), include_commitments: z.boolean().optional() });
 
 const statusFor = (ratio: number): 'ok' | 'warning' | 'over' => (ratio >= 1 ? 'over' : ratio >= WARNING_RATIO ? 'warning' : 'ok');
 
@@ -66,6 +70,93 @@ router.get(
       })
       .sort((a, b) => b.ratio - a.ratio);
     res.json(result);
+  })
+);
+
+// The one overall monthly budget (registered before /:categoryKey so
+// "overall" is never read as a category). GET also returns a suggested
+// amount — average counted spending over the last 3 full months — so the
+// app can offer it before a budget exists. No carry-over between months.
+router.get(
+  '/overall',
+  asyncHandler(async (req, res) => {
+    const q = monthQuery.parse(req.query);
+    const today = localToday();
+    const month = q.month ?? today.month;
+    const year = q.year ?? today.year;
+    const userId = req.userId!;
+
+    const [budget] = await db.select().from(monthlyBudgets).where(eq(monthlyBudgets.userId, userId));
+    const includeCommitments = budget?.includeCommitments ?? false;
+
+    const start = addMonths(year, month, -3);
+    const totals = (await getTotalsInRange(userId, start.month, start.year, month, year)).filter((t) => t.type === 'expense');
+    const keys = [...new Set(totals.map((t) => t.category))];
+    const groups = new Map(
+      keys.length ? (await db.select({ key: categories.key, group: categories.group }).from(categories).where(inArray(categories.key, keys))).map((c) => [c.key, c.group]) : []
+    );
+    const counted = totals.filter((t) => countsTowardBudget(groups.get(t.category) ?? '', includeCommitments));
+
+    const spent = counted.filter((t) => t.month === month && t.year === year).reduce((s, t) => s + t.amount, 0);
+    const pastByMonth = new Map<string, number>();
+    for (const t of counted) {
+      if (t.month === month && t.year === year) continue;
+      const k = `${t.year}-${t.month}`;
+      pastByMonth.set(k, (pastByMonth.get(k) ?? 0) + t.amount);
+    }
+    const pastTotal = [...pastByMonth.values()].reduce((s, v) => s + v, 0);
+    const suggested = pastByMonth.size ? Math.round(pastTotal / pastByMonth.size / 100) * 100 || null : null;
+
+    // Only limits on categories that count toward the total are "set aside" from it.
+    const limits = await db
+      .select({ limit: budgets.monthlyLimit, group: categories.group })
+      .from(budgets)
+      .innerJoin(categories, eq(categories.key, budgets.categoryKey))
+      .where(eq(budgets.userId, userId));
+    const allocated = limits.filter((l) => countsTowardBudget(l.group, includeCommitments)).reduce((s, l) => s + l.limit, 0);
+
+    const isCurrent = year === today.year && month === today.month;
+    const isPast = year * 12 + month < today.year * 12 + today.month;
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const progress = budget ? computeOverallBudget(budget.amount, spent, isCurrent ? today.day : isPast ? null : 1, daysInMonth) : null;
+
+    res.json({
+      month,
+      year,
+      amount: budget?.amount ?? null,
+      include_commitments: includeCommitments,
+      spent: Math.round(spent * 100) / 100,
+      allocated,
+      suggested,
+      left: progress ? Math.round(progress.left * 100) / 100 : null,
+      ratio: progress?.ratio ?? null,
+      status: progress?.status ?? null,
+      days_left: progress?.daysLeft ?? null,
+      per_day: progress?.perDay ?? null,
+    });
+  })
+);
+
+router.put(
+  '/overall',
+  asyncHandler(async (req, res) => {
+    const body = overallSchema.parse(req.body);
+    const values = { amount: body.amount, includeCommitments: body.include_commitments ?? false, updatedAt: new Date() };
+    const [row] = await db
+      .insert(monthlyBudgets)
+      .values({ userId: req.userId!, ...values })
+      .onConflictDoUpdate({ target: monthlyBudgets.userId, set: values })
+      .returning();
+    res.json({ amount: row.amount, include_commitments: row.includeCommitments });
+  })
+);
+
+router.delete(
+  '/overall',
+  asyncHandler(async (req, res) => {
+    const [deleted] = await db.delete(monthlyBudgets).where(eq(monthlyBudgets.userId, req.userId!)).returning({ userId: monthlyBudgets.userId });
+    if (!deleted) throw notFound('No monthly budget is set.');
+    res.status(204).send();
   })
 );
 

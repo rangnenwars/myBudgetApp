@@ -6,11 +6,12 @@ import { investments } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { idParam, money, MAX_AMOUNT } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
+import { requireFeature } from '../middleware/requireFeature';
 import { notFound } from '../lib/errors';
 import { localToday } from '../lib/clock';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireFeature('investments'));
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),

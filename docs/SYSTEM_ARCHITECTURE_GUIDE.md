@@ -39,7 +39,6 @@ For anyone who has to modify, debug or operate My Budget. The deeper per-topic d
 | Database | **PostgreSQL 16** | |
 | Auth | `bcrypt` (cost 12) · JWT access token (15 min) · rotated refresh token (30 days, stored hashed) | web keeps the refresh token in an httpOnly cookie; native keeps both in the OS keystore |
 | E-mail | `nodemailer` over SMTP | password reset, e-mail confirmation, nightly issue digest |
-| AI (optional) | `@anthropic-ai/sdk` | fix suggestions in the nightly issue digest only; rule-based fallback if no key |
 | Security middleware | `helmet`, `cors`, `express-rate-limit` | `server/src/app.ts` |
 | Reverse proxy / TLS | **Caddy 2** | `deploy/Caddyfile` |
 | Tests | Jest (+ Supertest against a real Postgres for the server) | pre-commit hook (Husky) and CI run them |

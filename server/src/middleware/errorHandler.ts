@@ -5,7 +5,7 @@ import { AppError } from '../lib/errors';
 // Express recognizes this as error-handling middleware purely by arity (4 params) — do not remove any parameter even if unused.
 export const errorHandler = (err: unknown, _req: Request, res: Response, _next: NextFunction): void => {
   if (err instanceof AppError) {
-    res.status(err.status).json({ error: err.message });
+    res.status(err.status).json(err.code ? { error: err.message, code: err.code } : { error: err.message });
     return;
   }
   if (err instanceof ZodError) {

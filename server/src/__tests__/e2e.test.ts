@@ -2,7 +2,8 @@
 // API + real Postgres — the "does the whole system actually work together"
 // counterpart to the focused per-route tests in the other files here.
 import request from 'supertest';
-import { app, uniqueEmail, uniquePhone } from './helpers';
+import { app, uniqueEmail, uniquePhone, setFeatures } from './helpers';
+import { FEATURE_KEYS } from '../../../constants/features';
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -15,6 +16,8 @@ describe('end-to-end: a full user session', () => {
     // 1. Register.
     const register = await request(app).post('/api/v1/auth/register').send({ name: 'E2E User', email, phone: uniquePhone(), password: 'password123' });
     expect(register.status).toBe(201);
+    // Staff switch on every optional feature, so the walk-through can use them all.
+    await setFeatures(register.body.user.id, FEATURE_KEYS);
     let { accessToken, refreshToken } = register.body;
 
     // 2. Log out immediately, then log back in with a fresh session — mirrors
@@ -106,6 +109,8 @@ describe('end-to-end: a full user session', () => {
     const today = new Date().toISOString().slice(0, 10);
     const alice = await request(app).post('/api/v1/auth/register').send({ name: 'Alice', email: uniqueEmail('alice'), phone: uniquePhone(), password: 'password123' });
     const bob = await request(app).post('/api/v1/auth/register').send({ name: 'Bob', email: uniqueEmail('bob'), phone: uniquePhone(), password: 'password123' });
+    await setFeatures(alice.body.user.id, FEATURE_KEYS);
+    await setFeatures(bob.body.user.id, FEATURE_KEYS);
 
     await request(app).post('/api/v1/transactions').set(auth(alice.body.accessToken)).send({ amount: 1000, type: 'expense', category_key: 'fuel_petrol', date: today });
     await request(app).post('/api/v1/loans').set(auth(alice.body.accessToken)).send({ name: 'Alice loan', principal: 1000, outstanding: 1000, emi: 100 });

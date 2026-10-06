@@ -146,3 +146,67 @@ describe('GET /transactions/page', () => {
     expect((await request(app).get('/api/v1/transactions/page').query({ limit: 1000 }).set(auth(accessToken))).status).toBe(400);
   });
 });
+
+describe('overall monthly budget', () => {
+  const now = new Date();
+  const month = now.getUTCMonth() + 1;
+  const year = now.getUTCFullYear();
+  const day = now.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const iso = (y: number, m: number, d = 1) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const lastMonth = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 };
+
+  it('requires authentication', async () => {
+    expect((await request(app).get('/api/v1/budgets/overall')).status).toBe(401);
+  });
+
+  it('starts empty, with a suggestion from last months spending', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 14230, type: 'expense', category_key: 'groceries_milk', date: iso(lastMonth.y, lastMonth.m) });
+    const res = await request(app).get('/api/v1/budgets/overall').set(auth(accessToken));
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ amount: null, spent: 0, suggested: 14200, status: null, per_day: null });
+  });
+
+  it('counts day-to-day spending, leaves EMIs and investments out, and works out per day', async () => {
+    const { accessToken } = await registerUser();
+    expect((await request(app).put('/api/v1/budgets/overall').set(auth(accessToken)).send({ amount: 15000 })).body).toEqual({ amount: 15000, include_commitments: false });
+    const add = (category_key: string, amount: number) =>
+      request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount, type: 'expense', category_key, date: iso(year, month) });
+    await add('groceries_milk', 6000);
+    await add('entertainment', 3200);
+    await add('loan_emi', 8000); // Loans & EMIs — not counted
+    await add('mutual_funds', 5000); // Investments — not counted
+    await request(app).put('/api/v1/budgets/groceries_milk').set(auth(accessToken)).send({ monthly_limit: 5000 });
+    await request(app).put('/api/v1/budgets/loan_emi').set(auth(accessToken)).send({ monthly_limit: 8000 }); // outside the total
+
+    const res = await request(app).get('/api/v1/budgets/overall').set(auth(accessToken));
+    const daysLeft = daysInMonth - day + 1;
+    expect(res.body).toMatchObject({ amount: 15000, spent: 9200, left: 5800, allocated: 5000, status: 'ok', days_left: daysLeft, per_day: Math.floor(5800 / daysLeft) });
+
+    await request(app).put('/api/v1/budgets/overall').set(auth(accessToken)).send({ amount: 15000, include_commitments: true });
+    const withCommitments = await request(app).get('/api/v1/budgets/overall').set(auth(accessToken));
+    expect(withCommitments.body).toMatchObject({ spent: 22200, allocated: 13000, status: 'over', per_day: 0 });
+  });
+
+  it('starts every month fresh (no carry-over) and shows no days left for a past month', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).put('/api/v1/budgets/overall').set(auth(accessToken)).send({ amount: 10000 });
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 2000, type: 'expense', category_key: 'groceries_milk', date: iso(lastMonth.y, lastMonth.m) });
+    const past = await request(app).get('/api/v1/budgets/overall').query({ month: lastMonth.m, year: lastMonth.y }).set(auth(accessToken));
+    expect(past.body).toMatchObject({ spent: 2000, left: 8000, days_left: 0, per_day: 0 });
+    const current = await request(app).get('/api/v1/budgets/overall').set(auth(accessToken));
+    expect(current.body).toMatchObject({ spent: 0, left: 10000 });
+  });
+
+  it('is private to each user, rejects a bad amount, and can be removed', async () => {
+    const { accessToken } = await registerUser();
+    const other = await registerUser();
+    await request(app).put('/api/v1/budgets/overall').set(auth(accessToken)).send({ amount: 9000 });
+    expect((await request(app).get('/api/v1/budgets/overall').set(auth(other.accessToken))).body.amount).toBeNull();
+    expect((await request(app).put('/api/v1/budgets/overall').set(auth(accessToken)).send({ amount: 0 })).status).toBe(400);
+    expect((await request(app).delete('/api/v1/budgets/overall').set(auth(accessToken))).status).toBe(204);
+    expect((await request(app).delete('/api/v1/budgets/overall').set(auth(accessToken))).status).toBe(404);
+    expect((await request(app).get('/api/v1/budgets/overall').set(auth(accessToken))).body.amount).toBeNull();
+  });
+});

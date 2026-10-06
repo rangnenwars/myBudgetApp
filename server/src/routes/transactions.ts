@@ -1,8 +1,9 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { z } from 'zod';
-import { and, eq, desc, gte, ilike, isNull, lt, lte, or, sql, SQL } from 'drizzle-orm';
+import { and, eq, desc, gte, ilike, inArray, isNull, lt, lte, or, sql, SQL } from 'drizzle-orm';
 import { db } from '../db/client';
-import { transactions, categories, recurringTransactions } from '../db/schema';
+import { transactions, categories, recurringTransactions, people, peopleLedger } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { monthsDateRange } from '../lib/clock';
 import { isoDate, idParam, money, optionalText, likeContains } from '../lib/validation';
@@ -11,6 +12,7 @@ import { autoPostMiddleware } from '../lib/autoPost';
 import { ruleScheduleFor } from '../lib/recurringTransactions';
 import { badRequest, conflict, notFound } from '../lib/errors';
 import { recomputeBudgetClass } from '../lib/budgetClass';
+import { splitEqually } from '../calculations';
 import { getTransactionsInRange } from '../lib/queries';
 
 const router = Router();
@@ -209,6 +211,153 @@ router.post(
 
     await recomputeBudgetClass(req.userId!);
     res.status(201).json(row);
+  })
+);
+
+// One payment shared across categories (the Add transaction "Split" switch): a
+// separate entry per line so budgets and reports see each category's share,
+// all saved together or not at all, and tagged with one split_group.
+const splitSchema = z.object({
+  type: z.enum(['income', 'expense']),
+  date: isoDate(),
+  note: optionalText(500),
+  total: money(),
+  lines: z
+    .array(z.object({ category_key: z.string().min(1).max(64), amount: money() }))
+    .min(2, 'Split across at least two categories.')
+    .max(20, 'At most 20 lines.'),
+});
+
+router.post(
+  '/split',
+  asyncHandler(async (req, res) => {
+    const body = splitSchema.parse(req.body);
+
+    const keys = body.lines.map((l) => l.category_key);
+    if (new Set(keys).size !== keys.length) throw badRequest('Each category can appear only once.');
+    const cents = (n: number) => Math.round(n * 100);
+    const linesTotal = body.lines.reduce((s, l) => s + cents(l.amount), 0);
+    if (linesTotal !== cents(body.total)) {
+      throw badRequest(`The lines add up to ${linesTotal / 100}, but the total is ${body.total}.`);
+    }
+    for (const l of body.lines) await assertValidCategory(l.category_key, req.userId!, body.type);
+
+    const [y, m] = body.date.split('-').map(Number);
+    const splitGroup = crypto.randomUUID();
+    const rows = await db
+      .insert(transactions)
+      .values(
+        body.lines.map((l) => ({
+          userId: req.userId!,
+          category: l.category_key,
+          amount: l.amount,
+          type: body.type,
+          subcategory: null,
+          note: body.note ?? null,
+          date: body.date,
+          month: m,
+          year: y,
+          splitGroup,
+        }))
+      )
+      .returning();
+
+    await recomputeBudgetClass(req.userId!);
+    res.status(201).json({ splitGroup, entries: rows });
+  })
+);
+
+// A bill the user paid for several people (the "Split with people" option). Only
+// the user's own share is spending, so it becomes the one transaction; each
+// friend's share is a line in their People ledger ("owes you"). Equal splits are
+// worked out in paise, and any leftover paise stay with the user so the parts
+// always add up to the total.
+const splitPeopleSchema = z.object({
+  date: isoDate(),
+  note: optionalText(500),
+  category_key: z.string().min(1).max(64),
+  total: money(),
+  method: z.enum(['equal', 'custom']),
+  people: z
+    .array(z.object({ person_id: z.coerce.number().int().positive(), amount: money().optional() }))
+    .min(1, 'Choose at least one person.')
+    .max(20, 'At most 20 people.'),
+});
+
+router.post(
+  '/split-people',
+  asyncHandler(async (req, res) => {
+    const body = splitPeopleSchema.parse(req.body);
+    const ids = body.people.map((p) => p.person_id);
+    if (new Set(ids).size !== ids.length) throw badRequest('Each person can appear only once.');
+    await assertValidCategory(body.category_key, req.userId!, 'expense');
+
+    const toCents = (n: number) => Math.round(n * 100);
+    const totalCents = toCents(body.total);
+    let shares: number[];
+    if (body.method === 'equal') {
+      const friendCents = toCents(splitEqually(body.total, ids.length).friendShare);
+      shares = ids.map(() => friendCents);
+    } else {
+      if (body.people.some((p) => p.amount == null)) throw badRequest("Enter each person's share.");
+      shares = body.people.map((p) => toCents(p.amount!));
+    }
+    const friendsCents = shares.reduce((a, b) => a + b, 0);
+    if (friendsCents > totalCents) {
+      throw badRequest(`The shares add up to ${friendsCents / 100}, which is more than the total ${body.total}.`);
+    }
+    if (shares.some((c) => c <= 0)) throw badRequest('Each share must be at least one paisa.');
+    const myCents = totalCents - friendsCents;
+
+    const result = await db.transaction(async (tx) => {
+      const found = await tx
+        .select({ id: people.id, name: people.name })
+        .from(people)
+        .where(and(eq(people.userId, req.userId!), inArray(people.id, ids)));
+      if (found.length !== ids.length) throw notFound('Person not found.');
+      const nameOf = new Map(found.map((f) => [f.id, f.name]));
+      const [y, m] = body.date.split('-').map(Number);
+
+      let mine = null;
+      if (myCents > 0) {
+        [mine] = await tx
+          .insert(transactions)
+          .values({
+            userId: req.userId!,
+            category: body.category_key,
+            amount: myCents / 100,
+            type: 'expense',
+            subcategory: null,
+            note: (body.note ?? `Split with ${ids.map((id) => nameOf.get(id)).join(', ')}`).slice(0, 500),
+            date: body.date,
+            month: m,
+            year: y,
+          })
+          .returning();
+      }
+
+      const [category] = await tx.select({ label: categories.label }).from(categories).where(eq(categories.key, body.category_key));
+      const ledgerNote = body.note ?? `Split: ${category?.label ?? 'shared bill'}`;
+      await tx.insert(peopleLedger).values(
+        ids.map((id, i) => ({
+          userId: req.userId!,
+          personId: id,
+          kind: 'split_share' as const,
+          amount: shares[i] / 100,
+          date: body.date,
+          note: ledgerNote,
+          transactionId: mine?.id ?? null,
+        }))
+      );
+      return {
+        transaction: mine,
+        myShare: myCents / 100,
+        shares: ids.map((id, i) => ({ personId: id, name: nameOf.get(id)!, amount: shares[i] / 100 })),
+      };
+    });
+
+    await recomputeBudgetClass(req.userId!);
+    res.status(201).json(result);
   })
 );
 

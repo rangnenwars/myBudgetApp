@@ -9,7 +9,12 @@ import { getAuditLog, AuditLogEntry } from '../../utils/database';
 
 const PAGE = 50;
 
-const ACTION_LABEL: Record<string, string> = { account_updated: 'Changed account', account_deleted: 'Deleted account' };
+const ACTION_LABEL: Record<string, string> = {
+  account_updated: 'Changed account',
+  account_deleted: 'Deleted account',
+  feature_changed: 'Changed feature access',
+  signup_features_changed: 'Changed what new users get',
+};
 
 const fmtWhen = (iso: string) =>
   new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });

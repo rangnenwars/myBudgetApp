@@ -112,3 +112,18 @@ dc ps && cat release.env
 dc exec -T postgres psql -U mybudget -d mybudget -c "SELECT role, count(*) FROM users GROUP BY role;"
 dc exec -T postgres psql -U mybudget -d mybudget -c "SELECT count(*) AS demo_accounts FROM users WHERE email LIKE '%@mybudget.local';"
 ```
+
+---
+
+# Update — 2026-10-06 (security & confidentiality review)
+
+Full findings and their status: [SECURITY_REVIEW.md](SECURITY_REVIEW.md). What changed in configuration terms:
+
+| Item | Status | Notes |
+|---|---|---|
+| Gap 3 above ("Try Pro" off, no billing) | ✅ Resolved in repo | Migration 0013 made every account `pro` and `pro` the default; nothing to grant. `ALLOW_SELF_TIER_CHANGE` now only matters for development. |
+| Migration `0016_owner_integrity` | ✅ In repo · 📝 Confirm on production | Applies itself on the next server start. Then run the one-off check in [OPERATIONS_RUNBOOK.md §5.4](OPERATIONS_RUNBOOK.md) and `VALIDATE CONSTRAINT`. |
+| Issue-report privacy defaults | ✅ In repo | `ISSUE_DIGEST_SHOW_REPORTER`, `ISSUE_DIGEST_ATTACH_SCREENSHOTS` default **off**; the Anthropic/Claude integration was removed (reports never leave the server for outside processing), so `ANTHROPIC_API_KEY` / `ISSUE_AI_*` no longer exist; nothing to set on production to stay private. |
+| Screenshot retention | ✅ In repo | Runs nightly on every server (`ISSUE_SCREENSHOT_RETENTION_DAYS`, default 90) even with the digest off. Production runs it at 02:00 **UTC** until `TZ` is passed through (gap 2). |
+| Database dumps in git | ✅ In repo | `.gitignore` now covers `/db dump/`, `*.dump`, `*.sql.gz`. Nothing of the kind was ever committed. |
+| Server coverage floor | ⚠ Not enforced | `server/package.json` `quality` runs `npm test`, not `test:coverage`, so CI and the pre-commit hook don't check the 80/90% floor. Coverage itself is 88% branches. |

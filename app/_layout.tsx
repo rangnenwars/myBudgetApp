@@ -48,9 +48,14 @@ export default function RootLayout() {
               <Stack.Screen name="admin/index" options={{ presentation: 'modal' }} />
               <Stack.Screen name="admin/audit-log" />
               <Stack.Screen name="admin/metrics" />
+              <Stack.Screen name="admin/features" />
               <Stack.Screen name="settings" />
               <Stack.Screen name="accounts" />
               <Stack.Screen name="budgets" />
+              <Stack.Screen name="free-money-day" />
+              <Stack.Screen name="people/index" />
+              <Stack.Screen name="people/[id]" />
+              <Stack.Screen name="people/split" />
               <Stack.Screen name="forgot-password" />
               <Stack.Screen name="reset-password" />
               <Stack.Screen name="verify-email" />

@@ -1,6 +1,32 @@
 # Prapanji roadmap — money app for everyone, student-friendly
 
-Status: **draft for approval** · 2026-10-04 · replaces the old parent/student PLAN.md
+Status: **in progress** · drafted 2026-10-04 · progress last checked 2026-10-06 · replaces the old parent/student PLAN.md
+
+## Progress
+
+Keep this section up to date whenever an item is built, committed or changed.
+
+| Item | Status | Notes |
+|------|--------|-------|
+| A1 Generic categories | **Partly done, committed** (`30de1df`) | The family-specific categories are gone, and a migration gives each existing user a private copy of the ones they used. Still missing: new general categories (Rent, Eating out, Salary/Pocket money, student fees). The outcome of running the migration on production (runbook 5.3) hasn't been confirmed. |
+| A2 Category packs | Not started | |
+| A3 Simple / Full mode | **Replaced** by admin-driven feature access. **All three parts built and committed** (2026-10-06) | Admin (and system_manager) switches Goals, Loans and Investments on or off per user; support can only view. Home, Transactions, Reports, Budgets, Accounts, Input expenses and People are always on. Sign-up defaults are editable by admin. Existing users keep only features they already have data for. A hidden feature leaves net worth, reports and free-money day, and its server routes refuse access; data is kept. Users see only their tabs, with a "Request access" button that feeds the issue flow. Wireframes A, B, C1, C2 approved, with "Waiting requests" on the admin Features page. Part 1: `user_features` + `app_settings` tables (migration 0020), `requireFeature` on goals/loans/investments and their two reports, `/features` and `/admin/features` endpoints, `features` on `/auth/me`; loan EMIs keep posting while Loans is off. Part 2: tabs for Goals, Loans and Investments appear only when switched on; opening a hidden one shows "isn't on for your account" with **Request access** (`components/FeatureGate.tsx`); Reports and the free-money day leave out hidden features. Checked in the browser against the local server. Part 3: staff screens. A **Features** section on each user's sheet (Users screen, admin and support see it, only admin switches); a **Feature access** page (`app/admin/features.tsx`, reached from the Users screen header or System metrics) with the sign-up defaults, **Waiting requests** with Switch on / Decline, and who has what; the audit log names the new actions. Checked in the browser with a throwaway admin. System managers have no Users screen, so they answer requests from the Feature access page. |
+| A4 First-run setup | Not started | |
+| A5 Remove Pro leftovers | Not started | The Pro/Standard chip is still on Home, and `ProGate` still shows "Try Pro (test mode)". |
+| B1 Quick-add | **Built and committed** | A sheet opened from Home (`components/QuickAddSheet.tsx`) with a keypad and the 4 most-used categories. It isn't a centre ＋ tab, and it has no account picker until B6. |
+| B2 Safe-to-spend | **Built as "Free-money day", committed** | The card and screen (`components/FreeMoneyCard.tsx`, `app/free-money-day.tsx`, migration 0015) show the day of the month by which your fixed bills are covered. A "₹X/day" figure now comes from the monthly budget (B5), not from payday. |
+| B3 Upcoming bills | Not started | |
+| B4 Day / Week / Month view | Not started | Part of the planned "weekly review" (with Phase D look-back). Plan first, approval before building. |
+| B5 Budgets → **one monthly budget** | **Built and committed** (2026-10-06) | Re-scoped by the owner: instead of per-category or weekly budgets, one overall monthly budget (e.g. ₹15,000) with optional category limits inside it. EMIs, credit-card bills and investments excluded by default (switch to include). No carry-over. Budgets screen shows total, category limits, "Everything else"; Home shows "₹X left · about ₹Y/day" above the free-money card (`components/BudgetCard.tsx`, `GET/PUT/DELETE /budgets/overall`, migration 0019). Weekly split of the budget not built. |
+| B6 Transactions ↔ accounts, transfers, prepaid cards | Not started | |
+| C1 Goal templates | Not started | |
+| C2 Lent & borrowed (People) | **Slices 1–2 built and simplified; committed (2026-10-06)** | Home has one People button (with totals). People has two buttons: **Split a bill** (own simple page, paid by me, equal or changed amounts) and **Lent or borrowed**, plus per-person history, part payments, due dates, write-off, undo (migrations 0017–0018). The Split switch was removed from Add transaction and Quick add; splitting one payment across categories is **parked** (API only, `POST /transactions/split`). Still to do: slice 3 (remind message + UPI link), slice 4 (invite flow F/G/H, approved). |
+| C3 Event & term budgets | Not started | |
+| Phase D Habits | Not started | Weekly look-back is planned with B4. |
+| Phase E Later | Not started | Deferred by design. |
+| UX pass | Not started | Every row in the UX table below is still open. |
+
+**Waiting on the owner:** approval of the optional-features wireframes, answers to "Questions for you" at the end of this doc, and a wireframe approved before any UI change.
 
 ## Direction
 

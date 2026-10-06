@@ -5,9 +5,11 @@ import { db } from '../db/client';
 import { loans, savingsGoals } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
+import { requireFeature } from '../middleware/requireFeature';
 import { autoPostMiddleware } from '../lib/autoPost';
 import { getTotalsInRange, forEachTransactionBatch } from '../lib/queries';
 import { localToday, addMonths } from '../lib/clock';
+import { getFreeMoneyDay } from '../lib/freeMoneyDay';
 import {
   computeMonthSummary,
   computeMonthlySeries,
@@ -81,6 +83,7 @@ router.get(
 
 router.get(
   '/debt-payoff',
+  requireFeature('loans'),
   asyncHandler(async (req, res) => {
     const q = debtQuery.parse(req.query);
     const userLoans = await db.select().from(loans).where(and(eq(loans.userId, req.userId!), eq(loans.is_active, true)));
@@ -90,6 +93,7 @@ router.get(
 
 router.get(
   '/goal-eta',
+  requireFeature('goals'),
   asyncHandler(async (req, res) => {
     const today = localToday();
     const start = addMonths(today.year, today.month, -2);
@@ -101,6 +105,13 @@ router.get(
     const userGoals = await db.select().from(savingsGoals).where(eq(savingsGoals.userId, req.userId!));
     const results = userGoals.map((g) => ({ goalId: g.id, name: g.name, ...computeGoalETA(g, avgMonthlySavings) }));
     res.json({ avgMonthlySavings, goals: results });
+  })
+);
+
+router.get(
+  '/free-money-day',
+  asyncHandler(async (req, res) => {
+    res.json(await getFreeMoneyDay(req.userId!));
   })
 );
 

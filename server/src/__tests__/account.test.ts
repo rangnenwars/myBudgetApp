@@ -141,6 +141,26 @@ describe('GET /auth/me/export', () => {
     expect(text).not.toMatch(/password|token_hash|tokenHash/i);
     expect(text).not.toMatch(/theirs/);
   });
+
+  it('includes the user\'s issue reports (a link to each screenshot, not the bytes) and free-money history', async () => {
+    const { accessToken } = await registerUser();
+    const other = await registerUser();
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const report = { category: 'bug', severity: 'low', screen: 'goals', title: 'Goal bar overflows', description: 'The progress bar goes past the card edge.' };
+    const mine = await request(app).post('/api/v1/issues').set(auth(accessToken)).send({ ...report, screenshot: { data: png, mime_type: 'image/png' } });
+    await request(app).post('/api/v1/issues').set(auth(other.accessToken)).send({ ...report, title: 'Not mine at all' });
+    await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken)); // records this week's snapshot
+
+    const res = await request(app).get('/api/v1/auth/me/export').set(auth(accessToken));
+    expect(res.status).toBe(200);
+    expect(res.body.issueReports).toEqual([
+      expect.objectContaining({ id: mine.body.id, title: 'Goal bar overflows', screenshotUrl: `/api/v1/issues/${mine.body.id}/screenshot` }),
+    ]);
+    expect(Array.isArray(res.body.freeMoneyHistory)).toBe(true);
+    const text = JSON.stringify(res.body);
+    expect(text).not.toContain('Not mine at all');
+    expect(text).not.toContain(png.slice(0, 20)); // screenshot bytes are not inlined
+  });
 });
 
 describe('DELETE /auth/me', () => {

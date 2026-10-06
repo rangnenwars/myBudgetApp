@@ -1,5 +1,7 @@
 import {
   classifyLocal,
+  computeFreeMoneyDay,
+  splitEqually,
   computeMonthSummary,
   computeCategoryBreakdown,
   computeSavingsRate,
@@ -17,6 +19,8 @@ import {
   monthlyEquivalent,
   splitEmi,
   monthsToRepay,
+  countsTowardBudget,
+  computeOverallBudget,
 } from '../calculations';
 import { Transaction, Loan, Investment, SavingsGoal } from '../types';
 
@@ -494,5 +498,85 @@ describe('simulateDebtPayoff with interest and rollover', () => {
 
   it('leaves out a loan whose EMI never covers its interest', () => {
     expect(simulateDebtPayoff([loan({ outstanding: 100000, emi: 1000, interest_rate: 24 })], 'snowball')).toEqual([]);
+  });
+});
+
+describe('computeFreeMoneyDay', () => {
+  it('maps the committed share of income onto the month', () => {
+    expect(computeFreeMoneyDay(50000, 15000, 31)).toEqual({ share: 0.3, day: 10, daysFree: 21, status: 'ok' });
+    expect(computeFreeMoneyDay(60000, 36600, 31).day).toBe(19); // 61% of 31 days, rounded up
+    expect(computeFreeMoneyDay(60000, 36600, 31).daysFree).toBe(12);
+  });
+
+  it('uses the length of the month it is given', () => {
+    expect(computeFreeMoneyDay(1000, 500, 28).day).toBe(14);
+    expect(computeFreeMoneyDay(1000, 500, 30).day).toBe(15);
+  });
+
+  it('does not round up past an exact day because of floating-point noise', () => {
+    expect(computeFreeMoneyDay(30000, 10000, 30).day).toBe(10);
+  });
+
+  it('is day 0 with nothing committed, and every day free', () => {
+    expect(computeFreeMoneyDay(40000, 0, 30)).toEqual({ share: 0, day: 0, daysFree: 30, status: 'ok' });
+  });
+
+  it('reports over when commitments reach income, and no_income without income', () => {
+    expect(computeFreeMoneyDay(10000, 10000, 30)).toMatchObject({ status: 'over', day: 30, daysFree: 0 });
+    expect(computeFreeMoneyDay(10000, 14000, 30).share).toBeCloseTo(1.4);
+    expect(computeFreeMoneyDay(0, 500, 30)).toEqual({ share: 0, day: null, daysFree: 0, status: 'no_income' });
+    expect(computeFreeMoneyDay(-5, 500, 30).status).toBe('no_income');
+  });
+
+  it('treats a negative commitment total as zero', () => {
+    expect(computeFreeMoneyDay(1000, -50, 30).day).toBe(0);
+  });
+});
+
+describe('splitEqually', () => {
+  it('splits evenly when it divides', () => {
+    expect(splitEqually(1800, 2)).toEqual({ friendShare: 600, myShare: 600 });
+    expect(splitEqually(100, 1)).toEqual({ friendShare: 50, myShare: 50 });
+  });
+
+  it('leaves the leftover paise with the user so the parts add up', () => {
+    expect(splitEqually(100, 2)).toEqual({ friendShare: 33.33, myShare: 33.34 });
+    expect(splitEqually(10, 3)).toEqual({ friendShare: 2.5, myShare: 2.5 });
+    const { friendShare, myShare } = splitEqually(0.1 + 0.2, 2);
+    expect(Math.round((friendShare * 2 + myShare) * 100)).toBe(30);
+  });
+
+  it('gives the whole bill to the user with no friends', () => {
+    expect(splitEqually(250, 0)).toEqual({ friendShare: 0, myShare: 250 });
+  });
+});
+
+describe('countsTowardBudget', () => {
+  it('counts day-to-day spending but leaves out EMIs, cards and investments unless opted in', () => {
+    expect(countsTowardBudget('Food & dining', false)).toBe(true);
+    expect(countsTowardBudget('Loans & EMIs', false)).toBe(false);
+    expect(countsTowardBudget('Credit cards', false)).toBe(false);
+    expect(countsTowardBudget('Investments & savings', false)).toBe(false);
+    expect(countsTowardBudget('Loans & EMIs', true)).toBe(true);
+  });
+});
+
+describe('computeOverallBudget', () => {
+  it('works out what is left and the per-day figure, counting today', () => {
+    // ₹15,000 budget, ₹9,200 spent, 11 Oct of 31 days → 21 days left including today.
+    expect(computeOverallBudget(15000, 9200, 11, 31)).toEqual({ left: 5800, ratio: 0.613, status: 'ok', daysLeft: 21, perDay: 276 });
+  });
+
+  it('warns at 80% and flags over-spending with nothing left per day', () => {
+    expect(computeOverallBudget(10000, 8000, 20, 30).status).toBe('warning');
+    expect(computeOverallBudget(10000, 12000, 20, 30)).toMatchObject({ left: -2000, status: 'over', perDay: 0 });
+  });
+
+  it('has no days left for a month that has ended', () => {
+    expect(computeOverallBudget(10000, 4000, null, 30)).toMatchObject({ daysLeft: 0, perDay: 0, left: 6000 });
+  });
+
+  it('gives the whole remainder on the last day of the month', () => {
+    expect(computeOverallBudget(10000, 9000, 30, 30)).toMatchObject({ daysLeft: 1, perDay: 1000 });
   });
 });

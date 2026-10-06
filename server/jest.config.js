@@ -14,7 +14,9 @@ module.exports = {
   // of a test run. forceExit is the standard fix rather than adding
   // teardown plumbing to close a pool that's supposed to stay open.
   forceExit: true,
-  collectCoverageFrom: ['src/routes/**/*.ts', 'src/middleware/**/*.ts', 'src/lib/**/*.ts'],
+  // jobs/ counts too (the nightly digest and retention); its run-*.ts files are
+  // thin CLI wrappers around runIssueDigest/analyzeIssues, exercised by hand.
+  collectCoverageFrom: ['src/routes/**/*.ts', 'src/middleware/**/*.ts', 'src/lib/**/*.ts', 'src/jobs/**/*.ts', '!src/jobs/run-*.ts'],
   coverageThreshold: {
     global: {
       branches: 80,

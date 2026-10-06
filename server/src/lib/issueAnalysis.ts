@@ -285,7 +285,7 @@ export const analyzeIssues = (issues: IssueRecord[], now: Date = new Date()): Is
   };
 };
 
-// ---------- Rule-based fix suggestions (used when no Claude API key is set, or the call fails) ----------
+// ---------- Rule-based fix suggestions (the digest's only kind — computed on the server) ----------
 
 // Server-side code behind each screen — where data/perf bugs usually live.
 const SERVER_FILES: Record<string, string[]> = {

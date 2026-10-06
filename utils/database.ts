@@ -10,6 +10,7 @@
 // (same names, same param order minus the userId the server now derives
 // from the JWT) so screen call sites needed minimal changes.
 
+import type { FeatureKey } from '../constants/features';
 import { api } from './api';
 import {
   TxnType,
@@ -25,6 +26,12 @@ import {
   Account,
   AccountType,
   BudgetStatus,
+  OverallBudget,
+  FreeMoneyDayInfo,
+  Person,
+  PeopleSummary,
+  LedgerEntry,
+  LedgerKind,
 } from './types';
 import { Category, CategoryType } from '../constants/categories';
 
@@ -54,6 +61,44 @@ export const addTransaction = async (
 export const addTransactionsBatch = async (entries: Omit<Transaction, 'id' | 'created_at' | 'month' | 'year'>[]): Promise<Transaction[]> => {
   const { data } = await api.post('/transactions/batch', {
     entries: entries.map((t) => ({ amount: t.amount, type: t.type, category_key: t.category, subcategory: t.subcategory, note: t.note, date: t.date })),
+  });
+  return data;
+};
+
+/** One payment shared across categories: saves a linked entry per line, all or nothing. The lines must add up to `total`. */
+export const addSplitTransaction = async (input: {
+  type: TxnType;
+  date: string;
+  total: number;
+  note?: string | null;
+  lines: { category: string; amount: number }[];
+}): Promise<{ splitGroup: string; entries: Transaction[] }> => {
+  const { data } = await api.post('/transactions/split', {
+    type: input.type,
+    date: input.date,
+    total: input.total,
+    note: input.note,
+    lines: input.lines.map((l) => ({ category_key: l.category, amount: l.amount })),
+  });
+  return data;
+};
+
+/** A bill you paid for several people: your share becomes the one spending entry, each friend's share what they owe you. */
+export const addSplitWithPeople = async (input: {
+  date: string;
+  total: number;
+  category: string;
+  note?: string | null;
+  method: 'equal' | 'custom';
+  people: { personId: number; amount?: number }[];
+}): Promise<{ transaction: Transaction | null; myShare: number; shares: { personId: number; name: string; amount: number }[] }> => {
+  const { data } = await api.post('/transactions/split-people', {
+    date: input.date,
+    total: input.total,
+    category_key: input.category,
+    note: input.note,
+    method: input.method,
+    people: input.people.map((p) => ({ person_id: p.personId, amount: p.amount })),
   });
   return data;
 };
@@ -133,6 +178,11 @@ export const getCategoryBreakdownForRange = async (
 
 export const getMonthlySeriesForRange = async (startMonth: number, startYear: number, endMonth: number, endYear: number) => {
   const { data } = await api.get('/reports/monthly-series', { params: { startMonth, startYear, endMonth, endYear } });
+  return data;
+};
+
+export const getFreeMoneyDay = async (): Promise<FreeMoneyDayInfo> => {
+  const { data } = await api.get('/reports/free-money-day');
   return data;
 };
 
@@ -401,6 +451,21 @@ export const deleteBudget = async (categoryKey: string): Promise<void> => {
   await api.delete(`/budgets/${categoryKey}`);
 };
 
+// ---------- Overall monthly budget (one number; category limits sit inside it) ----------
+
+export const getOverallBudget = async (month?: number, year?: number): Promise<OverallBudget> => {
+  const { data } = await api.get('/budgets/overall', { params: { month, year } });
+  return data;
+};
+
+export const setOverallBudget = async (amount: number, includeCommitments: boolean): Promise<void> => {
+  await api.put('/budgets/overall', { amount, include_commitments: includeCommitments });
+};
+
+export const clearOverallBudget = async (): Promise<void> => {
+  await api.delete('/budgets/overall');
+};
+
 // ---------- Your account (password reset, verification, export) ----------
 // Sign-in/out, change password and account deletion live in AuthContext
 // because they change the session; these are the stand-alone calls.
@@ -461,5 +526,124 @@ export interface SystemMetrics {
 
 export const getSystemMetrics = async (): Promise<SystemMetrics> => {
   const { data } = await api.get('/system/metrics');
+  return data;
+};
+
+// ---------- People (lending, borrowing, shared bills) ----------
+
+export const getPeople = async (): Promise<PeopleSummary> => {
+  const { data } = await api.get('/people');
+  return data;
+};
+
+export const addPerson = async (name: string): Promise<Person> => {
+  const { data } = await api.post('/people', { name });
+  return data;
+};
+
+export const getPerson = async (id: number): Promise<{ person: Person; entries: LedgerEntry[] }> => {
+  const { data } = await api.get(`/people/${id}`);
+  return data;
+};
+
+/** `due_date: null` clears the pay-back-by date. */
+export const updatePerson = async (id: number, patch: { name?: string; due_date?: string | null }): Promise<Person> => {
+  const { data } = await api.patch(`/people/${id}`, patch);
+  return data;
+};
+
+export const deletePerson = async (id: number): Promise<void> => {
+  await api.delete(`/people/${id}`);
+};
+
+/** A write-off clears the whole balance, so it takes no amount. */
+export const addPersonEntry = async (
+  id: number,
+  entry: { kind: LedgerKind; amount?: number; date?: string; note?: string | null; due_date?: string | null }
+): Promise<{ entry: LedgerEntry; person: Person }> => {
+  const { data } = await api.post(`/people/${id}/entries`, entry);
+  return data;
+};
+
+export const deletePersonEntry = async (id: number, entryId: number): Promise<void> => {
+  await api.delete(`/people/${id}/entries/${entryId}`);
+};
+
+// ============================================================
+// Optional features — staff switch Goals/Loans/Investments per user; the
+// user can only see theirs and ask for one (server routes/features.ts).
+// ============================================================
+
+export interface MyFeature {
+  key: FeatureKey;
+  label: string;
+  description: string;
+  on: boolean;
+  /** Asked for and waiting on staff. */
+  requested: boolean;
+}
+
+export const getMyFeatures = async (): Promise<MyFeature[]> => {
+  const { data } = await api.get('/features');
+  return data;
+};
+
+export const requestFeature = async (key: FeatureKey): Promise<MyFeature> => {
+  const { data } = await api.post(`/features/${key}/request`);
+  return data;
+};
+
+// ---------- Feature access, staff side (server routes/adminFeatures.ts) ----------
+
+export interface UserFeatureAccess {
+  key: FeatureKey;
+  label: string;
+  on: boolean;
+  source: 'default' | 'existing_data' | 'admin' | 'request' | null;
+  changedByEmail: string | null;
+  updatedAt: string | null;
+  /** The user asked for it and is waiting. */
+  requestedAt: string | null;
+}
+
+export type SignupFeatureDefaults = Record<FeatureKey, boolean>;
+
+export interface FeatureOverview {
+  defaults: SignupFeatureDefaults;
+  totalUsers: number;
+  features: { key: FeatureKey; label: string; usersOn: number }[];
+  requests: { userId: number; name: string; email: string; feature: FeatureKey; requestedAt: string }[];
+}
+
+export interface FeatureUser {
+  id: number;
+  name: string;
+  email: string;
+  source: string;
+  updatedAt: string;
+}
+
+export const getFeatureOverview = async (): Promise<FeatureOverview> => {
+  const { data } = await api.get('/admin/features');
+  return data;
+};
+
+export const saveSignupFeatureDefaults = async (defaults: SignupFeatureDefaults): Promise<SignupFeatureDefaults> => {
+  const { data } = await api.put('/admin/features/defaults', defaults);
+  return data;
+};
+
+export const getFeatureUsers = async (key: FeatureKey): Promise<{ items: FeatureUser[]; total: number }> => {
+  const res = await api.get(`/admin/features/${key}/users`, { params: { limit: 100 } });
+  return { items: res.data, total: Number(res.headers['x-total-count'] ?? res.data.length) };
+};
+
+export const getUserFeatureAccess = async (userId: number): Promise<UserFeatureAccess[]> => {
+  const { data } = await api.get(`/admin/users/${userId}/features`);
+  return data;
+};
+
+export const setUserFeature = async (userId: number, key: FeatureKey, on: boolean): Promise<UserFeatureAccess> => {
+  const { data } = await api.put(`/admin/users/${userId}/features/${key}`, { on });
   return data;
 };

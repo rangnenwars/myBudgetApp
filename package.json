@@ -67,10 +67,24 @@
       "/server/"
     ],
     "collectCoverageFrom": [
-      "utils/calculations.ts"
+      "utils/calculations.ts",
+      "utils/dates.ts",
+      "utils/issues.ts"
     ],
     "coverageThreshold": {
       "./utils/calculations.ts": {
+        "branches": 85,
+        "functions": 100,
+        "lines": 90,
+        "statements": 90
+      },
+      "./utils/dates.ts": {
+        "branches": 85,
+        "functions": 100,
+        "lines": 90,
+        "statements": 90
+      },
+      "./utils/issues.ts": {
         "branches": 85,
         "functions": 100,
         "lines": 90,

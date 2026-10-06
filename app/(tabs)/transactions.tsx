@@ -7,6 +7,7 @@ import {
   Pressable,
   Modal,
   Switch,
+  ScrollView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -197,24 +198,28 @@ export default function TransactionsScreen() {
       if (editingId != null) {
         // Editing works on the amount exactly as stored — period only
         // applies when logging a new bill, not when fixing an existing row.
+        // Making it repeat quarterly/yearly stores the monthly equivalent, as when adding.
+        const repeatSpread = repeat && frequency !== 'monthly';
         await updateTransaction(editingId, {
-          amount: value,
+          amount: repeatSpread ? monthlyEquivalent(value, frequency as EntryPeriod) : value,
           type,
-          category,
-          note: note.trim() || null,
+          category: category!,
+          note: note.trim() || (repeatSpread ? `${frequency} entry — original ${fmt(value)}` : null),
           date,
         });
         if (repeat) await repeatTransactionMonthly(editingId, frequency);
       } else {
-        // A repeating entry is logged at its full amount and posted again each
-        // period; the monthly-equivalent split only applies to one-off logging.
-        const spread = !repeat && period !== 'once' && period !== 'monthly';
+        // Quarterly/yearly amounts are stored as their monthly equivalent (÷3 / ÷12) with the
+        // original in the note — whether logged once or set to repeat (the rule copies this
+        // amount, so every automatic posting is the monthly equivalent too).
+        const cadence: TxnPeriod = repeat ? frequency : period;
+        const spread = cadence !== 'once' && cadence !== 'monthly';
         await addTransaction({
-          amount: spread ? monthlyEquivalent(value, period as EntryPeriod) : value,
+          amount: spread ? monthlyEquivalent(value, cadence as EntryPeriod) : value,
           type,
-          category,
+          category: category!,
           subcategory: null,
-          note: note.trim() || (spread ? `${period} entry — original ${fmt(value)}` : null),
+          note: note.trim() || (spread ? `${cadence} entry — original ${fmt(value)}` : null),
           date,
           ...monthYearOf(date),
           repeat_frequency: repeat ? frequency : undefined,
@@ -329,7 +334,7 @@ export default function TransactionsScreen() {
           style={styles.modalBackdrop}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={styles.modalSheet}>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalSheet} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editingId != null ? 'Edit transaction' : 'Add transaction'}</Text>
               <Pressable onPress={() => { setModalOpen(false); resetForm(); }}>
@@ -425,12 +430,18 @@ export default function TransactionsScreen() {
               </View>
             )}
 
+            {repeat && frequency !== 'monthly' && (
+              <Text style={styles.hint}>
+                Logged as the monthly equivalent ({frequency === 'quarterly' ? '÷3' : '÷12'}) each time — the original amount is kept in the note.
+              </Text>
+            )}
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Save transaction'}</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -504,6 +515,7 @@ const styles = StyleSheet.create({
   rowAmount: { fontSize: 14, fontWeight: '700' },
   rowDeleteBtn: { marginLeft: SPACING.sm, padding: 4 },
   modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
+  modalScroll: { maxHeight: '92%' },
   modalSheet: {
     backgroundColor: COLORS.bg,
     borderTopLeftRadius: RADIUS.lg,

@@ -18,7 +18,6 @@
     "issues:analyze": "tsx src/jobs/run-issue-analysis.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.131.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

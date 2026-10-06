@@ -126,3 +126,29 @@ describe('scheduler timing', () => {
     expect(parseDigestTime(undefined)).toEqual({ hour: 2, minute: 0 });
   });
 });
+
+describe('startNightlyJobs', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  it('schedules the next run at ISSUE_DIGEST_TIME and can be cancelled', () => {
+    jest.useFakeTimers({ now: new Date(2026, 9, 3, 1, 0, 0) });
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    const saved = process.env.ISSUE_DIGEST_TIME;
+    process.env.ISSUE_DIGEST_TIME = '01:30';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { startNightlyJobs } = require('../jobs/scheduler');
+      const stop = startNightlyJobs();
+      expect(jest.getTimerCount()).toBe(1);
+      expect(String((console.log as jest.Mock).mock.calls[0][0])).toMatch(/next run at .*01:30:00/);
+      stop();
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      if (saved === undefined) delete process.env.ISSUE_DIGEST_TIME;
+      else process.env.ISSUE_DIGEST_TIME = saved;
+    }
+  });
+});

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createApp } from './app';
 import { pool } from './db/client';
-import { startIssueDigestSchedule } from './jobs/scheduler';
+import { startNightlyJobs } from './jobs/scheduler';
 
 for (const name of ['DATABASE_URL', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET']) {
   if (!process.env[name]) {
@@ -46,4 +46,4 @@ const shutdown = (signal: string) => {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-startIssueDigestSchedule();
+startNightlyJobs();

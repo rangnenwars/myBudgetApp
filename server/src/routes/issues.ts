@@ -140,23 +140,23 @@ router.get(
   })
 );
 
-/** The reporter can fetch their own screenshot; staff can fetch any. */
+/**
+ * The reporter can fetch their own screenshot; of staff, only admins can fetch
+ * others'. A screenshot of this app shows the user's own balances, and support
+ * accounts are deliberately kept away from users' financial data (same rule as
+ * /admin/users), so support triages from the report text alone.
+ */
 router.get(
   '/:id/screenshot',
   asyncHandler(async (req, res) => {
     const id = idParam(req);
-    if (!Number.isInteger(id)) throw notFound('Issue report not found.');
     const [row] = await db
       .select({ userId: issueReports.userId, screenshot: issueReports.screenshot, mimeType: issueReports.screenshotMimeType })
       .from(issueReports)
       .where(eq(issueReports.id, id));
-    if (!row) throw notFound('Issue report not found.');
-
-    if (row.userId !== req.userId) {
-      const [me] = await db.select({ role: users.role, isActive: users.isActive }).from(users).where(eq(users.id, req.userId!));
-      // 404 rather than 403 — don't confirm someone else's report exists.
-      if (!me?.isActive || (me.role !== 'admin' && me.role !== 'support')) throw notFound('Issue report not found.');
-    }
+    // 404 rather than 403 for someone else's report — don't confirm it exists.
+    // requireAuth loaded req.role fresh from the database on this request.
+    if (!row || (row.userId !== req.userId && req.role !== 'admin')) throw notFound('Issue report not found.');
     if (!row.screenshot || !row.mimeType) throw notFound('This report has no screenshot.');
 
     res.set({
@@ -193,7 +193,6 @@ router.patch(
   requireStaff,
   asyncHandler(async (req, res) => {
     const id = idParam(req);
-    if (!Number.isInteger(id)) throw notFound('Issue report not found.');
     const body = updateSchema.parse(req.body);
     const [row] = await db
       .update(issueReports)

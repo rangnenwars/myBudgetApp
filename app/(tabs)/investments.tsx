@@ -17,12 +17,13 @@ import { useAuth } from '../../context/AuthContext';
 import { addInvestment, updateInvestment, deleteInvestment, getInvestments, Investment } from '../../utils/database';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
+import { withFeature } from '../../components/FeatureGate';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const INVESTMENT_TYPES = ['Mutual fund', 'Fixed deposit', 'Bonds', 'Gold', 'Chit fund (BC)', 'Other'];
 
-export default function InvestmentsScreen() {
+function InvestmentsScreen() {
   const { user } = useAuth();
   const [items, setItems] = useState<Investment[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -247,3 +248,6 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.sm },
   saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
 });
+
+// Staff switch this feature on per user; without it the screen is replaced by a "request access" page.
+export default withFeature('investments', InvestmentsScreen);

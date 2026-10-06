@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/theme';
 
 export default function TabsLayout() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, hasFeature } = useAuth();
 
   if (isLoading) return null;
   if (!user) return <Redirect href="/login" />;
@@ -39,6 +39,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="loans"
         options={{
+          // Hidden until staff switch the feature on for this user; the route still exists for old links.
+          href: hasFeature('loans') ? undefined : null,
           title: 'Loans',
           tabBarIcon: ({ color, size }) => <Ionicons name="card" color={color} size={size} />,
         }}
@@ -46,6 +48,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="investments"
         options={{
+          // Hidden until staff switch the feature on for this user; the route still exists for old links.
+          href: hasFeature('investments') ? undefined : null,
           title: 'Investments',
           tabBarIcon: ({ color, size }) => <Ionicons name="trending-up" color={color} size={size} />,
         }}
@@ -53,6 +57,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="goals"
         options={{
+          // Hidden until staff switch the feature on for this user; the route still exists for old links.
+          href: hasFeature('goals') ? undefined : null,
           title: 'Goals',
           tabBarIcon: ({ color, size }) => <Ionicons name="flag" color={color} size={size} />,
         }}

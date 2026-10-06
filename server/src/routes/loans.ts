@@ -6,6 +6,7 @@ import { loans, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { isoDate, money, idParam } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
+import { requireFeature } from '../middleware/requireFeature';
 import { badRequest, notFound } from '../lib/errors';
 import { recomputeBudgetClass } from '../lib/budgetClass';
 import { computePartPayment } from '../calculations';
@@ -13,7 +14,7 @@ import { loanEmiMiddleware, monthStart } from '../lib/loanEmiExpenses';
 import { localToday } from '../lib/clock';
 
 const router = Router();
-router.use(requireAuth, loanEmiMiddleware);
+router.use(requireAuth, requireFeature('loans'), loanEmiMiddleware);
 
 const payEmiSchema = z.object({
   date: isoDate(),

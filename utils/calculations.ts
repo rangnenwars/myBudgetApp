@@ -299,6 +299,38 @@ export const bucketForGroup = (group: string): CategoryBucket => {
   return 'expense';
 };
 
+/** Whether spending in a category counts toward the overall monthly budget: day-to-day spending always, EMIs/cards/investments only when opted in. */
+export const countsTowardBudget = (group: string, includeCommitments: boolean): boolean =>
+  includeCommitments || bucketForGroup(group) === 'expense';
+
+export interface OverallBudgetStatus {
+  left: number;
+  ratio: number;
+  status: 'ok' | 'warning' | 'over';
+  /** Days remaining in the month including today; 0 for a past month. */
+  daysLeft: number;
+  /** What can still be spent each remaining day; 0 once nothing is left. */
+  perDay: number;
+}
+
+/**
+ * Progress against one overall monthly budget. No carry-over: every month
+ * starts from the full amount. `day` is today's day of the month, or null
+ * when looking at a month that has already ended.
+ */
+export const computeOverallBudget = (amount: number, spent: number, day: number | null, daysInMonth: number): OverallBudgetStatus => {
+  const left = amount - spent;
+  const ratio = amount > 0 ? spent / amount : 0;
+  const daysLeft = day == null ? 0 : Math.max(daysInMonth - day + 1, 0);
+  return {
+    left,
+    ratio: Math.round(ratio * 1000) / 1000,
+    status: ratio >= 1 ? 'over' : ratio >= 0.8 ? 'warning' : 'ok',
+    daysLeft,
+    perDay: left > 0 && daysLeft > 0 ? Math.floor(left / daysLeft) : 0,
+  };
+};
+
 /** Converts a quarterly/yearly bill into its monthly-equivalent budget impact. Monthly passes through unchanged. */
 export const monthlyEquivalent = (amount: number, period: EntryPeriod): number => {
   if (period === 'quarterly') return amount / 3;
@@ -325,3 +357,42 @@ export const transactionsToCsvRows = (transactions: Transaction[]): string[] =>
 
 /** Header + one row per transaction, in the given order (caller sorts beforehand). */
 export const transactionsToCsv = (transactions: Transaction[]): string => [CSV_HEADER, ...transactionsToCsvRows(transactions)].join('\n');
+
+// ---------- Free-money day ----------
+
+export interface FreeMoneyDay {
+  /** Fixed commitments as a fraction of monthly income (0.61 = 61%). */
+  share: number;
+  /** Day of the month by which the commitments are covered; 0 when nothing is committed, null without income. */
+  day: number | null;
+  /** Days left in the month that are yours to spend. */
+  daysFree: number;
+  status: 'ok' | 'over' | 'no_income';
+}
+
+/**
+ * The day of the month by which a month's income has paid for everything fixed
+ * (loan EMIs and repeating bills), assuming income is spread evenly over the
+ * month. Like "tax freedom day": every day after it is free to spend.
+ */
+export const computeFreeMoneyDay = (monthlyIncome: number, monthlyCommitted: number, daysInMonth: number): FreeMoneyDay => {
+  if (!(monthlyIncome > 0)) return { share: 0, day: null, daysFree: 0, status: 'no_income' };
+  const committed = Math.max(0, monthlyCommitted);
+  const share = committed / monthlyIncome;
+  if (share >= 1) return { share, day: daysInMonth, daysFree: 0, status: 'over' };
+  const day = Math.max(0, Math.min(daysInMonth, Math.ceil(share * daysInMonth - 1e-9)));
+  return { share, day, daysFree: daysInMonth - day, status: 'ok' };
+};
+
+// ---------- Splitting a bill with people ----------
+
+/**
+ * A bill the user paid, shared equally with `friends` other people (and the
+ * user): each friend's share is worked out in paise, and any leftover paise
+ * stay with the user, so the shares always add up to the total.
+ */
+export const splitEqually = (total: number, friends: number): { friendShare: number; myShare: number } => {
+  const cents = Math.round(total * 100);
+  const base = friends > 0 ? Math.floor(cents / (friends + 1)) : 0;
+  return { friendShare: base / 100, myShare: (cents - base * friends) / 100 };
+};

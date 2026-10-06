@@ -21,13 +21,14 @@ import { simulateDebtPayoff, computePartPayment, DebtStrategy, splitEmi, monthsT
 import { confirmAction, showAlert } from '../../utils/alert';
 import { todayLocalIso, isValidIsoDate } from '../../utils/dates';
 import { apiErrorMessage } from '../../utils/api';
+import { withFeature } from '../../components/FeatureGate';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const LOAN_TYPES = ['home', 'car', 'personal', 'education', 'gold', 'other'] as const;
 const LOAN_TYPE_LABEL: Record<string, string> = { home: 'Home', car: 'Car', personal: 'Personal', education: 'Education', gold: 'Gold', other: 'Other' };
 
-export default function LoansScreen() {
+function LoansScreen() {
   const { user } = useAuth();
   const [items, setItems] = useState<Loan[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -527,3 +528,6 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.sm },
   saveBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },
 });
+
+// Staff switch this feature on per user; without it the screen is replaced by a "request access" page.
+export default withFeature('loans', LoansScreen);
