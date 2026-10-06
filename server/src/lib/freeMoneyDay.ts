@@ -1,6 +1,6 @@
-import { and, desc, eq, gt, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lt } from 'drizzle-orm';
 import { db } from '../db/client';
-import { categories, freeMoneySnapshots, loans, recurringTransactions } from '../db/schema';
+import { categories, freeMoneySnapshots, loans, recurringTransactions, transactions } from '../db/schema';
 import { addMonths, localToday } from './clock';
 import { getTotalsInRange } from './queries';
 import { hasFeature } from './features';
@@ -23,24 +23,37 @@ export const weekStartOf = (iso: string): string => {
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 };
 
+export const INCOME_MONTHS = 3;
+
 /**
  * Income used for the calculation, from what the user has told the app:
- * 1. their repeating income entries, if any;
- * 2. otherwise the average of the most recent months (up to 3, from the last 6
- *    full months) in which they logged income;
+ * 1. the average of the last 3 full months, counting only months since the
+ *    user's first entry — a tracked month with no income counts as ₹0, so an
+ *    irregular earner isn't shown a month's income they didn't get. Repeating
+ *    income is already in these months once it has posted;
+ * 2. otherwise (no full month tracked yet, or nothing earned in it) their
+ *    repeating income entries;
  * 3. otherwise what they have logged this month so far, so a brand-new account
  *    with a salary entered today still gets an answer.
  */
 const monthlyIncome = async (userId: number, repeating: number, today: { year: number; month: number }) => {
-  if (repeating > 0) return { amount: repeating, source: 'repeating' as const };
-
-  const start = addMonths(today.year, today.month, -6);
+  const [first] = await db
+    .select({ year: transactions.year, month: transactions.month })
+    .from(transactions)
+    .where(eq(transactions.userId, userId))
+    .orderBy(asc(transactions.year), asc(transactions.month))
+    .limit(1);
+  const firstIndex = first ? first.year * 12 + first.month : Infinity;
+  const start = addMonths(today.year, today.month, -INCOME_MONTHS);
   const end = addMonths(today.year, today.month, -1);
-  const rows = await getTotalsInRange(userId, start.month, start.year, end.month, end.year);
-  const byMonth = new Map<number, number>();
-  for (const r of rows) if (r.type === 'income') byMonth.set(r.year * 12 + r.month, (byMonth.get(r.year * 12 + r.month) ?? 0) + r.amount);
-  const recent = [...byMonth.entries()].sort((a, b) => b[0] - a[0]).slice(0, 3);
-  if (recent.length > 0) return { amount: recent.reduce((s, [, v]) => s + v, 0) / recent.length, source: 'average' as const };
+  const tracked = Math.min(INCOME_MONTHS, Math.max(0, end.year * 12 + end.month - Math.max(firstIndex, start.year * 12 + start.month) + 1));
+  if (tracked > 0) {
+    const rows = await getTotalsInRange(userId, start.month, start.year, end.month, end.year);
+    const earned = rows.filter((r) => r.type === 'income').reduce((s, r) => s + r.amount, 0);
+    if (earned > 0) return { amount: earned / tracked, source: 'average' as const };
+  }
+
+  if (repeating > 0) return { amount: repeating, source: 'repeating' as const };
 
   const thisMonth = await getTotalsInRange(userId, today.month, today.year, today.month, today.year);
   const soFar = thisMonth.filter((r) => r.type === 'income').reduce((s, r) => s + r.amount, 0);
@@ -56,14 +69,16 @@ export const getFreeMoneyDay = async (userId: number) => {
     .from(recurringTransactions)
     .innerJoin(categories, eq(categories.key, recurringTransactions.category))
     .where(eq(recurringTransactions.userId, userId));
-  // Loan EMIs only count while Loans is switched on for the user; the screen
-  // shouldn't list loans they can't open.
-  const activeLoans = (await hasFeature(userId, 'loans'))
-    ? await db
-        .select()
-        .from(loans)
-        .where(and(eq(loans.userId, userId), eq(loans.is_active, true), gt(loans.outstanding, 0)))
-    : [];
+  const loansOn = await hasFeature(userId, 'loans');
+  const userLoans = await db
+    .select()
+    .from(loans)
+    .where(and(eq(loans.userId, userId), eq(loans.is_active, true), gt(loans.outstanding, 0)));
+  // With Loans switched off, EMIs that are still posted as expenses every
+  // month (lib/loanEmiExpenses.ts) are still paid, so they still count — but
+  // unnamed, and not offered for a part payment, since the user can't open them.
+  const activeLoans = loansOn ? userLoans : [];
+  const countedLoans = loansOn ? userLoans : userLoans.filter((l) => l.counts_as_expense);
 
   const repeatingIncome = rules
     .filter((r) => r.rule.type === 'income')
@@ -71,7 +86,7 @@ export const getFreeMoneyDay = async (userId: number) => {
   const income = await monthlyIncome(userId, repeatingIncome, today);
 
   const items: Commitment[] = [
-    ...activeLoans.map((l) => ({ kind: 'loan' as const, label: l.name, amount: Math.min(l.emi, l.outstanding) })),
+    ...countedLoans.map((l) => ({ kind: 'loan' as const, label: loansOn ? l.name : 'Loan EMI', amount: Math.min(l.emi, l.outstanding) })),
     ...rules
       .filter((r) => r.rule.type === 'expense')
       .map((r) => ({ kind: 'repeating' as const, label: r.rule.note?.trim() || r.label, amount: monthlyEquivalent(r.rule.amount, r.rule.frequency) })),

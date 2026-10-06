@@ -198,28 +198,27 @@ export default function TransactionsScreen() {
       if (editingId != null) {
         // Editing works on the amount exactly as stored — period only
         // applies when logging a new bill, not when fixing an existing row.
-        // Making it repeat quarterly/yearly stores the monthly equivalent, as when adding.
-        const repeatSpread = repeat && frequency !== 'monthly';
+        // Making it repeat keeps that amount: the rule posts it in full every period.
         await updateTransaction(editingId, {
-          amount: repeatSpread ? monthlyEquivalent(value, frequency as EntryPeriod) : value,
+          amount: value,
           type,
           category: category!,
-          note: note.trim() || (repeatSpread ? `${frequency} entry — original ${fmt(value)}` : null),
+          note: note.trim() || null,
           date,
         });
         if (repeat) await repeatTransactionMonthly(editingId, frequency);
       } else {
-        // Quarterly/yearly amounts are stored as their monthly equivalent (÷3 / ÷12) with the
-        // original in the note — whether logged once or set to repeat (the rule copies this
-        // amount, so every automatic posting is the monthly equivalent too).
-        const cadence: TxnPeriod = repeat ? frequency : period;
-        const spread = cadence !== 'once' && cadence !== 'monthly';
+        // A one-off Quarterly/Yearly bill is stored as its monthly equivalent (÷3 / ÷12) with the
+        // original in the note. A repeating one is stored in full: the rule posts the whole bill
+        // once every quarter/year (lib/recurringTransactions.ts), so dividing it would post a third
+        // or a twelfth of the real amount.
+        const spread = !repeat && period !== 'once' && period !== 'monthly';
         await addTransaction({
-          amount: spread ? monthlyEquivalent(value, cadence as EntryPeriod) : value,
+          amount: spread ? monthlyEquivalent(value, period as EntryPeriod) : value,
           type,
           category: category!,
           subcategory: null,
-          note: note.trim() || (spread ? `${cadence} entry — original ${fmt(value)}` : null),
+          note: note.trim() || (spread ? `${period} entry — original ${fmt(value)}` : null),
           date,
           ...monthYearOf(date),
           repeat_frequency: repeat ? frequency : undefined,
@@ -432,7 +431,7 @@ export default function TransactionsScreen() {
 
             {repeat && frequency !== 'monthly' && (
               <Text style={styles.hint}>
-                Logged as the monthly equivalent ({frequency === 'quarterly' ? '÷3' : '÷12'}) each time — the original amount is kept in the note.
+                The full amount is added once every {frequency === 'quarterly' ? '3 months' : 'year'}, on this day of the month.
               </Text>
             )}
 

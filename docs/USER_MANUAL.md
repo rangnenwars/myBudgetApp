@@ -57,7 +57,8 @@ Icons at the top of the Dashboard: **bug** = report a problem · **gear** = sett
 
 Your loan EMIs and repeating bills are spoken for every month. The app adds them up, compares them with your monthly income, and shows the date by which your income has covered them all. If 61% of your income is committed, that date is the 19th of a 31-day month, and the last 12 days are free to spend.
 
-* **Income** is your repeating income entries. If you have none, it is the average of your recent months, and if you have only just started, whatever income you have logged this month so far. One income entry is enough to see a result.
+* **Income** is the average of your last three full months since you started using the app. A month with no income counts as zero, so an irregular income isn't overstated. If you have only just started, it is your repeating income entries, or else whatever income you have logged this month so far. One income entry is enough to see a result.
+* **EMIs** count even if Loans has been switched off for you, as long as they are still being added to your expenses.
 * The card compares with last week ("2 days earlier") once it has a reading from the week before.
 * Tap the card for each commitment and its share. Under **What if you prepay a loan**, type an amount to see how the loan's EMI and your free-money day would change. This is a preview only; record the real part payment under Loans.
 * "No free days" means your fixed bills and EMIs are as much as your income. "Not enough to work out yet" means no income is recorded.
@@ -74,8 +75,8 @@ Tap the orange **+** on the dashboard: pick Expense or Income, type the amount o
 
 * **Category** — tap the field for the list (Household, Food & dining, Transport, Health, Family, Loans & EMIs, Credit cards, Shopping, Property, Investments & savings, Income…). Use the search box to find one fast. Can't find yours? Add your own **custom category** from the same list (you can rename or delete your own later; a category that still has transactions can't be deleted).
 * **Date** — today by default. Choose *Yesterday* or any past date. Future dates aren't allowed.
-* **How often** — *Once* records the exact amount on that date. *Monthly / Quarterly / Yearly* converts the amount to its monthly equivalent (a ₹12,000 yearly bill is recorded as ₹1,000/month).
-* **Repeat** — switch it on for salary, rent, insurance or any fixed amount. The same entry is added automatically every month, quarter or year on the same day (29th–31st use the month's last day). To change the amount, the frequency or the day — or to stop it — tap the **Repeating** button.
+* **How often** — *Once* records the exact amount on that date. *Monthly / Quarterly / Yearly* converts the amount to its monthly equivalent (a ₹12,000 yearly bill is recorded as ₹1,000/month). This choice is hidden when **Repeat** is on.
+* **Repeat** — switch it on for salary, rent, insurance or any fixed amount. The same entry is added automatically every month, quarter or year on the same day (29th–31st use the month's last day). A quarterly or yearly repeat adds the **full** amount each time. A **Loan EMI** can't be set to repeat — add the loan under Loans and its EMI is added every month for you. To change the amount, the frequency or the day — or to stop it — tap the **Repeating** button.
 * **Edit** — tap a row, change it, save. **Delete** — the trash icon (you'll be asked to confirm).
 * **Find things** — search by note, category or amount; filter **All / Expenses / Income**. The list loads 50 at a time as you scroll.
 

@@ -38,7 +38,8 @@ export default function FreeMoneyDayScreen() {
   const preview = useMemo(() => {
     if (!info || info.status === 'no_income') return null;
     const loan = info.loans.find((l) => l.id === loanId);
-    const value = parseFloat(prepay);
+    // Indian grouping ("1,00,000") must not stop parseFloat at the first comma.
+    const value = parseFloat(prepay.replace(/,/g, ''));
     if (!loan || !(value > 0)) return null;
     if (value > loan.outstanding) return { error: `That is more than the ${fmtInr(loan.outstanding)} still owed on this loan.` } as const;
     const after = computePartPayment(loan, value);
@@ -95,7 +96,7 @@ export default function FreeMoneyDayScreen() {
             </View>
           )}
           {info.previous && info.status !== 'no_income' && (
-            <Text style={styles.small}>Last week: {dayLabel(info.year, info.month, info.previous.day || 1)}</Text>
+            <Text style={styles.small}>Last week: {info.previous.day > 0 ? dayLabel(info.year, info.month, info.previous.day) : 'every day free'}</Text>
           )}
         </Card>
 

@@ -32,7 +32,7 @@ describe('mailer', () => {
   });
 
   it('refuses to send when not configured', async () => {
-    await expect(loadMailer().sendMail({ to: 'a@example.com', subject: 's', text: 't' })).rejects.toThrow(/SMTP is not configured/);
+    await expect(loadMailer().sendMail({ to: 'a@example.com', subject: 's', text: 't' })).rejects.toThrow(/Email is not configured/);
     expect(mockCreateTransport).not.toHaveBeenCalled();
   });
 
