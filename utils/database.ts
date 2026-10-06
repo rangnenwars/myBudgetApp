@@ -10,6 +10,7 @@
 // (same names, same param order minus the userId the server now derives
 // from the JWT) so screen call sites needed minimal changes.
 
+import type { FeatureKey } from '../constants/features';
 import { api } from './api';
 import {
   TxnType,
@@ -25,6 +26,7 @@ import {
   Account,
   AccountType,
   BudgetStatus,
+  OverallBudget,
   FreeMoneyDayInfo,
   Person,
   PeopleSummary,
@@ -449,6 +451,21 @@ export const deleteBudget = async (categoryKey: string): Promise<void> => {
   await api.delete(`/budgets/${categoryKey}`);
 };
 
+// ---------- Overall monthly budget (one number; category limits sit inside it) ----------
+
+export const getOverallBudget = async (month?: number, year?: number): Promise<OverallBudget> => {
+  const { data } = await api.get('/budgets/overall', { params: { month, year } });
+  return data;
+};
+
+export const setOverallBudget = async (amount: number, includeCommitments: boolean): Promise<void> => {
+  await api.put('/budgets/overall', { amount, include_commitments: includeCommitments });
+};
+
+export const clearOverallBudget = async (): Promise<void> => {
+  await api.delete('/budgets/overall');
+};
+
 // ---------- Your account (password reset, verification, export) ----------
 // Sign-in/out, change password and account deletion live in AuthContext
 // because they change the session; these are the stand-alone calls.
@@ -550,4 +567,83 @@ export const addPersonEntry = async (
 
 export const deletePersonEntry = async (id: number, entryId: number): Promise<void> => {
   await api.delete(`/people/${id}/entries/${entryId}`);
+};
+
+// ============================================================
+// Optional features — staff switch Goals/Loans/Investments per user; the
+// user can only see theirs and ask for one (server routes/features.ts).
+// ============================================================
+
+export interface MyFeature {
+  key: FeatureKey;
+  label: string;
+  description: string;
+  on: boolean;
+  /** Asked for and waiting on staff. */
+  requested: boolean;
+}
+
+export const getMyFeatures = async (): Promise<MyFeature[]> => {
+  const { data } = await api.get('/features');
+  return data;
+};
+
+export const requestFeature = async (key: FeatureKey): Promise<MyFeature> => {
+  const { data } = await api.post(`/features/${key}/request`);
+  return data;
+};
+
+// ---------- Feature access, staff side (server routes/adminFeatures.ts) ----------
+
+export interface UserFeatureAccess {
+  key: FeatureKey;
+  label: string;
+  on: boolean;
+  source: 'default' | 'existing_data' | 'admin' | 'request' | null;
+  changedByEmail: string | null;
+  updatedAt: string | null;
+  /** The user asked for it and is waiting. */
+  requestedAt: string | null;
+}
+
+export type SignupFeatureDefaults = Record<FeatureKey, boolean>;
+
+export interface FeatureOverview {
+  defaults: SignupFeatureDefaults;
+  totalUsers: number;
+  features: { key: FeatureKey; label: string; usersOn: number }[];
+  requests: { userId: number; name: string; email: string; feature: FeatureKey; requestedAt: string }[];
+}
+
+export interface FeatureUser {
+  id: number;
+  name: string;
+  email: string;
+  source: string;
+  updatedAt: string;
+}
+
+export const getFeatureOverview = async (): Promise<FeatureOverview> => {
+  const { data } = await api.get('/admin/features');
+  return data;
+};
+
+export const saveSignupFeatureDefaults = async (defaults: SignupFeatureDefaults): Promise<SignupFeatureDefaults> => {
+  const { data } = await api.put('/admin/features/defaults', defaults);
+  return data;
+};
+
+export const getFeatureUsers = async (key: FeatureKey): Promise<{ items: FeatureUser[]; total: number }> => {
+  const res = await api.get(`/admin/features/${key}/users`, { params: { limit: 100 } });
+  return { items: res.data, total: Number(res.headers['x-total-count'] ?? res.data.length) };
+};
+
+export const getUserFeatureAccess = async (userId: number): Promise<UserFeatureAccess[]> => {
+  const { data } = await api.get(`/admin/users/${userId}/features`);
+  return data;
+};
+
+export const setUserFeature = async (userId: number, key: FeatureKey, on: boolean): Promise<UserFeatureAccess> => {
+  const { data } = await api.put(`/admin/users/${userId}/features/${key}`, { on });
+  return data;
 };

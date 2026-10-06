@@ -299,6 +299,38 @@ export const bucketForGroup = (group: string): CategoryBucket => {
   return 'expense';
 };
 
+/** Whether spending in a category counts toward the overall monthly budget: day-to-day spending always, EMIs/cards/investments only when opted in. */
+export const countsTowardBudget = (group: string, includeCommitments: boolean): boolean =>
+  includeCommitments || bucketForGroup(group) === 'expense';
+
+export interface OverallBudgetStatus {
+  left: number;
+  ratio: number;
+  status: 'ok' | 'warning' | 'over';
+  /** Days remaining in the month including today; 0 for a past month. */
+  daysLeft: number;
+  /** What can still be spent each remaining day; 0 once nothing is left. */
+  perDay: number;
+}
+
+/**
+ * Progress against one overall monthly budget. No carry-over: every month
+ * starts from the full amount. `day` is today's day of the month, or null
+ * when looking at a month that has already ended.
+ */
+export const computeOverallBudget = (amount: number, spent: number, day: number | null, daysInMonth: number): OverallBudgetStatus => {
+  const left = amount - spent;
+  const ratio = amount > 0 ? spent / amount : 0;
+  const daysLeft = day == null ? 0 : Math.max(daysInMonth - day + 1, 0);
+  return {
+    left,
+    ratio: Math.round(ratio * 1000) / 1000,
+    status: ratio >= 1 ? 'over' : ratio >= 0.8 ? 'warning' : 'ok',
+    daysLeft,
+    perDay: left > 0 && daysLeft > 0 ? Math.floor(left / daysLeft) : 0,
+  };
+};
+
 /** Converts a quarterly/yearly bill into its monthly-equivalent budget impact. Monthly passes through unchanged. */
 export const monthlyEquivalent = (amount: number, period: EntryPeriod): number => {
   if (period === 'quarterly') return amount / 3;

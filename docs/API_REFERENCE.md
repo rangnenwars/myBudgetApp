@@ -10,7 +10,7 @@ Base URL: `http://localhost:4000` locally (`EXPO_PUBLIC_API_URL` on the client).
 
 **Auth.** Send `Authorization: Bearer <accessToken>` on every route marked 🔒. The token comes from `POST /auth/login` or `POST /auth/register`. A route marked 🔒🛡️ additionally requires the caller's account to have `role: 'admin'`. On every 🔒 request the server also re-reads the account (one primary-key lookup): a deleted or deactivated account, or a token issued before the user changed/reset their password or chose "sign out everywhere" (`users.tokens_valid_after`), gets **401** immediately — not when the 15-minute token expires. Deactivation by staff also revokes all refresh tokens.
 
-**Errors.** Every error response is `{ "error": "human-readable message" }`. Common statuses:
+**Errors.** Every error response is `{ "error": "human-readable message" }`, plus a machine-readable `code` where the client needs to branch (today only `FEATURE_NOT_ADDED`). Common statuses:
 
 | Status | Meaning |
 |---|---|
@@ -21,6 +21,8 @@ Base URL: `http://localhost:4000` locally (`EXPO_PUBLIC_API_URL` on the client).
 | 409 | Conflict — duplicate email or mobile number, or a category still referenced by a transaction |
 | 429 | Rate limited — sign-in, sign-up, refresh and email endpoints per IP; password checks (change password, delete account) per account |
 | 500 | Unexpected server error (generic message to the client; the server logs only the error code and message, never the failed query's values) |
+
+**Optional features.** Goals, Loans and Investments are switched on or off per user by staff (`/api/v1/admin/features`, below); everything else is always on. A route marked 🧩 refuses with **403** `{ "error": "Loans isn't on for your account.", "code": "FEATURE_NOT_ADDED" }` while its feature is off. Switching a feature off never deletes data; it also drops out of net worth and the free-money day until it is back on. Loan EMIs keep posting as expenses while Loans is off, because the money is still being paid.
 
 **Money.** All amounts are `NUMERIC` server-side, returned as JS numbers over JSON (never strings, never floats used for the underlying storage).
 
@@ -66,7 +68,7 @@ Body: `{ refreshToken: string }` — or `{}` with the cookie transport, which al
 Errors: 400 no token in the body and no cookie transport header
 
 ### `GET /auth/me` 🔒
-→ **200** `UserProfile`
+→ **200** `UserProfile` plus `features: ('goals'|'loans'|'investments')[]`, the optional features switched on for the caller (also on the `user` returned by register and login)
 Errors: 401 if the account behind the token has since been deleted
 
 ### `PATCH /auth/me/tier` 🔒
@@ -107,7 +109,7 @@ Errors: 400 wrong current password, or new password equals the current one
 → **204** — revokes every refresh token for the account (this device included; clears the web cookie). Each session ends within one access-token lifetime (15 min).
 
 ### `GET /auth/me/export` 🔒
-→ **200** JSON download (`Content-Disposition: attachment; filename="mybudget-export-YYYY-MM-DD.json"`) of everything the account owns: profile, transactions, repeating entries, loans, investments, goals with their contribution history, accounts, budgets, custom categories, net-worth history, free-money-day history (`freeMoneyHistory`) and the user's issue reports (`issueReports` — text and status, each with a `screenshotUrl` pointing at `GET /issues/:id/screenshot` instead of the image bytes). Never includes the password hash or tokens, or the internal analysis/suggestion the nightly digest stored on a report.
+→ **200** JSON download (`Content-Disposition: attachment; filename="mybudget-export-YYYY-MM-DD.json"`) of everything the account owns: profile, transactions, repeating entries, loans, investments, goals with their contribution history, accounts, the monthly budget (`monthlyBudget`), budgets, custom categories, net-worth history, free-money-day history (`freeMoneyHistory`) and the user's issue reports (`issueReports` — text and status, each with a `screenshotUrl` pointing at `GET /issues/:id/screenshot` instead of the image bytes). Never includes the password hash or tokens, or the internal analysis/suggestion the nightly digest stored on a report.
 
 ### `DELETE /auth/me` 🔒
 Body: `{ password }` → **204** — permanently deletes the account and everything it owns (FK cascades), then clears the web cookie.
@@ -168,12 +170,12 @@ Body: `{ entries: [ …1–50 POST bodies, without repeat options… ] }` — al
 → **201** `Transaction[]` · Errors: 400 if any entry is invalid
 
 ### `POST /transactions/split` 🔒
-One payment shared across categories (the **Split across categories** switch). Body: `{ type: 'income'|'expense', date: 'YYYY-MM-DD', total: number, note?: string, lines: { category_key: string, amount: number }[] }` — 2–20 lines, each category at most once, and the lines must add up to `total` exactly (compared in paise, so `0.1 + 0.2` equals `0.3`). Saves one transaction per line, all dated `date` and sharing the optional `note`, in a single insert: if any line is invalid nothing is saved. Every entry carries the same `splitGroup` (a UUID); ordinary transactions have `splitGroup: null`. Recomputes `budgetClass`.
+**Parked: no screen uses this yet** (the category split was taken out of the app to keep the Add transaction form simple; the endpoint and its tests remain for when it returns as its own page). One payment shared across categories. Body: `{ type: 'income'|'expense', date: 'YYYY-MM-DD', total: number, note?: string, lines: { category_key: string, amount: number }[] }` — 2–20 lines, each category at most once, and the lines must add up to `total` exactly (compared in paise, so `0.1 + 0.2` equals `0.3`). Saves one transaction per line, all dated `date` and sharing the optional `note`, in a single insert: if any line is invalid nothing is saved. Every entry carries the same `splitGroup` (a UUID); ordinary transactions have `splitGroup: null`. Recomputes `budgetClass`.
 → **201** `{ splitGroup: string, entries: Transaction[] }`
 Errors: 400 fewer than 2 lines, duplicate category, lines don't add up to the total (message names both figures), a category that doesn't exist / isn't yours / is the wrong type, or an invalid date or amount
 
 ### `POST /transactions/split-people` 🔒
-A bill you paid for several people (the **Split → With people** option). Body: `{ date, total, category_key, note?, method: 'equal'|'custom', people: { person_id, amount? }[] }` — 1–20 people from the caller's own People list, each at most once; `category_key` must be an expense category. With `equal`, `total` is shared between the user and the people (`splitEqually` in `utils/calculations.ts`): each friend's share is worked out in paise and any leftover paise stay with the user. With `custom`, every person needs an `amount` and the user's share is the rest.
+A bill you paid for several people (the **People → Split a bill** page). Body: `{ date, total, category_key, note?, method: 'equal'|'custom', people: { person_id, amount? }[] }` — 1–20 people from the caller's own People list, each at most once; `category_key` must be an expense category. With `equal`, `total` is shared between the user and the people (`splitEqually` in `utils/calculations.ts`): each friend's share is worked out in paise and any leftover paise stay with the user. With `custom`, every person needs an `amount` and the user's share is the rest.
 Only the user's own share is spending: it is saved as one `expense` transaction (note = the given note, or `Split with <names>`; none is created if the friends cover everything). Each friend gets a `split_share` line in their People ledger (positive, "owes you"), linked to that transaction (`transaction_id`, set to null if the transaction is later deleted). All or nothing. Recomputes `budgetClass`.
 → **201** `{ transaction: Transaction|null, myShare: number, shares: { personId, name, amount }[] }`
 Errors: 400 duplicate person, custom shares missing or more than the total, a share under one paisa, invalid category / type / date · 404 a person that isn't the caller's
@@ -220,7 +222,7 @@ A category used by a rule cannot be deleted (409), same as one used by a transac
 
 ---
 
-## Loans — `/api/v1/loans`
+## Loans — `/api/v1/loans` 🧩 `loans`
 
 **Automatic monthly EMI expenses and pay-down.** A loan with `counts_as_expense: true` (the default), a positive `emi` and `outstanding > 0` contributes its EMI to expenses every month **and is paid down automatically**: each posted month splits the EMI into interest (outstanding × `interest_rate` ÷ 12 ÷ 100; zero when no rate is set) and principal, lowers `outstanding` by the principal, and caps the final instalment at balance + interest (`splitEmi` in `utils/calculations.ts`). The very first posting for a loan (or after it is switched back on) records the expense only — the balance just entered is taken as today's. If the EMI doesn't cover the month's interest, no principal is repaid and the balance is held. There is no scheduler: before any request to `/loans`, `/transactions` or `/reports` is served (`loanEmiMiddleware`, `server/src/lib/loanEmiExpenses.ts`), the server posts any missing months as `expense` transactions (category `loan_emi`, note `EMI - <loan name>`, dated the 1st of the month, amount = the loan's `emi` at posting time). A loan never posted before gets only the current month (its history isn't known); after a gap every missed month is posted, oldest first, capped at the latest 24. The loan's `emi_expensed_through` records how far posting has got, so it is idempotent, safe under parallel requests (rows are locked), and a posted transaction the user deletes does not come back. Switching a loan from off to on never back-fills the months it was off. Posted months are ordinary transactions: they appear in the Transactions list, Reports, trends and CSV export. Loans with `counts_as_expense: false` or `outstanding: 0` are skipped, but their `outstanding` still counts as a liability (net worth, Reports → Liabilities).
 
@@ -276,7 +278,22 @@ Body: any non-empty subset of the `POST` body → **200** `Account` · 404 not f
 
 ## Budgets — `/api/v1/budgets`
 
-A monthly spending limit per **expense** category. The EMI and repeating-entry middleware run first, so "spent" includes this month's automatic entries.
+One overall monthly budget, plus optional monthly limits per **expense** category. The EMI and repeating-entry middleware run first, so "spent" includes this month's automatic entries.
+
+### Overall monthly budget
+
+One spending limit per user (e.g. ₹15,000) that applies every month; each month starts fresh (no carry-over). Category limits below are optional parts of it. Spending in Loans & EMIs, Credit cards and Investments & savings categories is left out unless `include_commitments` is on.
+
+#### `GET /budgets/overall?month=&year=` 🔒
+Query optional (defaults to the current month in the app time zone).
+→ **200** `{ month, year, amount, include_commitments, spent, allocated, suggested, left, ratio, status, days_left, per_day }`. `amount` and the progress fields (`left`, `ratio`, `status`, `days_left`, `per_day`) are `null` when no budget is set. `allocated` = sum of category limits that count toward the total. `suggested` = average counted spending over the last 3 full months, rounded to ₹100 (`null` without history). `days_left` counts today; it is 0 for a past month, and `per_day` = `floor(left ÷ days_left)` (0 once nothing is left).
+
+#### `PUT /budgets/overall` 🔒
+Body: `{ amount: number (>0), include_commitments?: boolean (default false) }` — creates or replaces it.
+→ **200** `{ amount, include_commitments }` · 400 bad amount
+
+#### `DELETE /budgets/overall` 🔒
+→ **204** · 404 no monthly budget set. Category limits stay.
 
 ### `GET /budgets?month=&year=` 🔒
 Query optional (defaults to the current UTC month).
@@ -294,7 +311,7 @@ Deleting a custom category also removes its limit (in the same transaction, so n
 
 ---
 
-## Investments — `/api/v1/investments`
+## Investments — `/api/v1/investments` 🧩 `investments`
 
 ### `GET /investments` 🔒
 → **200** `Investment[]`, newest first
@@ -315,7 +332,7 @@ Errors: 404 not found / not yours
 
 ---
 
-## Goals — `/api/v1/goals`
+## Goals — `/api/v1/goals` 🧩 `goals`
 
 ### `GET /goals` 🔒
 → **200** `SavingsGoal[]`, newest first
@@ -365,15 +382,15 @@ Query adds: `type: 'income'|'expense'`.
 ### `GET /reports/export.csv` 🔒
 → **200**, `Content-Type: text/csv`, `Content-Disposition: attachment` — CSV text (`date,type,category,amount,note` header, one row per transaction in range). Header row only if there are no transactions.
 
-### `GET /reports/debt-payoff?strategy=&extraPerMonth=` 🔒
+### `GET /reports/debt-payoff?strategy=&extraPerMonth=` 🔒 🧩 `loans`
 Query: `strategy: 'snowball'|'avalanche'` (default `snowball`), `extraPerMonth: number` (default 0).
 → **200** payoff simulation results, one entry per active loan, ordered by payoff month (see `utils/calculations.ts`'s `simulateDebtPayoff`)
 
-### `GET /reports/goal-eta` 🔒
+### `GET /reports/goal-eta` 🔒 🧩 `goals`
 → **200** `{ avgMonthlySavings: number, goals: { goalId: number, name: string, monthsRemaining: number|null, etaDate: string|null }[] }` — projected from the caller's trailing 3-month average net savings
 
 ### `GET /reports/free-money-day` 🔒
-No query. The day of the month by which this month's income has paid for everything fixed. Income is the sum of the caller's repeating income entries (quarterly ÷ 3, yearly ÷ 12); with none, it is the average of the last three full months that had income. Commitments are every active loan with a balance (its EMI, capped at what is still owed) plus every repeating expense entry (monthly equivalent). `day = ceil(committed ÷ income × days in month)`, so each day of the month stands for an equal share of income (`computeFreeMoneyDay` in `utils/calculations.ts`).
+No query. The day of the month by which this month's income has paid for everything fixed. Income is the sum of the caller's repeating income entries (quarterly ÷ 3, yearly ÷ 12); with none, it is the average of the most recent months (up to three, from the last six full months) in which income was logged; with no earlier history, it is the income logged this month so far (`incomeSource: 'this_month'`). `status` is `no_income` only when no income has been logged at all. Commitments are every active loan with a balance while Loans is on for the caller (its EMI, capped at what is still owed) plus every repeating expense entry (monthly equivalent). `day = ceil(committed ÷ income × days in month)`, so each day of the month stands for an equal share of income (`computeFreeMoneyDay` in `utils/calculations.ts`).
 → **200**
 ```json
 { "year": 2026, "month": 10, "daysInMonth": 31, "income": 60000, "incomeSource": "repeating", "committed": 15000,
@@ -428,7 +445,7 @@ Undoes a mistaken line; the balance is recomputed (and `dueDate` cleared if it i
 ## Net worth — `/api/v1/net-worth`
 
 ### `POST /net-worth/snapshot` 🔒
-→ **200** the upserted row — recomputes net worth server-side (`investments + goal savings − loan outstanding`) for the current calendar month and upserts it (calling twice in the same month updates the same row, doesn't duplicate)
+→ **200** the upserted row — recomputes net worth server-side (`investments + goal savings − loan outstanding`) for the current calendar month and upserts it. Investments, goals and loans count only while that feature is on for the caller (calling twice in the same month updates the same row, doesn't duplicate)
 
 ### `GET /net-worth/history` 🔒
 → **200** `{ month: number, year: number, netWorth: number }[]`, ascending by (year, month)
@@ -460,6 +477,39 @@ Writes one `account_deleted` row to the admin audit log before the account itsel
 ```json
 { "id": 2, "name": "Bob", "email": "bob@example.com", "role": "user", "tier": "standard", "isActive": true, "budgetClass": null, "createdAt": "2026-08-29T09:00:00.000Z", "deactivatedAt": null, "lastLoginAt": "2026-09-16T08:12:00.000Z" }
 ```
+
+---
+
+## Feature access — `/api/v1/features` 🔒 and `/api/v1/admin/features` 🔒
+
+Admin-driven: **admin** and **system_manager** decide which user gets Goals, Loans and Investments and what a new account gets; **support** can see but not change; a user can only see their own and ask (`routes/features.ts`, `routes/adminFeatures.ts`, table `user_features`, setting `app_settings.signup_features`). Every change is written to the admin audit log (`feature_changed`, `signup_features_changed`).
+
+### `GET /features` 🔒
+→ **200** `{ key, label, description, on: boolean, requested: boolean }[]` for the caller, one per optional feature
+
+### `POST /features/:key/request` 🔒
+Asks staff to switch a feature on. Files a "Report a problem" entry (`category: 'other'`, `severity: 'low'`, `screen: <key>`, title `Access request: <Label>`) so it reaches the nightly digest. Asking again while a request is waiting, or for a feature that's already on, changes nothing.
+→ **200** that feature's entry as in `GET /features`
+Errors: 400 unknown key
+
+### `GET /admin/features` 🔒 (admin, system_manager, support)
+→ **200** `{ defaults: { goals, loans, investments: boolean }, totalUsers, features: { key, label, usersOn }[], requests: { userId, name, email, feature, requestedAt }[] }`. `requests` are the waiting ones, oldest first (up to 200)
+
+### `PUT /admin/features/defaults` 🔒 (admin, system_manager)
+Body: `{ goals: boolean, loans: boolean, investments: boolean }` (all three, nothing else). What accounts created from now on get; existing users don't change.
+→ **200** the saved defaults
+
+### `GET /admin/features/:key/users?limit=&offset=` 🔒 (admin, system_manager, support)
+→ **200** `{ id, name, email, source, updatedAt }[]`, users with the feature on, latest change first; `X-Total-Count` header
+
+### `GET /admin/users/:id/features` 🔒 (admin, system_manager, support)
+→ **200** `{ key, label, on, source: 'default'|'existing_data'|'admin'|'request'|null, changedByEmail, updatedAt, requestedAt }[]`
+Errors: 404 unknown user
+
+### `PUT /admin/users/:id/features/:key` 🔒 (admin, system_manager)
+Body: `{ on: boolean }`. Answers any waiting request: switched on marks its problem report `resolved`; left off marks it `wont_fix`.
+→ **200** that feature's entry as in `GET /admin/users/:id/features`
+Errors: 400 bad key or body, 404 unknown user
 
 ---
 

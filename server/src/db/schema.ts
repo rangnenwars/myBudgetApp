@@ -18,6 +18,7 @@ import {
   jsonb,
   customType,
   foreignKey,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -38,7 +39,9 @@ export const users = pgTable('users', {
   // 'admin' can manage every account via /api/v1/admin/users; 'support' can
   // only activate/deactivate one (routes/admin.ts enforces the split, not
   // this column); 'system_manager' gets read-only aggregate metrics via
-  // /api/v1/system/metrics and never touches an individual account; 'user' can do neither.
+  // /api/v1/system/metrics and, with admin, switches optional features per
+  // account (routes/adminFeatures.ts; support can only view those); it never
+  // edits an account itself. 'user' can do none of this.
   role: text('role').notNull().default('user'),
   // Deactivated accounts are rejected at login and at refresh — see routes/auth.ts.
   isActive: boolean('is_active').notNull().default(true),
@@ -360,6 +363,21 @@ export const budgets = pgTable('budgets', {
 ]);
 
 // ============================================================
+// monthly_budgets — one overall spending limit per user, applied every
+// month (no carry-over). Category limits in `budgets` are optional parts of
+// it. EMIs, credit-card bills and investments are left out of "spent"
+// unless include_commitments is on (routes/budgets.ts).
+// ============================================================
+export const monthlyBudgets = pgTable('monthly_budgets', {
+  userId: bigint('user_id', { mode: 'number' }).primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  includeCommitments: boolean('include_commitments').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check('monthly_budgets_amount_check', sql`${table.amount} > 0`),
+]);
+
+// ============================================================
 // admin_audit_log — one row per role/tier/active/delete change made
 // through /api/v1/admin/users, by an admin or support account.
 // actor/target ids are ON DELETE SET NULL (not CASCADE) so a log entry
@@ -484,3 +502,46 @@ export const peopleLedger = pgTable('people_ledger', {
   check('people_ledger_kind_check', sql`${table.kind} IN ('lent', 'borrowed', 'received', 'repaid', 'written_off', 'split_share')`),
   check('people_ledger_note_length', sql`length(${table.note}) <= 500`),
 ]);
+
+// ============================================================
+// user_features — which optional features (constants/features.ts: goals,
+// loans, investments) each user can use. Admin-driven: only admin and
+// system_manager switch them (routes/adminFeatures.ts); the user can only
+// ask (requested_at). No row means off. Switching off hides the feature and
+// makes its routes refuse (middleware/requireFeature.ts) but never deletes
+// the user's goals, loans or investments. source says how it was last set:
+// 'default' at sign-up, 'existing_data' by migration 0020, 'admin' by staff,
+// 'request' when the row was first created by the user asking for it.
+// request_issue_id is the "Report a problem" row the request created, so it
+// can be marked resolved when the feature is switched on.
+// ============================================================
+export const userFeatures = pgTable('user_features', {
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  featureKey: text('feature_key').notNull(),
+  status: text('status').notNull(),
+  source: text('source').notNull(),
+  changedBy: bigint('changed_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  requestedAt: timestamp('requested_at', { withTimezone: true }),
+  requestIssueId: bigint('request_issue_id', { mode: 'number' }).references(() => issueReports.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.featureKey] }),
+  index('idx_user_features_key_status').on(table.featureKey, table.status),
+  index('idx_user_features_requested').on(table.requestedAt).where(sql`${table.requestedAt} IS NOT NULL`),
+  check('user_features_key_check', sql`${table.featureKey} IN ('goals', 'loans', 'investments')`),
+  check('user_features_status_check', sql`${table.status} IN ('on', 'off')`),
+  check('user_features_source_check', sql`${table.source} IN ('default', 'existing_data', 'admin', 'request')`),
+]);
+
+// ============================================================
+// app_settings — small app-wide settings staff can change without a
+// redeploy, one JSON value per key. 'signup_features' is the map of
+// optional features a new account gets at sign-up ({ goals: true, ... }).
+// ============================================================
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedBy: bigint('updated_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

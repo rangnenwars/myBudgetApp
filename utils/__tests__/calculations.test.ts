@@ -19,6 +19,8 @@ import {
   monthlyEquivalent,
   splitEmi,
   monthsToRepay,
+  countsTowardBudget,
+  computeOverallBudget,
 } from '../calculations';
 import { Transaction, Loan, Investment, SavingsGoal } from '../types';
 
@@ -546,5 +548,35 @@ describe('splitEqually', () => {
 
   it('gives the whole bill to the user with no friends', () => {
     expect(splitEqually(250, 0)).toEqual({ friendShare: 0, myShare: 250 });
+  });
+});
+
+describe('countsTowardBudget', () => {
+  it('counts day-to-day spending but leaves out EMIs, cards and investments unless opted in', () => {
+    expect(countsTowardBudget('Food & dining', false)).toBe(true);
+    expect(countsTowardBudget('Loans & EMIs', false)).toBe(false);
+    expect(countsTowardBudget('Credit cards', false)).toBe(false);
+    expect(countsTowardBudget('Investments & savings', false)).toBe(false);
+    expect(countsTowardBudget('Loans & EMIs', true)).toBe(true);
+  });
+});
+
+describe('computeOverallBudget', () => {
+  it('works out what is left and the per-day figure, counting today', () => {
+    // ₹15,000 budget, ₹9,200 spent, 11 Oct of 31 days → 21 days left including today.
+    expect(computeOverallBudget(15000, 9200, 11, 31)).toEqual({ left: 5800, ratio: 0.613, status: 'ok', daysLeft: 21, perDay: 276 });
+  });
+
+  it('warns at 80% and flags over-spending with nothing left per day', () => {
+    expect(computeOverallBudget(10000, 8000, 20, 30).status).toBe('warning');
+    expect(computeOverallBudget(10000, 12000, 20, 30)).toMatchObject({ left: -2000, status: 'over', perDay: 0 });
+  });
+
+  it('has no days left for a month that has ended', () => {
+    expect(computeOverallBudget(10000, 4000, null, 30)).toMatchObject({ daysLeft: 0, perDay: 0, left: 6000 });
+  });
+
+  it('gives the whole remainder on the last day of the month', () => {
+    expect(computeOverallBudget(10000, 9000, 30, 30)).toMatchObject({ daysLeft: 1, perDay: 1000 });
   });
 });

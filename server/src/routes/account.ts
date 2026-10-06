@@ -14,6 +14,7 @@ import {
   goalContributions,
   netWorthSnapshots,
   budgets,
+  monthlyBudgets,
   accounts,
   issueReports,
   freeMoneySnapshots,
@@ -159,7 +160,7 @@ router.get(
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     if (!user) throw unauthorized('User no longer exists.');
 
-    const [txns, rules, userLoans, userInvestments, goals, userAccounts, userBudgets, customCategories, snapshots, reports, freeMoney] = await Promise.all([
+    const [txns, rules, userLoans, userInvestments, goals, userAccounts, userBudgets, customCategories, snapshots, reports, freeMoney, monthlyBudget] = await Promise.all([
       db.select().from(transactions).where(eq(transactions.userId, userId)).orderBy(transactions.date, transactions.id),
       db.select().from(recurringTransactions).where(eq(recurringTransactions.userId, userId)),
       db.select().from(loans).where(eq(loans.userId, userId)),
@@ -190,6 +191,7 @@ router.get(
         .where(eq(issueReports.userId, userId))
         .orderBy(issueReports.id),
       db.select().from(freeMoneySnapshots).where(eq(freeMoneySnapshots.userId, userId)),
+      db.select().from(monthlyBudgets).where(eq(monthlyBudgets.userId, userId)),
     ]);
     const contributions = goals.length
       ? await db.select().from(goalContributions).where(inArray(goalContributions.goal_id, goals.map((g) => g.id)))
@@ -205,6 +207,7 @@ router.get(
       investments: strip(userInvestments),
       goals: strip(goals).map((g) => ({ ...g, contributions: strip(contributions.filter((c) => c.goal_id === g.id)) })),
       accounts: strip(userAccounts),
+      monthlyBudget: strip(monthlyBudget)[0] ?? null,
       budgets: strip(userBudgets),
       customCategories: strip(customCategories),
       netWorthHistory: strip(snapshots),

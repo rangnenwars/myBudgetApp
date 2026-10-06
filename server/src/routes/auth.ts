@@ -20,6 +20,7 @@ import {
   toUserResponse,
   wantsCookie,
 } from '../lib/session';
+import { applySignupDefaults, getUserFeatures } from '../lib/features';
 
 const router = Router();
 export const BCRYPT_COST = 12;
@@ -84,11 +85,13 @@ router.post(
       throw err;
     }
 
+    await applySignupDefaults(user.id);
+
     // Best-effort: a mail outage must not block sign-up — the app offers "resend".
     await sendVerificationEmail(user).catch((err) => console.error('Verification email failed:', err));
 
     const tokens = await issueTokenPair(user.id);
-    res.status(201).json({ user: toUserResponse(user), ...sendTokens(req, res, tokens) });
+    res.status(201).json({ user: { ...toUserResponse(user), features: await getUserFeatures(user.id) }, ...sendTokens(req, res, tokens) });
   })
 );
 
@@ -112,7 +115,7 @@ router.post(
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
     const tokens = await issueTokenPair(user.id);
-    res.json({ user: toUserResponse(user), ...sendTokens(req, res, tokens) });
+    res.json({ user: { ...toUserResponse(user), features: await getUserFeatures(user.id) }, ...sendTokens(req, res, tokens) });
   })
 );
 
@@ -177,7 +180,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const [user] = await db.select().from(users).where(eq(users.id, req.userId!));
     if (!user) throw unauthorized('User no longer exists.');
-    res.json(toUserResponse(user));
+    // features: which optional screens (goals, loans, investments) staff have switched on.
+    res.json({ ...toUserResponse(user), features: await getUserFeatures(user.id) });
   })
 );
 

@@ -1,8 +1,11 @@
 export class AppError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Machine-readable reason the client can branch on (e.g. FEATURE_NOT_ADDED); sent as `code` beside `error`. */
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 

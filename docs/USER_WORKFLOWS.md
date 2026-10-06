@@ -14,7 +14,7 @@ flowchart LR
   classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-**Screens:** [App map](#map) · [Login](#login) · [Register](#register) · [Forgot password](#forgot) · [Reset password](#reset) · [Confirm email](#verify) · [Dashboard](#dashboard) · [Quick add](#quickadd) · [Input expenses](#input) · [Transactions](#transactions) · [Loans](#loans) · [People](#people) · [Person](#person) · [Investments](#investments) · [Goals](#goals) · [Accounts](#accounts) · [Budgets](#budgets) · [Free-money day](#freemoney) · [Reports](#reports) · [Settings](#settings) · [Report issue](#issue) · [Admin: Users](#users) · [Admin: Audit log](#audit) · [Admin: System metrics](#metrics)
+**Screens:** [App map](#map) · [Login](#login) · [Register](#register) · [Forgot password](#forgot) · [Reset password](#reset) · [Confirm email](#verify) · [Dashboard](#dashboard) · [Quick add](#quickadd) · [Input expenses](#input) · [Transactions](#transactions) · [Loans](#loans) · [People](#people) · [Split a bill](#splitbill) · [Person](#person) · [Investments](#investments) · [Goals](#goals) · [Accounts](#accounts) · [Budgets](#budgets) · [Free-money day](#freemoney) · [Reports](#reports) · [Settings](#settings) · [Report issue](#issue) · [Admin: Users](#users) · [Admin: Audit log](#audit) · [Admin: System metrics](#metrics)
 
 Words are kept to a minimum on purpose. Full explanations are in [USER_MANUAL.md](USER_MANUAL.md); the screen files are listed in [README.md](README.md) §5.
 
@@ -173,7 +173,7 @@ flowchart LR
   D --> M["Month arrows"] --> T["Income - Expense = Net savings"]
   D --> FMC["Free-money card"] --> FMD["Free-money day"]
   D -->|"orange plus"| QA["Quick add"]
-  D --> PC["You get / You owe card"] --> PL["People"]
+  D --> PB["People button"] --> PL["People"]
   D --> TOP["Top 5 expense categories"]
   D --> BA{"Any budget at 80%+?"} -->|yes| BAL["Budget alerts card"]:::warn --> BUD["Budgets"]
   D --> PI["Pro insights"]:::pro
@@ -206,7 +206,6 @@ flowchart LR
   D -->|More| F["Pick from full list"] --> E
   E --> G["Saved for today"]:::ok --> H["Dashboard totals refresh"]
   C -.-> N["Add note"]
-  C -.->|"Split across categories"| S["Add form with Split on"]
   E -.-> X["Enter an amount / pick a category"]:::bad
   classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
@@ -253,11 +252,6 @@ flowchart TB
   subgraph ADD["Add"]
     direction LR
     a1["Plus"] --> a2{"Income or Expense"} --> a3["Category: search or add custom"] --> a4["Amount"] --> a5["Date: today by default"] --> a6{"How often"}
-    a2 -.-> s1["Split switch"] --> s2["Lines: category + amount"] --> s3{"Left to assign = 0?"}
-    s3 -->|yes| s4["One entry per category"]:::ok
-    s3 -->|no| s5["Fix the amounts"]:::bad
-    s1 -.->|"With people"| w1["Pick friends: Equal or Custom"] --> w2["Your share = your spending"]:::ok
-    w1 --> w3["Each friend owes you, in People"]:::ok
     a6 -->|Once| a8["Exact amount"]
     a6 -->|"Monthly / Quarterly / Yearly"| a7["Monthly equivalent"]
     a8 --> a9{"Repeat switch"}
@@ -332,8 +326,32 @@ flowchart LR
   C -->|"You owe"| F["You owe them"]:::bad
   C -->|Overdue| G["Past pay-back date"]:::warn
   D --> H["Tap a name"] --> I["One person"]
-  B --> J["Add person or IOU"] --> K{"I lent or I borrowed"}
-  K --> L["Person + amount + optional due date"] --> M["Save"]:::ok --> I
+  B --> J["Split a bill"] --> SB["Split a bill page"]
+  B --> K["Lent or borrowed"] --> L["Person + amount + note"] --> M["Save"]:::ok --> I
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+<a id="splitbill"></a>
+
+### Split a bill
+
+`/people/split` · Signed in · `app/people/split.tsx`
+
+```mermaid
+flowchart LR
+  A(["People: Split a bill"]):::entry --> B["How much did you pay?"] --> C["What was it for?"] --> D["Who shared it?"]
+  D -->|"tap names"| E["Friends from your list"]
+  D -->|"+ New"| F["Type a name"]
+  E --> G["Everyone pays the same, including you"]
+  F --> G
+  G -.->|"Change the amounts"| H["Type each person's amount"] -.-> G
+  G --> I["Save"]:::ok --> J["People: balances updated"]:::ok
+  G --> K["Only your share counts as spending"]:::warn
+  I -.-> X["Missing amount, category or person"]:::bad
   classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d

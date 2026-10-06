@@ -17,7 +17,7 @@ const FILTERS: { key: PeopleFilter; label: string }[] = [
 ];
 
 const EMPTY_TEXT: Record<PeopleFilter, string> = {
-  all: 'No one yet. Add a friend you lent money to, or someone you borrowed from.',
+  all: 'No one yet. Split a bill with a friend, or note money you lent or borrowed.',
   get: 'Nobody owes you right now.',
   owe: 'You don\'t owe anyone right now.',
   overdue: 'Nothing is overdue.',
@@ -118,7 +118,8 @@ export default function PeopleScreen() {
               </Card>
             )}
 
-            <Button label="Add person or IOU" onPress={() => setSheetOpen(true)} />
+            <Button label="Split a bill" onPress={() => router.push('/people/split')} />
+            <Button label="Lent or borrowed" variant="outline" onPress={() => setSheetOpen(true)} />
           </>
         )}
       </ScrollView>

@@ -8,7 +8,7 @@ import { adminAuditLog } from '../db/schema';
 export const recordAdminAction = (entry: {
   actorId: number;
   actorEmail: string;
-  targetId: number;
+  targetId: number | null;
   targetEmail: string;
   action: string;
   details?: string;

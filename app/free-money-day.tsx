@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { getFreeMoneyDay, FreeMoneyDayInfo, computeFreeMoneyDay, computePartPayment } from '../utils/database';
 
 export default function FreeMoneyDayScreen() {
-  const { user } = useAuth();
+  const { user, hasFeature } = useAuth();
   const [info, setInfo] = useState<FreeMoneyDayInfo | null>(null);
   const [failed, setFailed] = useState(false);
   const [loanId, setLoanId] = useState<number | null>(null);
@@ -58,7 +58,12 @@ export default function FreeMoneyDayScreen() {
   }
 
   const change = weekChange(info.daysEarlier);
-  const incomeNote = info.incomeSource === 'repeating' ? 'Income from your repeating entries.' : "Income is the average of your last full months.";
+  const incomeNote =
+    info.incomeSource === 'repeating'
+      ? 'Income from your repeating entries.'
+      : info.incomeSource === 'this_month'
+        ? "Income is what you've logged this month so far."
+        : 'Income is the average of your recent months.';
   const dayText = info.day != null && info.day > 0 && info.status === 'ok' ? dayLabel(info.year, info.month, info.day) : null;
 
   return (
@@ -67,7 +72,7 @@ export default function FreeMoneyDayScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <Card>
           {info.status === 'no_income' ? (
-            <Text style={styles.muted}>Add your income as a repeating entry, or log a few months of income, to see your free-money day.</Text>
+            <Text style={styles.muted}>Log your income as a transaction, or set it to repeat, to see your free-money day.</Text>
           ) : info.status === 'over' ? (
             <>
               <Text style={[styles.big, { color: COLORS.red }]}>No free days</Text>
@@ -121,6 +126,8 @@ export default function FreeMoneyDayScreen() {
               <Text style={styles.small}>{incomeNote}</Text>
             </Card>
 
+            {hasFeature('loans') && (
+              <>
             <SectionTitle>What if you prepay a loan</SectionTitle>
             <Card>
               {info.loans.length === 0 ? (
@@ -171,6 +178,8 @@ export default function FreeMoneyDayScreen() {
                 </>
               )}
             </Card>
+              </>
+            )}
             <Notice>Each day of the month stands for an equal share of your income, so this is a guide to how much is spoken for, not a bank balance.</Notice>
           </>
         )}

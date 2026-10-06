@@ -134,6 +134,20 @@
       "when": 1791272192255,
       "tag": "0018_slow_boom_boom",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791286357985,
+      "tag": "0019_monthly_budget",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791288242636,
+      "tag": "0020_feature_access",
+      "breakpoints": true
     }
   ]
 }

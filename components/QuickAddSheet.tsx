@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { CategoryPicker } from './CategoryPicker';
 import { useCategories } from '../context/CategoriesContext';
@@ -106,14 +105,6 @@ export const QuickAddSheet: React.FC<Props> = ({ visible, onClose, onSaved }) =>
     }
   };
 
-  // Hands the amount over to the full Add form with Split switched on.
-  const openSplit = () => {
-    const carried = amount;
-    reset();
-    onClose();
-    router.push({ pathname: '/(tabs)/transactions', params: { add: 'split', amount: carried } });
-  };
-
   return (
     <Modal visible={visible} animationType={MODAL_ANIMATION} transparent onRequestClose={close}>
       <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -180,11 +171,6 @@ export const QuickAddSheet: React.FC<Props> = ({ visible, onClose, onSaved }) =>
             <Pressable onPress={() => setShowNote((v) => !v)} hitSlop={6}>
               <Text style={styles.link}>{showNote ? 'Hide note' : 'Add note'}</Text>
             </Pressable>
-            {type === 'expense' && (
-              <Pressable onPress={openSplit} hitSlop={6}>
-                <Text style={styles.link}>Split across categories</Text>
-              </Pressable>
-            )}
             <Text style={styles.today}>Today</Text>
           </View>
           {showNote && (

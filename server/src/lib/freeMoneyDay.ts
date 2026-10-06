@@ -3,6 +3,7 @@ import { db } from '../db/client';
 import { categories, freeMoneySnapshots, loans, recurringTransactions } from '../db/schema';
 import { addMonths, localToday } from './clock';
 import { getTotalsInRange } from './queries';
+import { hasFeature } from './features';
 import { computeFreeMoneyDay, monthlyEquivalent } from '../calculations';
 
 export interface Commitment {
@@ -23,19 +24,27 @@ export const weekStartOf = (iso: string): string => {
 };
 
 /**
- * Income used for the calculation: the user's repeating income entries if they
- * have any (what they've told the app to expect), otherwise their average over
- * the last three full months.
+ * Income used for the calculation, from what the user has told the app:
+ * 1. their repeating income entries, if any;
+ * 2. otherwise the average of the most recent months (up to 3, from the last 6
+ *    full months) in which they logged income;
+ * 3. otherwise what they have logged this month so far, so a brand-new account
+ *    with a salary entered today still gets an answer.
  */
 const monthlyIncome = async (userId: number, repeating: number, today: { year: number; month: number }) => {
   if (repeating > 0) return { amount: repeating, source: 'repeating' as const };
-  const start = addMonths(today.year, today.month, -3);
+
+  const start = addMonths(today.year, today.month, -6);
   const end = addMonths(today.year, today.month, -1);
   const rows = await getTotalsInRange(userId, start.month, start.year, end.month, end.year);
-  const byMonth = new Map<string, number>();
-  for (const r of rows) if (r.type === 'income') byMonth.set(`${r.year}-${r.month}`, (byMonth.get(`${r.year}-${r.month}`) ?? 0) + r.amount);
-  const total = [...byMonth.values()].reduce((s, v) => s + v, 0);
-  return { amount: byMonth.size ? total / byMonth.size : 0, source: 'average' as const };
+  const byMonth = new Map<number, number>();
+  for (const r of rows) if (r.type === 'income') byMonth.set(r.year * 12 + r.month, (byMonth.get(r.year * 12 + r.month) ?? 0) + r.amount);
+  const recent = [...byMonth.entries()].sort((a, b) => b[0] - a[0]).slice(0, 3);
+  if (recent.length > 0) return { amount: recent.reduce((s, [, v]) => s + v, 0) / recent.length, source: 'average' as const };
+
+  const thisMonth = await getTotalsInRange(userId, today.month, today.year, today.month, today.year);
+  const soFar = thisMonth.filter((r) => r.type === 'income').reduce((s, r) => s + r.amount, 0);
+  return { amount: soFar, source: soFar > 0 ? ('this_month' as const) : ('average' as const) };
 };
 
 export const getFreeMoneyDay = async (userId: number) => {
@@ -47,10 +56,14 @@ export const getFreeMoneyDay = async (userId: number) => {
     .from(recurringTransactions)
     .innerJoin(categories, eq(categories.key, recurringTransactions.category))
     .where(eq(recurringTransactions.userId, userId));
-  const activeLoans = await db
-    .select()
-    .from(loans)
-    .where(and(eq(loans.userId, userId), eq(loans.is_active, true), gt(loans.outstanding, 0)));
+  // Loan EMIs only count while Loans is switched on for the user; the screen
+  // shouldn't list loans they can't open.
+  const activeLoans = (await hasFeature(userId, 'loans'))
+    ? await db
+        .select()
+        .from(loans)
+        .where(and(eq(loans.userId, userId), eq(loans.is_active, true), gt(loans.outstanding, 0)))
+    : [];
 
   const repeatingIncome = rules
     .filter((r) => r.rule.type === 'income')

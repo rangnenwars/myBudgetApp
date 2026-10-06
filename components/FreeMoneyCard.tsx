@@ -57,7 +57,7 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
   let detail = '';
   if (info.status === 'no_income') {
     headline = 'Not enough to work out yet';
-    detail = 'Add your income as a repeating entry, or log a few months of income, and your free-money day appears here.';
+    detail = 'Log your income as a transaction, or set it to repeat, and your free-money day appears here.';
   } else if (info.status === 'over') {
     headline = 'No free days';
     detail = 'Your fixed bills and EMIs are as much as your income.';

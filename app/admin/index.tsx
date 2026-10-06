@@ -1,10 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Modal, Switch, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, Modal, Switch, KeyboardAvoidingView, Platform, TextInput, ScrollView } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
-import { getAdminUsers, updateAdminUser, deleteAdminUser, AdminUser, AdminRole } from '../../utils/database';
+import {
+  getAdminUsers,
+  updateAdminUser,
+  deleteAdminUser,
+  getUserFeatureAccess,
+  setUserFeature,
+  AdminUser,
+  AdminRole,
+  UserFeatureAccess,
+} from '../../utils/database';
+import { FeatureKey } from '../../constants/features';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 
@@ -21,6 +31,8 @@ const ROLE_LABEL: Record<AdminRole, string> = { user: 'User', support: 'Support'
 // see accounts at all, only aggregate metrics.
 export default function AdminUsersScreen() {
   const { user, isAdmin, isStaff, canViewMetrics } = useAuth();
+  // Admin and system manager may switch a user's optional features; support only sees them.
+  const canManageFeatures = canViewMetrics;
   const [items, setItems] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
@@ -28,6 +40,7 @@ export default function AdminUsersScreen() {
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [access, setAccess] = useState<UserFeatureAccess[] | null>(null);
   const isSelf = !!selected && selected.id === user?.id;
   // Support may only act on regular users, never other staff.
   const canToggleActive = !!selected && !isSelf && (isAdmin || selected.role === 'user');
@@ -66,6 +79,34 @@ export default function AdminUsersScreen() {
       await load();
     } catch (err) {
       setError(apiErrorMessage(err, 'Could not update this account.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Optional features of whoever's sheet is open (read fresh each time it opens).
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    setAccess(null);
+    if (selectedId == null) return;
+    let active = true;
+    getUserFeatureAccess(selectedId)
+      .then((rows) => active && setAccess(rows))
+      .catch(() => active && setAccess([]));
+    return () => {
+      active = false;
+    };
+  }, [selectedId]);
+
+  const onFeature = async (key: FeatureKey, on: boolean) => {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const row = await setUserFeature(selected.id, key, on);
+      setAccess((prev) => (prev ? prev.map((f) => (f.key === key ? row : f)) : prev));
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Could not change this feature.'));
     } finally {
       setSaving(false);
     }
@@ -121,6 +162,9 @@ export default function AdminUsersScreen() {
               <Ionicons name="stats-chart-outline" size={20} color={COLORS.textMuted} />
             </Pressable>
           )}
+          <Pressable onPress={() => router.push('/admin/features')} hitSlop={6} accessibilityLabel="Feature access">
+            <Ionicons name="toggle-outline" size={22} color={COLORS.textMuted} />
+          </Pressable>
           {isAdmin && (
             <Pressable onPress={() => router.push('/admin/audit-log')} hitSlop={6} accessibilityLabel="Audit log">
               <Ionicons name="document-text-outline" size={20} color={COLORS.textMuted} />
@@ -178,7 +222,7 @@ export default function AdminUsersScreen() {
 
       <Modal visible={!!selected} animationType={MODAL_ANIMATION} transparent onRequestClose={() => setSelected(null)}>
         <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalSheet}>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalSheet} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{selected?.name}</Text>
               <Pressable onPress={() => setSelected(null)}>
@@ -233,6 +277,36 @@ export default function AdminUsersScreen() {
             </>
             )}
 
+            <Text style={styles.controlLabel}>Feature access</Text>
+            <Text style={styles.selfNote}>Home, Transactions, Reports, Budgets, Accounts, Input expenses and People are always on.</Text>
+            {!access ? (
+              <Text style={styles.selfNote}>Loading…</Text>
+            ) : (
+              access.map((f) => (
+                <View key={f.key} style={styles.controlRow}>
+                  <View style={styles.featureMain}>
+                    <Text style={styles.featureName}>{f.label}</Text>
+                    <Text style={styles.selfNote}>
+                      {f.on
+                        ? `On · ${f.source === 'admin' ? `by ${f.changedByEmail ?? 'staff'}` : f.source === 'existing_data' ? 'had data before this change' : 'at sign-up'}`
+                        : f.requestedAt
+                          ? `Off · asked for it ${fmtDate(f.requestedAt)}`
+                          : 'Off'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={f.on}
+                    onValueChange={(v) => onFeature(f.key, v)}
+                    disabled={saving || !canManageFeatures}
+                    trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
+                    accessibilityLabel={`${f.label} for this user`}
+                  />
+                </View>
+              ))
+            )}
+            {!canManageFeatures && <Text style={styles.selfNote}>Only an admin or system manager can change feature access.</Text>}
+            <Text style={styles.selfNote}>Switching a feature off hides it; the user's data is kept.</Text>
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             {isAdmin && (
@@ -241,7 +315,7 @@ export default function AdminUsersScreen() {
                 <Text style={[styles.deleteBtnText, isSelf && styles.deleteBtnTextDisabled]}>Delete account</Text>
               </Pressable>
             )}
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -310,7 +384,10 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: `${COLORS.accent}22` },
   chipInactive: { backgroundColor: `${COLORS.red}22` },
   modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
+  modalScroll: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, maxHeight: '90%', flexGrow: 0 },
+  modalSheet: { padding: SPACING.lg, gap: SPACING.sm },
+  featureMain: { flex: 1, gap: 1 },
+  featureName: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
   modalEmail: { color: COLORS.textMuted, fontSize: 13, marginBottom: SPACING.xs },

@@ -30,10 +30,11 @@ import {
 import { computeGoalETA } from '../../utils/calculations';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
+import { withFeature } from '../../components/FeatureGate';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-export default function GoalsScreen() {
+function GoalsScreen() {
   const { user } = useAuth();
   const [items, setItems] = useState<SavingsGoal[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -422,3 +423,6 @@ const styles = StyleSheet.create({
   historyList: { maxHeight: 160 },
   historyRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
 });
+
+// Staff switch this feature on per user; without it the screen is replaced by a "request access" page.
+export default withFeature('goals', GoalsScreen);

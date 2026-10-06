@@ -26,7 +26,7 @@ Prapanji (formerly "My Budget") is a personal money app for everyone — student
 | [DB_ADMIN_QUERIES.md](DB_ADMIN_QUERIES.md) | SQL cookbook: make a user admin, grant Pro, deactivate, reset a password, delete test accounts, audit log, usage and issue-report queries |
 | [CONFIGURATION_STATE.md](CONFIGURATION_STATE.md) | Dated change log (2026-10-03), configuration matrix of what is in the repo vs what must be confirmed in external accounts, known gaps |
 | [USER_MANUAL.md](USER_MANUAL.md) | End-user guide to every screen, plus a section for staff accounts |
-| [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (24 total, Mermaid) — almost no prose; renders on GitHub |
+| [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (25 total, Mermaid) — almost no prose; renders on GitHub |
 | [USER_DISTRIBUTION.md](USER_DISTRIBUTION.md) | How to get the app and manual to end users — web first, Android APK / Play / TestFlight later — with onboarding message and rollout plan |
 | [MASTER_BUILD_PROMPT_v3_BACKEND.md](MASTER_BUILD_PROMPT_v3_BACKEND.md) | Server structure, API endpoints, auth flow, Docker changes, client integration — implemented and verified |
 | [pro-roadmap.html](pro-roadmap.html) · [live](https://claude.ai/code/artifact/80837269-945e-4a79-b5da-678c946641a1) | Rendered version of the Pro roadmap |
@@ -104,10 +104,8 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 - **Dashboard** — income/expense/net savings for the current month (‹ › arrows step back to earlier months), top-5 expense categories, budget-class badge, Expense/Loan/Investment breakdown
 - **Input expenses** — bulk entry screen: pick Monthly/Quarterly/Yearly, add one row per category+amount, save all at once (mirrors the original Excel workflow)
 - **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, a date for every entry (Today by default, or Yesterday / any past date via the date control; future dates are rejected; editing can change it too), and a Once/Monthly/Quarterly/Yearly period on new entries (Once logs the exact amount on the chosen date; Quarterly/Yearly are converted to a monthly-equivalent amount, same as Input Expenses), and a "Repeat" switch for salary, rent, insurance or any fixed amount (income or expense) — monthly, quarterly or yearly, added again on the same day of the month (29–31 fall back to the month's end) until stopped from the "Repeating" button (change the amount, how often or the day, or stop it). Search (notes, category names, amounts) and the All/Expenses/Income filter run on the server, and the list loads 50 at a time as you scroll — tap a row to edit it, tap the trash icon to delete it
-- **Split with people** (Add transaction → Split → With people) — a bill you paid for friends: equal or custom shares, only your own share counts as spending, each friend's share is added to what they owe you (`POST /transactions/split-people`)
-- **People** (Dashboard → You get / You owe card, `/people`) — money lent to, borrowed from or shared with friends: a per-person running ledger with part payments, due dates and an Overdue flag, write-off, and per-line undo. Not counted as spending (`/api/v1/people`)
-- **Quick add** (orange + on the Dashboard) — amount keypad, your most-used category chips, Save; logs for today. A "Split across categories" link hands the amount to the full form
-- **Split across categories** (Add transaction → Split switch) — one payment shared between categories, saved as one linked entry per category; the lines must add up to the amount (`POST /transactions/split`)
+- **People** (Dashboard → People button, `/people`) — **Split a bill** (a simple page: how much, what for, who shared it; equal or changed amounts; only your own share counts as spending) and **Lent or borrowed**: a per-person running ledger with part payments, due dates and an Overdue flag, write-off, and per-line undo. Not counted as spending (`/api/v1/people`, `POST /transactions/split-people`)
+- **Quick add** (orange + on the Dashboard) — amount keypad, your most-used category chips, Save; logs for today
 - **Free-money day** (Dashboard card → `/free-money-day`) — the day of the month by which income has covered every EMI and repeating bill, with a week-on-week change and a "what if I prepay a loan" preview (`GET /reports/free-money-day`)
 - **Custom categories** — add, rename, and delete your own category (name + income/expense) from any category picker, with a search box to find items once the list grows — see §3a
 - **Loans** — add/edit/delete, track principal/outstanding/EMI/interest rate plus optional loan type, lender, tenure, start date and note. A per-loan "Add monthly EMI to expenses" toggle (on by default) posts the EMI to expenses every month as a `Loan EMI` transaction **and pays the balance down by that month's principal** (interest worked out from the rate), so the balance stays right without any tapping; each card shows the next EMI's interest/principal split and the months left at the current rate — see API_REFERENCE "Automatic monthly EMI expenses and pay-down". Loans not counted as expenses (e.g. family loans) keep a "Mark EMI paid" button instead. Either way the outstanding debt shows under Reports → Liabilities and in net worth. "Part payment" button (prepayment): lowers the outstanding balance and scales the EMI down proportionally so the remaining tenure is unchanged, with a live before/after preview — tap a card to edit any field, trash icon to delete
@@ -230,7 +228,7 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 
 ---
 
-## 5. Pages / screens (24 total)
+## 5. Pages / screens (25 total)
 
 | # | Screen | File | Notes |
 |---|---|---|---|
@@ -256,8 +254,9 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 | 20 | Report an issue | `app/report-issue.tsx` | Modal, bug icon on the Dashboard; every signed-in user |
 | 21 | Terms | `app/legal/terms.tsx` | Linked from Register; draft placeholder |
 | 22 | Privacy policy | `app/legal/privacy.tsx` | Linked from Register; draft placeholder |
-| 23 | People | `app/people/index.tsx` | From the Dashboard's You get / You owe card; list with filters, and the Add IOU sheet |
+| 23 | People | `app/people/index.tsx` | From the Dashboard's People button; the list with filters, and two buttons: Split a bill, Lent or borrowed |
 | 24 | Person | `app/people/[id].tsx` | One person's balance, history and actions (They paid, Lend or borrow, Due date, Write off) |
+| 25 | Split a bill | `app/people/split.tsx` | From People; four plain questions and one Save button |
 
 `app/index.tsx` is a redirect (session check → `/login` or `/(tabs)`), not a user-facing page, so it's not counted above.
 

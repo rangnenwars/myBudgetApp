@@ -33,6 +33,7 @@ export const IouSheet: React.FC<Props> = ({ visible, onClose, onSaved, people = 
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [more, setMore] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -44,6 +45,7 @@ export const IouSheet: React.FC<Props> = ({ visible, onClose, onSaved, people = 
     setDue('');
     setNote('');
     setError(null);
+    setMore(false);
   }, [visible, person?.id]);
 
   const onSave = async () => {
@@ -75,7 +77,7 @@ export const IouSheet: React.FC<Props> = ({ visible, onClose, onSaved, people = 
       <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.sheet} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>{person ? `Lend or borrow: ${person.name}` : 'Add IOU'}</Text>
+            <Text style={styles.title}>{person ? `Lend or borrow: ${person.name}` : 'Lent or borrowed'}</Text>
             <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
               <Ionicons name="close" size={22} color={COLORS.text} />
             </Pressable>
@@ -127,14 +129,22 @@ export const IouSheet: React.FC<Props> = ({ visible, onClose, onSaved, people = 
           <Text style={styles.label}>Amount</Text>
           <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="0" placeholderTextColor={COLORS.textDim} keyboardType="numeric" accessibilityLabel="Amount" />
 
-          <Text style={styles.label}>Date</Text>
-          <DateField value={date} onChange={setDate} />
-
-          <Text style={styles.label}>Pay back by (optional)</Text>
-          <DueDateField value={due} onChange={setDue} />
-
           <Text style={styles.label}>Note (optional)</Text>
           <TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="What it was for" placeholderTextColor={COLORS.textDim} maxLength={500} />
+
+          {more ? (
+            <>
+              <Text style={styles.label}>Date</Text>
+              <DateField value={date} onChange={setDate} />
+
+              <Text style={styles.label}>Pay back by (optional)</Text>
+              <DueDateField value={due} onChange={setDue} />
+            </>
+          ) : (
+            <Pressable onPress={() => setMore(true)} accessibilityRole="link">
+              <Text style={styles.link}>Add a date or a pay-back date</Text>
+            </Pressable>
+          )}
 
           <Text style={styles.hint}>Lending isn't counted as spending. Update your balance under Accounts if you want it to match.</Text>
           {error && <Text style={styles.error}>{error}</Text>}
@@ -171,6 +181,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   hint: { color: COLORS.textDim, fontSize: 12 },
+  link: { color: COLORS.accent, fontWeight: '600', fontSize: 14 },
   error: { color: COLORS.red, fontSize: 13 },
   save: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: 'center', marginTop: SPACING.xs },
   saveText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 16 },

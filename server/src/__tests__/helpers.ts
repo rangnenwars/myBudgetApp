@@ -3,7 +3,8 @@ import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../app';
 import { db } from '../db/client';
-import { users } from '../db/schema';
+import { userFeatures, users } from '../db/schema';
+import { FEATURE_KEYS, FeatureKey } from '../../../constants/features';
 
 export const app = createApp();
 
@@ -29,10 +30,25 @@ export const uniquePhone = (): string => `9${crypto.randomInt(0, 1e9).toString()
 export interface RegisteredUser {
   accessToken: string;
   refreshToken: string;
-  user: { id: number; name: string; email: string; tier: string; budgetClass: string | null; role: string; isActive: boolean };
+  user: { id: number; name: string; email: string; tier: string; budgetClass: string | null; role: string; isActive: boolean; features: string[] };
 }
 
-export const registerUser = async (overrides: { name?: string; email?: string; phone?: string; password?: string } = {}): Promise<RegisteredUser> => {
+// Sets exactly which optional features a test user has, straight in the
+// database (as staff would). Leaves app_settings alone, so tests in other
+// workers never see each other's sign-up defaults.
+export const setFeatures = async (userId: number, features: readonly FeatureKey[]) => {
+  await db.delete(userFeatures).where(eq(userFeatures.userId, userId));
+  if (features.length) {
+    await db.insert(userFeatures).values(features.map((featureKey) => ({ userId, featureKey, status: 'on', source: 'admin' })));
+  }
+};
+
+// Every optional feature is on unless the test passes `features` — most tests
+// are about goals/loans/investments themselves, not about who may use them.
+// Pass `features: null` to keep whatever the sign-up defaults gave.
+export const registerUser = async (
+  overrides: { name?: string; email?: string; phone?: string; password?: string; features?: readonly FeatureKey[] | null } = {}
+): Promise<RegisteredUser> => {
   const res = await request(app)
     .post('/api/v1/auth/register')
     .send({
@@ -43,6 +59,11 @@ export const registerUser = async (overrides: { name?: string; email?: string; p
     });
   if (res.status !== 201) {
     throw new Error(`registerUser failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
+  const features = overrides.features === undefined ? FEATURE_KEYS : overrides.features;
+  if (features !== null) {
+    await setFeatures(res.body.user.id, features);
+    res.body.user.features = [...features];
   }
   return res.body;
 };

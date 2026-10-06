@@ -15,6 +15,8 @@ import goalsRoutes from './routes/goals';
 import reportsRoutes from './routes/reports';
 import netWorthRoutes from './routes/netWorth';
 import adminUsersRoutes from './routes/admin';
+import adminFeaturesRoutes from './routes/adminFeatures';
+import featuresRoutes from './routes/features';
 import adminAuditLogRoutes from './routes/adminAuditLog';
 import systemRoutes from './routes/system';
 import issuesRoutes from './routes/issues';
@@ -71,6 +73,9 @@ export const createApp = () => {
   app.use('/api/v1/goals', goalsRoutes);
   app.use('/api/v1/reports', reportsRoutes);
   app.use('/api/v1/net-worth', netWorthRoutes);
+  app.use('/api/v1/features', featuresRoutes);
+  // Ahead of the users router: it serves /admin/users/:id/features too.
+  app.use('/api/v1/admin', adminFeaturesRoutes);
   app.use('/api/v1/admin/users', adminUsersRoutes);
   app.use('/api/v1/admin/audit-log', adminAuditLogRoutes);
   app.use('/api/v1/system', systemRoutes);

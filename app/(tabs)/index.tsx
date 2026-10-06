@@ -8,7 +8,8 @@ import { BudgetClassBadge } from '../../components/BudgetClassBadge';
 import { ProGate } from '../../components/ProGate';
 import { QuickAddSheet } from '../../components/QuickAddSheet';
 import { FreeMoneyCard } from '../../components/FreeMoneyCard';
-import { PeopleCard } from '../../components/PeopleCard';
+import { BudgetCard } from '../../components/BudgetCard';
+import { PeopleButton } from '../../components/PeopleButton';
 import { useAuth } from '../../context/AuthContext';
 import { useCategories } from '../../context/CategoriesContext';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
@@ -36,7 +37,6 @@ export default function DashboardScreen() {
   const [breakdown, setBreakdown] = useState<Record<CategoryBucket, number>>({ expense: 0, loan: 0, investment: 0 });
   // Budgets at 80% or more of their limit in the viewed month.
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
-  const [hasBudgets, setHasBudgets] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   // Bumped after a quick add so the totals and the free-money card reload.
   const [refreshKey, setRefreshKey] = useState(0);
@@ -60,7 +60,6 @@ export default function DashboardScreen() {
         ]);
         if (!active) return;
 
-        setHasBudgets(budgets.length > 0);
         setBudgetAlerts(budgets.filter((b) => b.status !== 'ok'));
 
         setSummary(monthSummary);
@@ -179,22 +178,16 @@ export default function DashboardScreen() {
         </View>
       </Card>
 
-      <PeopleCard refreshKey={refreshKey} />
+      <PeopleButton refreshKey={refreshKey} />
+
+      <BudgetCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} refreshKey={refreshKey} />
 
       {isCurrentMonth && <FreeMoneyCard refreshKey={refreshKey} />}
 
       <View style={styles.quickLinks}>
-        <Pressable style={styles.quickLink} onPress={() => router.push('/budgets')}>
-          <Ionicons name="pie-chart-outline" size={18} color={COLORS.accent} />
-          <Text style={styles.quickLinkText}>Budgets</Text>
-        </Pressable>
         <Pressable style={styles.quickLink} onPress={() => router.push('/accounts')}>
           <Ionicons name="wallet-outline" size={18} color={COLORS.accent} />
           <Text style={styles.quickLinkText}>Accounts</Text>
-        </Pressable>
-        <Pressable style={styles.quickLink} onPress={() => router.push('/people')}>
-          <Ionicons name="people-outline" size={18} color={COLORS.accent} />
-          <Text style={styles.quickLinkText}>People</Text>
         </Pressable>
       </View>
 
@@ -221,9 +214,6 @@ export default function DashboardScreen() {
             })}
           </Card>
         </Pressable>
-      )}
-      {!hasBudgets && isCurrentMonth && (
-        <Text style={styles.hintText}>Tip: set monthly limits under Budgets and you’ll be warned here at 80%.</Text>
       )}
 
       <Text style={styles.sectionTitle}>{isCurrentMonth ? "This month's" : viewLabel} breakdown</Text>
@@ -363,7 +353,6 @@ const styles = StyleSheet.create({
   quickLinkText: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
   alertCard: { borderColor: `${COLORS.yellow}66` },
   alertTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', marginBottom: SPACING.xs },
-  hintText: { color: COLORS.textDim, fontSize: 12 },
   summaryCard: { marginTop: SPACING.sm },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryItem: { flex: 1 },

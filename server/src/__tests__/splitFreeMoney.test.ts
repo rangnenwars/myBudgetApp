@@ -160,6 +160,38 @@ describe('GET /reports/free-money-day', () => {
     expect(res.body).toMatchObject({ incomeSource: 'average', income: 40000, committed: 8000, share: 0.2 });
   });
 
+  it("uses this month's income so far when there is no earlier history", async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 90000, type: 'income', category_key: 'salary_1', date: TODAY });
+    await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ name: 'Home loan', principal: 500000, outstanding: 500000, emi: 18000 });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ status: 'ok', incomeSource: 'this_month', income: 90000, committed: 18000, share: 0.2 });
+  });
+
+  it('prefers earlier full months over a partly logged current month', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 60000, type: 'income', category_key: 'salary_1', date: monthStart(-1) });
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 500, type: 'income', category_key: 'salary_1', date: TODAY });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ incomeSource: 'average', income: 60000 });
+  });
+
+  it('looks back six months and averages the three most recent that had income', async () => {
+    const { accessToken } = await registerUser();
+    for (const [delta, amount] of [[-5, 10000], [-3, 20000], [-2, 30000], [-1, 40000]] as const) {
+      await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount, type: 'income', category_key: 'salary_1', date: monthStart(delta) });
+    }
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ incomeSource: 'average', income: 30000 });
+  });
+
+  it('still reports no_income when the user has logged no income at all', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 400, type: 'expense', category_key: 'shopping', date: TODAY });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ status: 'no_income', income: 0 });
+  });
+
   it('flags commitments larger than income, and caps an EMI at what is still owed', async () => {
     const { accessToken } = await registerUser();
     await addRule(accessToken, { amount: 10000, type: 'income', category_key: 'salary_1' });

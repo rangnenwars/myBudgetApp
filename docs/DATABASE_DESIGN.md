@@ -364,6 +364,48 @@ CREATE TABLE budgets (
 CREATE INDEX idx_budgets_category ON budgets(category_key);
 
 -- ============================================================
+-- monthly_budgets — one overall monthly spending limit per user (no carry-over).
+-- EMI/card/investment categories count only when include_commitments is true.
+-- ============================================================
+CREATE TABLE monthly_budgets (
+  user_id             BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  amount              NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  include_commitments BOOLEAN NOT NULL DEFAULT false,
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================
+-- user_features — which optional features (goals, loans, investments) each
+-- user has. Set by admin/system_manager only; no row means off. Switching off
+-- never deletes the user's data. requested_at = the user asked and is waiting.
+-- ============================================================
+CREATE TABLE user_features (
+  user_id          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  feature_key      TEXT NOT NULL CHECK (feature_key IN ('goals','loans','investments')),
+  status           TEXT NOT NULL CHECK (status IN ('on','off')),
+  source           TEXT NOT NULL CHECK (source IN ('default','existing_data','admin','request')),
+  changed_by       BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  requested_at     TIMESTAMPTZ,
+  request_issue_id BIGINT REFERENCES issue_reports(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, feature_key)
+);
+CREATE INDEX idx_user_features_key_status ON user_features(feature_key, status);
+CREATE INDEX idx_user_features_requested ON user_features(requested_at) WHERE requested_at IS NOT NULL;
+
+-- ============================================================
+-- app_settings — app-wide settings staff change without a redeploy.
+-- 'signup_features' = { "goals": bool, "loans": bool, "investments": bool }.
+-- ============================================================
+CREATE TABLE app_settings (
+  key        TEXT PRIMARY KEY,
+  value      JSONB NOT NULL,
+  updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================
 -- admin_audit_log — one row per role/tier/active/delete change made
 -- through /api/v1/admin/users, by an admin or support account. Account
 -- metadata only (actor/target email, which field changed) — never touches
@@ -438,6 +480,8 @@ CREATE INDEX idx_issue_reports_pending ON issue_reports(created_at) WHERE notifi
 | `refresh_tokens` stores a hash, not the raw token | Standard practice — a leaked database dump shouldn't hand out valid session tokens |
 | Composite index `(user_id, year, month)` on transactions | Matches the exact query shape `getTransactions(userId, month, year)` already uses today |
 | `budgets` | Monthly limit per expense category; `GET /budgets` joins it to the month's spending for ok/warning/over alerts |
+| `monthly_budgets` | The one overall monthly budget per user; `GET /budgets/overall` returns spent, left and a per-day figure |
+| `user_features` + `app_settings` | Admin-driven feature access (replaces the planned Simple/Full mode). Migration 0020 switches on, for each existing user, only the features they already have data in; new accounts get `signup_features` (seeded as Goals on, Loans and Investments off). Routes check it on every request (`middleware/requireFeature.ts`), so a change applies at once |
 
 ### What does *not* need to change
 `utils/calculations.ts` — the pure functions (`computeMonthSummary`, `simulateDebtPayoff`, `bucketForGroup`, etc.) operate on plain arrays already fetched from storage. They don't care whether those arrays came from SQLite, `localStorage`, or a Postgres row set over HTTP. That's the payoff of the architecture documented in the [architecture-flows artifact](https://claude.ai/code/artifact/3787e434-ead3-4e0a-881d-119411b2a53d) — the backend swap only touches the data layer, not the 47-test business logic module.

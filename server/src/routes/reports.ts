@@ -5,6 +5,7 @@ import { db } from '../db/client';
 import { loans, savingsGoals } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
+import { requireFeature } from '../middleware/requireFeature';
 import { autoPostMiddleware } from '../lib/autoPost';
 import { getTotalsInRange, forEachTransactionBatch } from '../lib/queries';
 import { localToday, addMonths } from '../lib/clock';
@@ -82,6 +83,7 @@ router.get(
 
 router.get(
   '/debt-payoff',
+  requireFeature('loans'),
   asyncHandler(async (req, res) => {
     const q = debtQuery.parse(req.query);
     const userLoans = await db.select().from(loans).where(and(eq(loans.userId, req.userId!), eq(loans.is_active, true)));
@@ -91,6 +93,7 @@ router.get(
 
 router.get(
   '/goal-eta',
+  requireFeature('goals'),
   asyncHandler(async (req, res) => {
     const today = localToday();
     const start = addMonths(today.year, today.month, -2);

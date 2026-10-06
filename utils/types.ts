@@ -76,6 +76,25 @@ export interface Account {
 export type RepeatFrequency = 'monthly' | 'quarterly' | 'yearly';
 
 /** A category's monthly spending limit with what has been spent against it in the requested month. */
+/** The one overall monthly budget and this month's progress against it. Progress fields are null when no budget is set. */
+export interface OverallBudget {
+  month: number;
+  year: number;
+  amount: number | null;
+  /** Whether EMIs, credit-card bills and investments count toward it (off by default). */
+  include_commitments: boolean;
+  spent: number;
+  /** Sum of the optional category limits. */
+  allocated: number;
+  /** Average counted spending over the last 3 full months, rounded to ₹100; null without history. */
+  suggested: number | null;
+  left: number | null;
+  ratio: number | null;
+  status: 'ok' | 'warning' | 'over' | null;
+  days_left: number | null;
+  per_day: number | null;
+}
+
 export interface BudgetStatus {
   category: string;
   monthly_limit: number;
@@ -131,7 +150,7 @@ export interface FreeMoneyDayInfo {
   month: number;
   daysInMonth: number;
   income: number;
-  incomeSource: 'repeating' | 'average';
+  incomeSource: 'repeating' | 'average' | 'this_month';
   committed: number;
   items: { kind: 'loan' | 'repeating'; label: string; amount: number }[];
   share: number;

@@ -74,7 +74,7 @@ const chartConfig = {
 };
 
 export default function ReportsScreen() {
-  const { user } = useAuth();
+  const { user, hasFeature } = useAuth();
   const { getCategory } = useCategories();
   const [range, setRange] = useState<RangePreset>('6m');
   const [metric, setMetric] = useState<TrendMetric>('net');
@@ -92,13 +92,15 @@ export default function ReportsScreen() {
     const now = new Date();
     const { startMonth, startYear, endMonth, endYear } = getRangeBounds(range, now);
 
+    // Only what staff have switched on for this user: the server refuses the
+    // rest, and net worth leaves out a hidden feature (same as routes/netWorth.ts).
     const [monthSeries, rangeSummary, categoryBreakdown, investments, userGoals, userLoans, userAccounts] = await Promise.all([
       getMonthlySeriesForRange(startMonth, startYear, endMonth, endYear),
       getRangeSummary(startMonth, startYear, endMonth, endYear),
       getCategoryBreakdownForRange(startMonth, startYear, endMonth, endYear, 'expense'),
-      getInvestments(),
-      getGoals(),
-      getLoans(),
+      hasFeature('investments') ? getInvestments() : [],
+      hasFeature('goals') ? getGoals() : [],
+      hasFeature('loans') ? getLoans() : [],
       getAccounts(),
     ]);
     setSeries(monthSeries);
@@ -112,7 +114,7 @@ export default function ReportsScreen() {
     setNetWorth(currentNetWorth);
     await recordNetWorthSnapshot();
     setNetWorthTrend(await getNetWorthSnapshots());
-  }, [user, range]);
+  }, [user, range, hasFeature]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -200,7 +202,7 @@ export default function ReportsScreen() {
           </Card>
         </View>
 
-        {loans.length > 0 && (
+        {hasFeature('loans') && loans.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Liabilities</Text>
             <Card>
@@ -296,6 +298,8 @@ export default function ReportsScreen() {
           )}
         </Card>
 
+        {hasFeature('loans') && (
+        <>
         <Text style={styles.sectionTitle}>Debt payoff progress</Text>
         <Card>
           {loans.length === 0 ? (
@@ -316,6 +320,11 @@ export default function ReportsScreen() {
           )}
         </Card>
 
+        </>
+        )}
+
+        {hasFeature('goals') && (
+        <>
         <Text style={styles.sectionTitle}>Goal progress</Text>
         <Card>
           {goals.length === 0 ? (
@@ -335,6 +344,8 @@ export default function ReportsScreen() {
             })
           )}
         </Card>
+        </>
+        )}
       </ProGate>
     </ScrollView>
   );
