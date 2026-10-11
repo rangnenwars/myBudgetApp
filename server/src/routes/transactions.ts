@@ -9,7 +9,7 @@ import { monthsDateRange } from '../lib/clock';
 import { isoDate, idParam, money, optionalText, likeContains } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { autoPostMiddleware } from '../lib/autoPost';
-import { NO_REPEAT_CATEGORIES, NO_REPEAT_MESSAGE, ruleScheduleFor } from '../lib/recurringTransactions';
+import { activeRuleFilter, endFields, NO_REPEAT_CATEGORIES, NO_REPEAT_MESSAGE, ruleScheduleFor } from '../lib/recurringTransactions';
 import { badRequest, conflict, notFound } from '../lib/errors';
 import { recomputeBudgetClass } from '../lib/budgetClass';
 import { splitEqually } from '../calculations';
@@ -62,6 +62,9 @@ const baseSchema = z.object({
 const createSchema = baseSchema.extend({
   repeat_monthly: z.boolean().optional(),
   repeat_frequency: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
+  // A repeat must say when it ends: a date, or no_end for an open-ended one.
+  repeat_ends_on: isoDate('repeat_ends_on').optional(),
+  repeat_no_end: z.boolean().optional(),
 });
 
 const updateSchema = baseSchema
@@ -164,6 +167,10 @@ router.post(
     await assertValidCategory(body.category_key, req.userId!, body.type);
     const repeatFrequency = body.repeat_frequency ?? (body.repeat_monthly ? 'monthly' : undefined);
 
+    const end = repeatFrequency
+      ? endFields({ ends_on: body.repeat_ends_on, no_end: body.repeat_no_end }, { required: true, after: body.date })
+      : {};
+
     if (repeatFrequency) {
       if (NO_REPEAT_CATEGORIES.has(body.category_key)) throw badRequest(NO_REPEAT_MESSAGE);
       // Same guard as POST /recurring, so a double tap can't make every period post twice.
@@ -175,7 +182,8 @@ router.post(
             eq(recurringTransactions.userId, req.userId!),
             eq(recurringTransactions.type, body.type),
             eq(recurringTransactions.category, body.category_key),
-            eq(recurringTransactions.amount, body.amount)
+            eq(recurringTransactions.amount, body.amount),
+            activeRuleFilter()
           )
         );
       if (duplicate) throw conflict('An entry with this category and amount already repeats.');
@@ -205,6 +213,7 @@ router.post(
           amount: body.amount,
           note: body.note?.trim() || null,
           ...ruleScheduleFor(body.date, repeatFrequency),
+          ...end,
         });
       }
       return created;

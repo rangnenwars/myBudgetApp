@@ -4,6 +4,7 @@ import { categories, freeMoneySnapshots, loans, recurringTransactions, transacti
 import { addMonths, localToday } from './clock';
 import { getTotalsInRange } from './queries';
 import { hasFeature } from './features';
+import { activeRuleFilter } from './recurringTransactions';
 import { computeFreeMoneyDay, monthlyEquivalent } from '../calculations';
 
 export interface Commitment {
@@ -68,7 +69,7 @@ export const getFreeMoneyDay = async (userId: number) => {
     .select({ rule: recurringTransactions, label: categories.label })
     .from(recurringTransactions)
     .innerJoin(categories, eq(categories.key, recurringTransactions.category))
-    .where(eq(recurringTransactions.userId, userId));
+    .where(and(eq(recurringTransactions.userId, userId), activeRuleFilter()));
   const loansOn = await hasFeature(userId, 'loans');
   const userLoans = await db
     .select()

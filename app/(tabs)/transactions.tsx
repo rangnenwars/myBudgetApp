@@ -19,6 +19,8 @@ import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme'
 import { CategoryPicker } from '../../components/CategoryPicker';
 import { DateField } from '../../components/DateField';
 import { RepeatingEntries } from '../../components/RepeatingEntries';
+import { RepeatEndField } from '../../components/RepeatEndField';
+import { RepeatEndChoice, endPayload, firstRepeatDate, repeatEndError } from '../../utils/repeatEnd';
 import { useAuth } from '../../context/AuthContext';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
@@ -92,6 +94,8 @@ export default function TransactionsScreen() {
   const [saving, setSaving] = useState(false);
   const [repeat, setRepeat] = useState(false);
   const [frequency, setFrequency] = useState<RepeatFrequency>('monthly');
+  const [repeatEnd, setRepeatEnd] = useState<RepeatEndChoice | null>(null);
+  const [endTried, setEndTried] = useState(false);
   const [rules, setRules] = useState<RecurringTransaction[]>([]);
   const [repeatingOpen, setRepeatingOpen] = useState(false);
 
@@ -151,6 +155,8 @@ export default function TransactionsScreen() {
     setPeriod('once');
     setRepeat(false);
     setFrequency('monthly');
+    setRepeatEnd(null);
+    setEndTried(false);
     setDate(todayLocalIso());
     setAmount('');
     setCategory(null);
@@ -169,6 +175,8 @@ export default function TransactionsScreen() {
     setPeriod('once'); // editing works on the amount as stored — see the period note below
     setDate(item.date);
     setRepeat(false);
+    setRepeatEnd(null);
+    setEndTried(false);
     setAmount(String(item.amount));
     setCategory(item.category);
     setNote(item.note ?? '');
@@ -192,6 +200,14 @@ export default function TransactionsScreen() {
       setError(dateError);
       return;
     }
+    if (repeat) {
+      const endError = repeatEndError(date, repeatEnd);
+      if (endError) {
+        setEndTried(true);
+        setError(endError);
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
@@ -206,7 +222,7 @@ export default function TransactionsScreen() {
           note: note.trim() || null,
           date,
         });
-        if (repeat) await repeatTransactionMonthly(editingId, frequency);
+        if (repeat) await repeatTransactionMonthly(editingId, frequency, endPayload(date, repeatEnd!));
       } else {
         // A one-off Quarterly/Yearly bill is stored as its monthly equivalent (÷3 / ÷12) with the
         // original in the note. A repeating one is stored in full: the rule posts the whole bill
@@ -222,6 +238,12 @@ export default function TransactionsScreen() {
           date,
           ...monthYearOf(date),
           repeat_frequency: repeat ? frequency : undefined,
+          ...(repeat && repeatEnd
+            ? (() => {
+                const end = endPayload(date, repeatEnd);
+                return 'ends_on' in end ? { repeat_ends_on: end.ends_on } : { repeat_no_end: true };
+              })()
+            : {}),
         });
       }
       resetForm();
@@ -407,7 +429,7 @@ export default function TransactionsScreen() {
                 <Text style={styles.repeatLabel}>Repeat</Text>
                 <Text style={styles.hint}>
                   {repeat
-                    ? `Added again on the ${ordinal(repeatDay)} ${frequency === 'monthly' ? 'of every month' : frequency === 'quarterly' ? 'every 3 months' : 'of this month every year'}, until you stop it under "Repeating".`
+                    ? `Added again on the ${ordinal(repeatDay)} ${frequency === 'monthly' ? 'of every month' : frequency === 'quarterly' ? 'every 3 months' : 'of this month every year'}, until the end date you choose below.`
                     : 'Turn on for salary, rent, insurance or any fixed amount that comes back.'}
                 </Text>
               </View>
@@ -433,6 +455,21 @@ export default function TransactionsScreen() {
               <Text style={styles.hint}>
                 The full amount is added once every {frequency === 'quarterly' ? '3 months' : 'year'}, on this day of the month.
               </Text>
+            )}
+
+            {repeat && (
+              <RepeatEndField
+                base={date}
+                firstDue={firstRepeatDate(date, frequency)}
+                frequency={frequency}
+                day={repeatDay}
+                value={repeatEnd}
+                onChange={(v) => {
+                  setRepeatEnd(v);
+                  setError(null);
+                }}
+                showError={endTried}
+              />
             )}
 
             {error && <Text style={styles.error}>{error}</Text>}

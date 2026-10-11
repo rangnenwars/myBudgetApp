@@ -7,6 +7,9 @@ import { confirmAction } from '../utils/alert';
 import { apiErrorMessage } from '../utils/api';
 import { RecurringTransaction, RepeatFrequency, updateRecurring, deleteRecurring } from '../utils/database';
 import { Segmented } from './ScreenKit';
+import { RepeatEndField } from './RepeatEndField';
+import { RepeatEndChoice, endPayload, endStatus, repeatEndError } from '../utils/repeatEnd';
+import { todayLocalIso } from '../utils/dates';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -32,6 +35,8 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState<RepeatFrequency>('monthly');
   const [day, setDay] = useState('');
+  const [repeatEnd, setRepeatEnd] = useState<RepeatEndChoice | null>(null);
+  const [endTried, setEndTried] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,6 +51,8 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
     setAmount(String(rule.amount));
     setFrequency(rule.frequency);
     setDay(String(rule.day_of_month));
+    setRepeatEnd(rule.ends_on ? { kind: 'date', date: rule.ends_on } : rule.no_end ? { kind: 'none' } : null);
+    setEndTried(false);
     setError(null);
   };
 
@@ -61,10 +68,21 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
       setError('Day of the month must be 1–31.');
       return;
     }
+    const today = todayLocalIso();
+    const endError = repeatEndError(today, repeatEnd);
+    if (endError) {
+      setEndTried(true);
+      setError(endError);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const patch: Parameters<typeof updateRecurring>[1] = { amount: value };
+      // Only sent when the user changed it (or the rule had no choice yet).
+      const newEnd = endPayload(today, repeatEnd!);
+      const unchanged = 'ends_on' in newEnd ? newEnd.ends_on === editing.ends_on : editing.no_end;
+      if (!unchanged) Object.assign(patch, newEnd);
       if (frequency !== editing.frequency) patch.frequency = frequency;
       if (dayValue !== editing.day_of_month) patch.day_of_month = dayValue;
       await updateRecurring(editing.id, patch);
@@ -140,6 +158,19 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
                 keyboardType="numeric"
               />
 
+              <RepeatEndField
+                base={todayLocalIso()}
+                firstDue={editing.next_due}
+                frequency={frequency}
+                day={Number(day) >= 1 && Number(day) <= 31 ? Number(day) : editing.day_of_month}
+                value={repeatEnd}
+                onChange={(v) => {
+                  setRepeatEnd(v);
+                  setError(null);
+                }}
+                showError={endTried}
+              />
+
               {error && <Text style={styles.error}>{error}</Text>}
 
               <Pressable style={styles.saveBtn} onPress={onSave} disabled={busy}>
@@ -165,6 +196,9 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
                       <Text style={styles.rowLabel}>{cat?.label ?? rule.category}</Text>
                       <Text style={styles.rowNote}>
                         {rule.note ? `${rule.note} · ` : ''}next {fmtDue(rule.next_due)}
+                      </Text>
+                      <Text style={[styles.rowNote, endStatus(rule, todayLocalIso()).warn && styles.rowNoteWarn]}>
+                        {endStatus(rule, todayLocalIso()).text}
                       </Text>
                     </View>
                     <Text style={[styles.rowAmount, { color: rule.type === 'income' ? COLORS.accent : COLORS.red }]}>
@@ -192,6 +226,7 @@ const styles = StyleSheet.create({
   rowMid: { flex: 1 },
   rowLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   rowNote: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  rowNoteWarn: { color: COLORS.red, fontWeight: '600' },
   rowAmount: { fontSize: 13, fontWeight: '700' },
   empty: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', paddingVertical: SPACING.lg },
   hint: { color: COLORS.textDim, fontSize: 12 },

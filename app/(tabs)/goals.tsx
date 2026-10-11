@@ -31,6 +31,8 @@ import { computeGoalETA } from '../../utils/calculations';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 import { withFeature } from '../../components/FeatureGate';
+import { DateInput } from '../../components/DateInput';
+import { todayLocalIso } from '../../utils/dates';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -283,7 +285,7 @@ function GoalsScreen() {
             <TextInput style={styles.input} value={target} onChangeText={setTarget} placeholder="0" placeholderTextColor={COLORS.textDim} keyboardType="numeric" />
 
             <Text style={styles.label}>Target date (optional)</Text>
-            <TextInput style={styles.input} value={deadline} onChangeText={setDeadline} placeholder="YYYY-MM-DD" placeholderTextColor={COLORS.textDim} />
+            <DateInput value={deadline} onChange={setDeadline} min={todayLocalIso()} inputStyle={styles.input} accessibilityLabel="Target date" />
 
             {error && <Text style={styles.error}>{error}</Text>}
 

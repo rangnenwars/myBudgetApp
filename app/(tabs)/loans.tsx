@@ -20,6 +20,7 @@ import { addLoan, deleteLoan, getLoans, updateLoan, payLoanEmi, payLoanPartial, 
 import { simulateDebtPayoff, computePartPayment, DebtStrategy, splitEmi, monthsToRepay } from '../../utils/calculations';
 import { confirmAction, showAlert } from '../../utils/alert';
 import { todayLocalIso, isValidIsoDate } from '../../utils/dates';
+import { DateInput } from '../../components/DateInput';
 import { apiErrorMessage } from '../../utils/api';
 import { withFeature } from '../../components/FeatureGate';
 
@@ -363,7 +364,7 @@ function LoansScreen() {
               </View>
               <View style={styles.col}>
                 <Text style={styles.label}>Start date</Text>
-                <TextInput style={styles.input} value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={COLORS.textDim} />
+                <DateInput value={startDate} onChange={setStartDate} inputStyle={styles.input} accessibilityLabel="Start date" />
               </View>
             </View>
 

@@ -212,10 +212,17 @@ export const recurringTransactions = pgTable('recurring_transactions', {
   // check (run before every transactions/reports request) is one indexed
   // comparison whatever the frequency.
   next_due: date('next_due').notNull(),
+  // Last date an entry may post (inclusive). A rule whose next_due is past it
+  // is expired: it posts nothing more, is hidden from the list and no longer
+  // counts as a commitment. no_end is the user's explicit "No end date"; a rule
+  // with neither set is an old one still waiting for the user to choose.
+  ends_on: date('ends_on'),
+  no_end: boolean('no_end').notNull().default(false),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_recurring_user_due').on(table.userId, table.next_due),
+  check('recurring_end_check', sql`NOT (${table.no_end} AND ${table.ends_on} IS NOT NULL)`),
   index('idx_recurring_category').on(table.category),
   check('recurring_amount_check', sql`${table.amount} > 0`),
   check('recurring_type_check', sql`${table.type} IN ('income', 'expense')`),

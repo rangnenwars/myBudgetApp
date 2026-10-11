@@ -42,7 +42,7 @@ export * from './calculations';
 
 /** `repeat_frequency` (or the older `repeat_monthly: true`) also saves a rule so the same entry posts again every month/quarter/year on the entry's day. */
 export const addTransaction = async (
-  t: Omit<Transaction, 'id' | 'created_at'> & { repeat_monthly?: boolean; repeat_frequency?: RepeatFrequency }
+  t: Omit<Transaction, 'id' | 'created_at'> & { repeat_monthly?: boolean; repeat_frequency?: RepeatFrequency; repeat_ends_on?: string; repeat_no_end?: boolean }
 ): Promise<Transaction> => {
   const { data } = await api.post('/transactions', {
     amount: t.amount,
@@ -53,6 +53,8 @@ export const addTransaction = async (
     date: t.date,
     repeat_monthly: t.repeat_monthly,
     repeat_frequency: t.repeat_frequency,
+    repeat_ends_on: t.repeat_ends_on,
+    repeat_no_end: t.repeat_no_end,
   });
   return data;
 };
@@ -199,16 +201,20 @@ export const getRecurring = async (): Promise<RecurringTransaction[]> => {
   return data;
 };
 
-/** Makes an existing transaction repeat (on its own day of the month), starting one period after it. */
-export const repeatTransactionMonthly = async (transactionId: number, frequency: RepeatFrequency = 'monthly'): Promise<RecurringTransaction> => {
-  const { data } = await api.post('/recurring', { transaction_id: transactionId, frequency });
+/** Makes an existing transaction repeat (on its own day of the month), starting one period after it, until `end`. */
+export const repeatTransactionMonthly = async (
+  transactionId: number,
+  frequency: RepeatFrequency,
+  end: { ends_on: string } | { no_end: true }
+): Promise<RecurringTransaction> => {
+  const { data } = await api.post('/recurring', { transaction_id: transactionId, frequency, ...end });
   return data;
 };
 
 /** Changes apply to entries not yet posted; already-posted transactions keep theirs. */
 export const updateRecurring = async (
   id: number,
-  patch: Partial<{ amount: number; note: string | null; frequency: RepeatFrequency; day_of_month: number }>
+  patch: Partial<{ amount: number; note: string | null; frequency: RepeatFrequency; day_of_month: number; ends_on: string; no_end: boolean }>
 ): Promise<RecurringTransaction> => {
   const { data } = await api.patch(`/recurring/${id}`, patch);
   return data;

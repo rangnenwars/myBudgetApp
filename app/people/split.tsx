@@ -21,6 +21,7 @@ export default function SplitBillScreen() {
   const [showNew, setShowNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -39,6 +40,30 @@ export default function SplitBillScreen() {
   const plan = planPeopleSplit(total, split);
   const nameOf = (k: number) => (k === NEW_PERSON ? split.newName.trim() : people.find((p) => p.id === k)?.name ?? '');
   const toggle = (id: number) => setSplit({ ...split, picked: split.picked.includes(id) ? split.picked.filter((x) => x !== id) : [...split.picked, id] });
+  // Adds the typed name to your People list right away and ticks them, so as many friends as needed can be added in a row.
+  const addFriend = async () => {
+    const name = split.newName.trim();
+    if (!name) return;
+    setAdding(true);
+    setError(null);
+    try {
+      let person: Person;
+      try {
+        person = await addPerson(name);
+      } catch (err) {
+        const existing = (await getPeople()).people.find((p) => p.name.toLowerCase() === name.toLowerCase());
+        if (!existing) throw err;
+        person = existing;
+      }
+      setPeople((list) => (list.some((p) => p.id === person.id) ? list : [...list, person]));
+      setSplit((v) => ({ ...v, newName: '', picked: v.picked.includes(person.id) ? v.picked : [...v.picked, person.id] }));
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Could not add this person.'));
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const friendShares = plan.keys.map((k) => plan.shares[k]);
   const allEqual = friendShares.every((v) => v === friendShares[0]) && friendShares[0] === plan.myShare;
 
@@ -110,16 +135,23 @@ export default function SplitBillScreen() {
           </Pressable>
         </View>
         {showNew && (
-          <TextInput
-            style={styles.input}
-            value={split.newName}
-            onChangeText={(newName) => setSplit({ ...split, newName })}
-            placeholder="Name"
-            placeholderTextColor={COLORS.textDim}
-            maxLength={60}
-            autoFocus
-            accessibilityLabel="New person's name"
-          />
+          <View style={styles.addRow}>
+            <TextInput
+              style={[styles.input, styles.addInput]}
+              value={split.newName}
+              onChangeText={(newName) => setSplit({ ...split, newName })}
+              onSubmitEditing={addFriend}
+              placeholder="Name"
+              placeholderTextColor={COLORS.textDim}
+              maxLength={60}
+              autoFocus
+              returnKeyType="done"
+              accessibilityLabel="New person's name"
+            />
+            <Pressable style={[styles.addBtn, (!split.newName.trim() || adding) && styles.addBtnOff]} onPress={addFriend} disabled={!split.newName.trim() || adding} accessibilityRole="button">
+              <Text style={styles.addBtnText}>{adding ? 'Adding…' : 'Add'}</Text>
+            </Pressable>
+          </View>
         )}
 
         {plan.keys.length > 0 && total > 0 && (
@@ -194,6 +226,11 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   chipText: { color: COLORS.text, fontSize: 14 },
   chipTextActive: { color: COLORS.onAccent, fontWeight: '600' },
+  addRow: { flexDirection: 'row', gap: SPACING.sm, alignItems: 'center' },
+  addInput: { flex: 1 },
+  addBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingHorizontal: SPACING.lg, paddingVertical: 13 },
+  addBtnOff: { opacity: 0.5 },
+  addBtnText: { color: COLORS.onAccent, fontWeight: '700', fontSize: 15 },
   summary: { gap: SPACING.sm },
   summaryMain: { color: COLORS.text, fontSize: 15 },
   bold: { fontWeight: '700' },

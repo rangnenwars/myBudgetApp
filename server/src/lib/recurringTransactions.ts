@@ -1,9 +1,10 @@
-import { and, eq, lte } from 'drizzle-orm';
+import { and, eq, gte, isNull, lte, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recurringTransactions, transactions } from '../db/schema';
 import { recomputeBudgetClass } from './budgetClass';
 import { MAX_CATCH_UP_MONTHS, monthStart } from './loanEmiExpenses';
 import { localToday } from './clock';
+import { badRequest } from './errors';
 
 // A repeating rule posts its amount again every month, quarter or year after
 // the user's original entry, on the rule's day_of_month. Same lazy approach
@@ -53,9 +54,16 @@ export const NO_REPEAT_MESSAGE = "A Loan EMI can't be set to repeat. Add the loa
 const todayLocal = (now: Date): string => localToday(now).iso;
 
 /** Posts any due entries for the user's repeating rules. Returns how many transactions were created. */
-/** Rules of the user with an entry due today or earlier. */
+/**
+ * A rule that can still post: no end date, or its next entry falls on or before
+ * the end date. Once the last entry before `ends_on` is posted, next_due moves
+ * past it and the rule is expired.
+ */
+export const activeRuleFilter = () => or(isNull(recurringTransactions.ends_on), gte(recurringTransactions.ends_on, recurringTransactions.next_due))!;
+
+/** Rules of the user with an entry due today or earlier (and not past their end date). */
 export const rulesDueFilter = (userId: number, now: Date = new Date()) =>
-  and(eq(recurringTransactions.userId, userId), lte(recurringTransactions.next_due, todayLocal(now)))!;
+  and(eq(recurringTransactions.userId, userId), lte(recurringTransactions.next_due, todayLocal(now)), activeRuleFilter())!;
 
 export const postDueRecurring = async (userId: number, now: Date = new Date(), knownDue = false): Promise<number> => {
   const today = todayLocal(now);
@@ -76,10 +84,12 @@ export const postDueRecurring = async (userId: number, now: Date = new Date(), k
       const step = FREQUENCY_MONTHS[frequency];
       let [y, m] = rule.posted_through.split('-').map(Number);
       const periods: { year: number; month: number; date: string }[] = [];
+      // Catching up never goes past the end date, however long the app sat unopened.
+      const cap = rule.ends_on && rule.ends_on < today ? rule.ends_on : today;
       for (;;) {
         const next = addMonths(y, m, step);
         const date = postingDate(next.year, next.month, rule.day_of_month);
-        if (date > today) break;
+        if (date > cap) break;
         periods.push({ ...next, date });
         ({ year: y, month: m } = next);
       }
@@ -109,4 +119,28 @@ export const postDueRecurring = async (userId: number, now: Date = new Date(), k
 
   if (posted > 0) await recomputeBudgetClass(userId);
   return posted;
+};
+
+/** How far ahead an end date may be set (years), so a typo like 2926 is a 400. */
+const MAX_END_YEARS = 30;
+
+/**
+ * Turns the request's `ends_on` / `no_end` into rule columns. A new repeat must
+ * say which (`required`); an edit may leave both out to keep what the rule has.
+ * `after` is the earliest allowed end date (the entry's own date for a new repeat).
+ */
+export const endFields = (
+  body: { ends_on?: string; no_end?: boolean },
+  opts: { required: boolean; after?: string; now?: Date }
+): { ends_on?: string | null; no_end?: boolean } => {
+  if (body.ends_on !== undefined && body.no_end) throw badRequest('Choose either an end date or no end date, not both.');
+  if (body.ends_on !== undefined) {
+    if (opts.after && body.ends_on < opts.after) throw badRequest("The end date can't be before the first entry.");
+    const today = localToday(opts.now ?? new Date());
+    if (body.ends_on > `${today.year + MAX_END_YEARS}-12-31`) throw badRequest(`The end date can be at most ${MAX_END_YEARS} years away.`);
+    return { ends_on: body.ends_on, no_end: false };
+  }
+  if (body.no_end) return { ends_on: null, no_end: true };
+  if (opts.required) throw badRequest('Choose when this repeat ends: set an end date or pick No end date.');
+  return {};
 };

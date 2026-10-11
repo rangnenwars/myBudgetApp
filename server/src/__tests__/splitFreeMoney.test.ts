@@ -118,7 +118,7 @@ describe('weekStartOf', () => {
 
 describe('GET /reports/free-money-day', () => {
   const addRule = (token: string, body: Record<string, unknown>) =>
-    request(app).post('/api/v1/transactions').set(auth(token)).send({ date: TODAY, repeat_monthly: true, ...body });
+    request(app).post('/api/v1/transactions').set(auth(token)).send({ date: TODAY, repeat_monthly: true, repeat_no_end: true, ...body });
 
   it('requires authentication', async () => {
     expect((await request(app).get('/api/v1/reports/free-money-day')).status).toBe(401);
@@ -241,7 +241,7 @@ describe('GET /reports/free-money-day', () => {
   it('spreads a quarterly repeating bill over three months', async () => {
     const { accessToken } = await registerUser();
     await addRule(accessToken, { amount: 60000, type: 'income', category_key: 'salary_1' });
-    const created = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ date: TODAY, amount: 30000, type: 'expense', category_key: 'internet', repeat_frequency: 'quarterly', note: 'Insurance' });
+    const created = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ date: TODAY, amount: 30000, type: 'expense', category_key: 'internet', repeat_frequency: 'quarterly', repeat_no_end: true, note: 'Insurance' });
     expect(created.status).toBe(201);
     const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
     expect(res.body).toMatchObject({ committed: 10000 });
