@@ -432,3 +432,32 @@ describe('repeat end date', () => {
     expect((await patch({ ends_on: '2026-02-30' })).status).toBe(400);
   });
 });
+
+describe('Loan EMI entries cannot repeat', () => {
+  it('refuses a repeating Loan EMI on POST /transactions, saving nothing', async () => {
+    const { accessToken } = await registerUser();
+    for (const extra of [{ repeat_monthly: true, repeat_no_end: true }, { repeat_frequency: 'quarterly', repeat_ends_on: '2030-01-01' }]) {
+      const res = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 10000, type: 'expense', category_key: 'loan_emi', date: dayIn(0, 1), ...extra });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Loans/);
+    }
+    expect(await listRules(accessToken)).toHaveLength(0);
+    expect((await listTxns(accessToken)).filter((t) => t.category === 'loan_emi')).toHaveLength(0);
+  });
+
+  it('refuses to make an existing Loan EMI entry repeat via POST /recurring', async () => {
+    const { accessToken } = await registerUser();
+    const once = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 10000, type: 'expense', category_key: 'loan_emi', date: dayIn(0, 1) });
+    expect(once.status).toBe(201);
+    const res = await request(app).post('/api/v1/recurring').set(auth(accessToken)).send({ transaction_id: once.body.id, no_end: true });
+    expect(res.status).toBe(400);
+    expect(await listRules(accessToken)).toHaveLength(0);
+  });
+
+  it('still lets other EMI-style categories repeat', async () => {
+    const { accessToken } = await registerUser();
+    const res = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 3000, type: 'expense', category_key: 'external_emis', date: dayIn(0, 1), repeat_monthly: true, repeat_no_end: true });
+    expect(res.status).toBe(201);
+    expect(await listRules(accessToken)).toHaveLength(1);
+  });
+});

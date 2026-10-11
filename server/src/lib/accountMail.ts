@@ -1,8 +1,8 @@
 import { mailerConfigured, sendMail } from './mailer';
 
 // Account emails (password reset, email verification) on top of the shared
-// SMTP mailer in lib/mailer.ts (configured by SMTP_HOST / SMTP_PORT /
-// SMTP_USER / SMTP_PASS / SMTP_FROM). What happens without SMTP:
+// mailer in lib/mailer.ts (Resend via RESEND_API_KEY + MAIL_FROM, or SMTP via
+// SMTP_HOST / SMTP_FROM). What happens with neither configured:
 //   - development: the email is printed to the server log so links can be
 //     tested locally;
 //   - production: nothing is sent and only a warning is logged (never the
@@ -26,7 +26,7 @@ export const sendAccountMail = async (mail: AccountMail): Promise<void> => {
   }
   if (!mailerConfigured()) {
     if (process.env.NODE_ENV === 'production') {
-      console.warn(`[mail] SMTP not configured — "${mail.subject}" to ${mail.to} was not sent.`);
+      console.warn(`[mail] email not configured — "${mail.subject}" to ${mail.to} was not sent.`);
     } else {
       console.log(`[mail] (dev, not sent) To: ${mail.to}\nSubject: ${mail.subject}\n\n${mail.text}\n`);
     }

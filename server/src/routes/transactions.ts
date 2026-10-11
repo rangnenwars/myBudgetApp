@@ -9,7 +9,7 @@ import { monthsDateRange } from '../lib/clock';
 import { isoDate, idParam, money, optionalText, likeContains } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { autoPostMiddleware } from '../lib/autoPost';
-import { activeRuleFilter, endFields, ruleScheduleFor } from '../lib/recurringTransactions';
+import { activeRuleFilter, endFields, NO_REPEAT_CATEGORIES, NO_REPEAT_MESSAGE, ruleScheduleFor } from '../lib/recurringTransactions';
 import { badRequest, conflict, notFound } from '../lib/errors';
 import { recomputeBudgetClass } from '../lib/budgetClass';
 import { splitEqually } from '../calculations';
@@ -172,6 +172,7 @@ router.post(
       : {};
 
     if (repeatFrequency) {
+      if (NO_REPEAT_CATEGORIES.has(body.category_key)) throw badRequest(NO_REPEAT_MESSAGE);
       // Same guard as POST /recurring, so a double tap can't make every period post twice.
       const [duplicate] = await db
         .select({ id: recurringTransactions.id })
