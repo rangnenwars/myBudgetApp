@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { DateInput } from './DateInput';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { isValidIsoDate, shiftIsoDate, todayLocalIso } from '../utils/dates';
 
@@ -47,16 +48,7 @@ export const DueDateField: React.FC<Props> = ({ value, onChange }) => {
         })}
       </View>
       {(other || showOther) && (
-        <TextInput
-          style={styles.input}
-          value={value}
-          onChangeText={onChange}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={COLORS.textDim}
-          autoCapitalize="none"
-          maxLength={10}
-          accessibilityLabel="Pay back by date"
-        />
+        <DateInput value={value} onChange={onChange} min={today} inputStyle={styles.input} accessibilityLabel="Pay back by date" />
       )}
       {error && <Text style={styles.error}>{error}</Text>}
     </View>

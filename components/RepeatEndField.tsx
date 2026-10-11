@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
-import { CalendarSheet } from './CalendarSheet';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { DateInput } from './DateInput';
 import { END_PRESET_MONTHS, RepeatEndChoice, endsOnFor, formatEndDate, repeatEndError, repeatPreview } from '../utils/repeatEnd';
 import { RepeatFrequency } from '../utils/types';
 
@@ -21,7 +20,6 @@ interface Props {
 
 /** Required "Ends on" choice for a repeating entry: a few months, a date, or an explicit no end date. */
 export const RepeatEndField: React.FC<Props> = ({ base, firstDue, frequency, day, value, onChange, showError }) => {
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const error = value || showError ? repeatEndError(base, value) : null;
   const endsOn = error ? null : endsOnFor(base, value);
   const preview = endsOn ? repeatPreview(firstDue, frequency, day, endsOn) : null;
@@ -42,31 +40,8 @@ export const RepeatEndField: React.FC<Props> = ({ base, firstDue, frequency, day
       </View>
 
       {value?.kind === 'date' && (
-        <View style={styles.dateRow}>
-          <TextInput
-            style={[styles.input, styles.dateInput]}
-            value={value.date}
-            onChangeText={(date) => onChange({ kind: 'date', date })}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={COLORS.textDim}
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={10}
-          />
-          <Pressable style={styles.calBtn} onPress={() => setCalendarOpen(true)} hitSlop={6} accessibilityLabel="Open calendar">
-            <Ionicons name="calendar-outline" size={18} color={COLORS.accent} />
-          </Pressable>
-        </View>
+        <DateInput value={value.date} onChange={(date) => onChange({ kind: 'date', date })} min={base} inputStyle={styles.input} accessibilityLabel="End date" />
       )}
-
-      <CalendarSheet
-        visible={calendarOpen}
-        value={value?.kind === 'date' ? value.date : ''}
-        min={base}
-        onSelect={(date) => onChange({ kind: 'date', date })}
-        onClose={() => setCalendarOpen(false)}
-      />
-
       {error ? (
         <Text style={styles.error}>{error}</Text>
       ) : value?.kind === 'none' ? (
@@ -107,9 +82,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 15,
   },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
-  dateInput: { flex: 1 },
-  calBtn: { backgroundColor: COLORS.input, borderColor: COLORS.accent, borderWidth: 1, borderRadius: RADIUS.md, padding: 10 },
   endLine: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   hint: { color: COLORS.textDim, fontSize: 12 },
   error: { color: COLORS.red, fontSize: 12 },
