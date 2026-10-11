@@ -4,6 +4,7 @@ import { categories, freeMoneySnapshots, loans, recurringTransactions } from '..
 import { addMonths, localToday } from './clock';
 import { getTotalsInRange } from './queries';
 import { hasFeature } from './features';
+import { activeRuleFilter } from './recurringTransactions';
 import { computeFreeMoneyDay, monthlyEquivalent } from '../calculations';
 
 export interface Commitment {
@@ -55,7 +56,7 @@ export const getFreeMoneyDay = async (userId: number) => {
     .select({ rule: recurringTransactions, label: categories.label })
     .from(recurringTransactions)
     .innerJoin(categories, eq(categories.key, recurringTransactions.category))
-    .where(eq(recurringTransactions.userId, userId));
+    .where(and(eq(recurringTransactions.userId, userId), activeRuleFilter()));
   // Loan EMIs only count while Loans is switched on for the user; the screen
   // shouldn't list loans they can't open.
   const activeLoans = (await hasFeature(userId, 'loans'))

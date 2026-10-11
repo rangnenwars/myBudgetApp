@@ -26,7 +26,7 @@ const addRepeating = (token: string, body: Record<string, unknown>) =>
   request(app)
     .post('/api/v1/transactions')
     .set(auth(token))
-    .send({ amount: 50000, type: 'income', category_key: 'salary_1', date: dayIn(0, 1), repeat_monthly: true, ...body });
+    .send({ amount: 50000, type: 'income', category_key: 'salary_1', date: dayIn(0, 1), repeat_monthly: true, repeat_no_end: true, ...body });
 
 describe('repeat every month', () => {
   it('requires authentication', async () => {
@@ -144,7 +144,7 @@ describe('repeat every month', () => {
     const addPlain = async (token: string, body: Record<string, unknown> = {}) =>
       (await request(app).post('/api/v1/transactions').set(auth(token)).send({ amount: 267000, type: 'income', category_key: 'salary_1', date: dayIn(1, 1), note: 'Salary', ...body })).body as Txn;
     const makeRepeat = (token: string, transaction_id: unknown, extra: Record<string, unknown> = {}) =>
-      request(app).post('/api/v1/recurring').set(auth(token)).send({ transaction_id, ...extra });
+      request(app).post('/api/v1/recurring').set(auth(token)).send({ transaction_id, no_end: true, ...extra });
 
     it('copies the transaction into a rule and posts from the following month', async () => {
       const { accessToken } = await registerUser();
@@ -315,7 +315,7 @@ describe('repeat frequency via the API', () => {
     const res = await request(app)
       .post('/api/v1/transactions')
       .set(auth(accessToken))
-      .send({ amount: 12000, type: 'expense', category_key: 'internet', date: '2026-09-15', repeat_frequency: 'quarterly' });
+      .send({ amount: 12000, type: 'expense', category_key: 'internet', date: '2026-09-15', repeat_frequency: 'quarterly', repeat_no_end: true });
     expect(res.status).toBe(201);
     const [rule] = (await request(app).get('/api/v1/recurring').set(auth(accessToken))).body;
     expect(rule).toMatchObject({ frequency: 'quarterly', day_of_month: 15, posted_through: '2026-09-01', next_due: '2026-12-15' });
@@ -323,7 +323,7 @@ describe('repeat frequency via the API', () => {
 
   it('refuses a second identical repeating entry with 409 and saves nothing', async () => {
     const { accessToken } = await registerUser();
-    const body = { amount: 999, type: 'expense', category_key: 'internet', date: '2026-09-15', repeat_frequency: 'monthly' };
+    const body = { amount: 999, type: 'expense', category_key: 'internet', date: '2026-09-15', repeat_frequency: 'monthly', repeat_no_end: true };
     expect((await request(app).post('/api/v1/transactions').set(auth(accessToken)).send(body)).status).toBe(201);
     expect((await request(app).post('/api/v1/transactions').set(auth(accessToken)).send(body)).status).toBe(409);
     const all = (await request(app).get('/api/v1/transactions').set(auth(accessToken))).body as Txn[];
@@ -335,7 +335,7 @@ describe('repeat frequency via the API', () => {
     await request(app)
       .post('/api/v1/transactions')
       .set(auth(accessToken))
-      .send({ amount: 500, type: 'expense', category_key: 'internet', date: '2026-09-01', repeat_frequency: 'yearly' });
+      .send({ amount: 500, type: 'expense', category_key: 'internet', date: '2026-09-01', repeat_frequency: 'yearly', repeat_no_end: true });
     const [rule] = (await request(app).get('/api/v1/recurring').set(auth(accessToken))).body;
     const res = await request(app).patch(`/api/v1/recurring/${rule.id}`).set(auth(accessToken)).send({ frequency: 'quarterly', day_of_month: 10 });
     expect(res.status).toBe(200);
@@ -347,5 +347,88 @@ describe('repeat frequency via the API', () => {
     const { accessToken } = await registerUser();
     const res = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 5, type: 'expense', category_key: 'internet', date: '2026-02-30' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('repeat end date', () => {
+  const insertRule = async (userId: number, over: Partial<typeof recurringTransactions.$inferInsert> = {}) => {
+    const postedThrough = '2026-01-01';
+    const [rule] = await db
+      .insert(recurringTransactions)
+      .values({
+        userId,
+        category: 'internet',
+        type: 'expense',
+        amount: 700,
+        posted_through: postedThrough,
+        frequency: 'monthly',
+        day_of_month: 5,
+        next_due: nextDueAfter(postedThrough, 'monthly', 5),
+        ...over,
+      })
+      .returning();
+    return rule;
+  };
+  const postedDates = async (userId: number) =>
+    (await db.select({ date: transactions.date }).from(transactions).where(eq(transactions.userId, userId))).map((r) => r.date).sort();
+  const OCT = new Date('2026-10-11T00:00:00Z');
+
+  it('a new repeat must say when it ends', async () => {
+    const { accessToken } = await registerUser();
+    const body = { amount: 50, type: 'expense', category_key: 'internet', date: '2026-09-15', repeat_frequency: 'monthly' };
+    const post = (extra: Record<string, unknown>) => request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ ...body, ...extra });
+    expect((await post({})).status).toBe(400);
+    expect((await post({ repeat_ends_on: '2027-09-15', repeat_no_end: true })).status).toBe(400);
+    expect((await post({ repeat_ends_on: '2026-09-14' })).status).toBe(400);
+    expect((await post({ repeat_ends_on: '2999-01-01' })).status).toBe(400);
+    expect(await listRules(accessToken)).toHaveLength(0);
+    expect((await post({ repeat_ends_on: '2027-09-15' })).status).toBe(201);
+    expect(await listRules(accessToken)).toEqual([expect.objectContaining({ ends_on: '2027-09-15', no_end: false })]);
+  });
+
+  it('stops posting at the end date, even when catching up months later', async () => {
+    const { user } = await registerUser();
+    await insertRule(user.id, { ends_on: '2026-07-31' });
+    expect(await postDueRecurring(user.id, OCT)).toBe(6);
+    expect(await postedDates(user.id)).toEqual(['2026-02-05', '2026-03-05', '2026-04-05', '2026-05-05', '2026-06-05', '2026-07-05']);
+    expect(await postDueRecurring(user.id, new Date('2027-03-01T00:00:00Z'))).toBe(0);
+  });
+
+  it('an end date before the repeat day in its last month leaves that month out', async () => {
+    const { user } = await registerUser();
+    await insertRule(user.id, { day_of_month: 25, ends_on: '2026-07-20' });
+    await postDueRecurring(user.id, OCT);
+    expect((await postedDates(user.id)).pop()).toBe('2026-06-25');
+  });
+
+  it('hides an expired rule from the list and lets the same repeat be added again', async () => {
+    const { user, accessToken } = await registerUser();
+    await insertRule(user.id, { ends_on: '2026-07-31' });
+    await postDueRecurring(user.id, OCT);
+    expect(await listRules(accessToken)).toHaveLength(0);
+    const again = await request(app)
+      .post('/api/v1/transactions')
+      .set(auth(accessToken))
+      .send({ amount: 700, type: 'expense', category_key: 'internet', date: dayIn(0, 1), repeat_frequency: 'monthly', repeat_no_end: true });
+    expect(again.status).toBe(201);
+  });
+
+  it('an old rule with no choice yet keeps posting and stays listed', async () => {
+    const { user, accessToken } = await registerUser();
+    await insertRule(user.id);
+    expect(await postDueRecurring(user.id, OCT)).toBe(9);
+    const [rule] = await listRules(accessToken);
+    expect(rule).toMatchObject({ ends_on: null, no_end: false });
+  });
+
+  it('PATCH sets an end date or No end date, each clearing the other', async () => {
+    const { user, accessToken } = await registerUser();
+    const rule = await insertRule(user.id);
+    const patch = (body: Record<string, unknown>) => request(app).patch(`/api/v1/recurring/${rule.id}`).set(auth(accessToken)).send(body);
+    expect((await patch({ ends_on: '2026-12-31' })).body).toMatchObject({ ends_on: '2026-12-31', no_end: false });
+    expect((await patch({ no_end: true })).body).toMatchObject({ ends_on: null, no_end: true });
+    expect((await patch({ ends_on: '2027-01-31' })).body).toMatchObject({ ends_on: '2027-01-31', no_end: false });
+    expect((await patch({ ends_on: '2027-01-31', no_end: true })).status).toBe(400);
+    expect((await patch({ ends_on: '2026-02-30' })).status).toBe(400);
   });
 });

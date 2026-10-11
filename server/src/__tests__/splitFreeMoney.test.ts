@@ -118,7 +118,7 @@ describe('weekStartOf', () => {
 
 describe('GET /reports/free-money-day', () => {
   const addRule = (token: string, body: Record<string, unknown>) =>
-    request(app).post('/api/v1/transactions').set(auth(token)).send({ date: TODAY, repeat_monthly: true, ...body });
+    request(app).post('/api/v1/transactions').set(auth(token)).send({ date: TODAY, repeat_monthly: true, repeat_no_end: true, ...body });
 
   it('requires authentication', async () => {
     expect((await request(app).get('/api/v1/reports/free-money-day')).status).toBe(401);

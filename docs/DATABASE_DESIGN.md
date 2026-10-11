@@ -249,6 +249,9 @@ CREATE TABLE recurring_transactions (
   frequency      TEXT NOT NULL DEFAULT 'monthly' CHECK (frequency IN ('monthly', 'quarterly', 'yearly')),
   day_of_month   SMALLINT NOT NULL DEFAULT 1 CHECK (day_of_month BETWEEN 1 AND 31),  -- 29–31 fall back to the month's last day
   next_due       DATE NOT NULL,   -- date of the next entry; kept so the due check is one indexed comparison for any frequency
+  ends_on        DATE,            -- last date an entry may post (inclusive); NULL with no_end = false is an old rule awaiting the user's choice
+  no_end         BOOLEAN NOT NULL DEFAULT false,  -- the user's explicit "No end date"
+  CONSTRAINT recurring_end_check CHECK (NOT (no_end AND ends_on IS NOT NULL)),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -27,6 +27,10 @@ export interface RecurringTransaction {
   day_of_month: number;
   /** YYYY-MM-DD the next entry is added on. */
   next_due: string;
+  /** Last date an entry may be added (inclusive). */
+  ends_on: string | null;
+  /** The user's explicit "No end date". With neither this nor ends_on, the rule predates "Ends on" and needs a choice. */
+  no_end: boolean;
 }
 
 export interface Loan {

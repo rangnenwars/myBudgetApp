@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
+import { CalendarSheet } from './CalendarSheet';
 import { entryDateError, isValidIsoDate, shiftIsoDate, todayLocalIso } from '../utils/dates';
 
 interface Props {
@@ -16,6 +17,7 @@ export const DateField: React.FC<Props> = ({ value, onChange }) => {
   const today = todayLocalIso();
   const yesterday = shiftIsoDate(today, -1);
   const [custom, setCustom] = useState(value !== today && value !== yesterday);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const error = entryDateError(value, today);
   const showCustom = custom || (value !== today && value !== yesterday);
@@ -59,10 +61,15 @@ export const DateField: React.FC<Props> = ({ value, onChange }) => {
           <Pressable style={[styles.stepBtn, !canStepForward && styles.stepBtnDisabled]} onPress={() => step(1)} disabled={!canStepForward} hitSlop={6}>
             <Ionicons name="chevron-forward" size={18} color={COLORS.text} />
           </Pressable>
+          <Pressable style={[styles.stepBtn, styles.calBtn]} onPress={() => setCalendarOpen(true)} hitSlop={6} accessibilityLabel="Open calendar">
+            <Ionicons name="calendar-outline" size={18} color={COLORS.accent} />
+          </Pressable>
         </View>
       )}
 
       {error ? <Text style={styles.error}>{error}</Text> : label ? <Text style={styles.hint}>{label}</Text> : null}
+
+      <CalendarSheet visible={calendarOpen} value={value} max={today} onSelect={onChange} onClose={() => setCalendarOpen(false)} />
     </View>
   );
 };
@@ -76,6 +83,7 @@ const styles = StyleSheet.create({
   chipTextActive: { color: COLORS.onAccent },
   customRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   stepBtn: { backgroundColor: COLORS.input, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: 10 },
+  calBtn: { borderColor: COLORS.accent },
   stepBtnDisabled: { opacity: 0.4 },
   input: {
     flex: 1,

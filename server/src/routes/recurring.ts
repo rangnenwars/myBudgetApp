@@ -4,10 +4,10 @@ import { and, eq, desc } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recurringTransactions, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { idParam, money, optionalText } from '../lib/validation';
+import { idParam, isoDate, money, optionalText } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { conflict, notFound } from '../lib/errors';
-import { nextDueAfter, ruleScheduleFor, RepeatFrequency } from '../lib/recurringTransactions';
+import { activeRuleFilter, endFields, nextDueAfter, ruleScheduleFor, RepeatFrequency } from '../lib/recurringTransactions';
 
 // New entries get a rule via POST /transactions with repeat_monthly: true (the
 // entry and its rule are written together); POST here does the same for a
@@ -20,6 +20,8 @@ const frequencySchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const createSchema = z.object({
   transaction_id: z.coerce.number().int().positive(),
   frequency: frequencySchema.default('monthly'),
+  ends_on: isoDate('ends_on').optional(),
+  no_end: z.boolean().optional(),
 });
 
 const updateSchema = z
@@ -28,13 +30,20 @@ const updateSchema = z
     note: optionalText(500).optional(),
     frequency: frequencySchema.optional(),
     day_of_month: z.coerce.number().int().min(1).max(31).optional(),
+    ends_on: isoDate('ends_on').optional(),
+    no_end: z.boolean().optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Provide at least one field to update.' });
 
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const rows = await db.select().from(recurringTransactions).where(eq(recurringTransactions.userId, req.userId!)).orderBy(desc(recurringTransactions.id));
+    // Expired rules (past their end date, nothing left to post) are not listed.
+    const rows = await db
+      .select()
+      .from(recurringTransactions)
+      .where(and(eq(recurringTransactions.userId, req.userId!), activeRuleFilter()))
+      .orderBy(desc(recurringTransactions.id));
     res.json(rows);
   })
 );
@@ -63,7 +72,8 @@ router.post(
           eq(recurringTransactions.userId, req.userId!),
           eq(recurringTransactions.type, txn.type),
           eq(recurringTransactions.category, txn.category),
-          eq(recurringTransactions.amount, txn.amount)
+          eq(recurringTransactions.amount, txn.amount),
+          activeRuleFilter()
         )
       );
     if (duplicate) throw conflict('An entry with this category and amount already repeats monthly.');
@@ -77,6 +87,7 @@ router.post(
         amount: txn.amount,
         note: txn.note?.trim() || null,
         ...ruleScheduleFor(txn.date, body.frequency),
+        ...endFields(body, { required: true, after: txn.date }),
       })
       .returning();
     res.status(201).json(row);
@@ -94,6 +105,7 @@ router.patch(
     const updateData: Partial<typeof recurringTransactions.$inferInsert> = { updated_at: new Date() };
     if (body.amount !== undefined) updateData.amount = body.amount;
     if (body.note !== undefined) updateData.note = body.note?.trim() || null;
+    Object.assign(updateData, endFields(body, { required: false }));
     if (body.frequency !== undefined || body.day_of_month !== undefined) {
       const [current] = await db
         .select()

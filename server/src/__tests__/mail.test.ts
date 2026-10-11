@@ -5,7 +5,7 @@ const mockCreateTransport = jest.fn(() => ({ sendMail: mockSendMail }));
 jest.mock('nodemailer', () => ({ __esModule: true, default: { createTransport: mockCreateTransport } }));
 
 const savedEnv = { ...process.env };
-const SMTP_VARS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'];
+const SMTP_VARS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM', 'RESEND_API_KEY', 'RESEND_FROM'];
 
 beforeEach(() => {
   jest.resetModules(); // mailer caches its transport — start each test fresh
@@ -56,6 +56,41 @@ describe('mailer', () => {
     process.env.SMTP_SECURE = 'true';
     await loadMailer().sendMail({ to: 'a@example.com', subject: 's', text: 't' });
     expect(mockCreateTransport).toHaveBeenLastCalledWith(expect.objectContaining({ port: 587, secure: true }));
+  });
+});
+
+describe('mailer via Resend', () => {
+  const okFetch = () => jest.spyOn(global, 'fetch').mockResolvedValue(new Response('{"id":"1"}', { status: 200 }));
+
+  it('is configured with RESEND_API_KEY and a from address, and prefers Resend over SMTP', async () => {
+    const { mailerConfigured, sendMail } = loadMailer();
+    process.env.RESEND_API_KEY = 're_test';
+    expect(mailerConfigured()).toBe(false);
+    process.env.RESEND_FROM = 'Prapanji <noreply@prapanji.in>';
+    expect(mailerConfigured()).toBe(true);
+
+    Object.assign(process.env, { SMTP_HOST: 'smtp.example.com', SMTP_FROM: 'x@example.com' });
+    const fetchSpy = okFetch();
+    await sendMail({ to: 'a@example.com, b@example.com', subject: 'Hi', text: 't', html: '<p>t</p>' });
+    expect(mockSendMail).not.toHaveBeenCalled();
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('https://api.resend.com/emails');
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer re_test' });
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ from: 'Prapanji <noreply@prapanji.in>', to: ['a@example.com', 'b@example.com'], subject: 'Hi', text: 't', html: '<p>t</p>' });
+  });
+
+  it('sends attachments as base64 with their content id', async () => {
+    Object.assign(process.env, { RESEND_API_KEY: 're_test', RESEND_FROM: 'noreply@prapanji.in' });
+    const fetchSpy = okFetch();
+    await loadMailer().sendMail({ to: 'a@example.com', subject: 's', text: 't', attachments: [{ filename: 'a.png', content: Buffer.from('hi'), contentType: 'image/png', cid: 'c1' }] });
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.attachments).toEqual([{ filename: 'a.png', content: Buffer.from('hi').toString('base64'), content_type: 'image/png', content_id: 'c1' }]);
+  });
+
+  it('throws with Resend\'s reason when it rejects the email', async () => {
+    Object.assign(process.env, { RESEND_API_KEY: 're_test', RESEND_FROM: 'noreply@prapanji.in' });
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response('{"message":"domain not verified"}', { status: 403 }));
+    await expect(loadMailer().sendMail({ to: 'a@example.com', subject: 's', text: 't' })).rejects.toThrow(/403.*domain not verified/);
   });
 });
 

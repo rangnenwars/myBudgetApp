@@ -49,6 +49,8 @@ services:
       # Account emails (and the issue digest) need SMTP — without it, reset and
       # confirmation emails are not sent (a warning is logged). Put the values
       # in /opt/mybudget/.env next to the other secrets.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}
       SMTP_USER: ${SMTP_USER:-}
