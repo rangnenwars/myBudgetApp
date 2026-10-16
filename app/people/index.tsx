@@ -72,6 +72,15 @@ export default function PeopleScreen() {
               </View>
             </Card>
 
+            <View style={styles.actions}>
+              <View style={styles.action}>
+                <Button label="Split a bill" onPress={() => router.push('/people/split')} />
+              </View>
+              <View style={styles.action}>
+                <Button label="Lent or borrowed" variant="outline" onPress={() => setSheetOpen(true)} />
+              </View>
+            </View>
+
             <View style={styles.filters}>
               {FILTERS.map((f) => (
                 <Pressable key={f.key} style={[styles.chip, filter === f.key && styles.chipActive]} onPress={() => setFilter(f.key)} accessibilityRole="button">
@@ -118,8 +127,6 @@ export default function PeopleScreen() {
               </Card>
             )}
 
-            <Button label="Split a bill" onPress={() => router.push('/people/split')} />
-            <Button label="Lent or borrowed" variant="outline" onPress={() => setSheetOpen(true)} />
           </>
         )}
       </ScrollView>
@@ -140,6 +147,8 @@ export default function PeopleScreen() {
 const styles = StyleSheet.create({
   totals: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   total: { fontSize: 26, fontWeight: '700' },
+  actions: { flexDirection: 'row', gap: SPACING.sm },
+  action: { flex: 1 },
   right: { alignItems: 'flex-end', gap: 4 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
   chip: { borderColor: COLORS.cardBorder, borderWidth: 1, backgroundColor: COLORS.card, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 7 },

@@ -56,7 +56,7 @@ describe('forgotten password', () => {
     expect((await request(app).post('/api/v1/auth/forgot-password').send({ email: email.toUpperCase() })).status).toBe(204);
     const token = lastTokenSentTo(email);
     const mail = [...outbox].reverse().find((m) => m.to === email)!;
-    expect(mail.subject).toMatch(/Reset your My Budget password/);
+    expect(mail.subject).toMatch(/Reset your Prapanji password/);
 
     expect((await request(app).post('/api/v1/auth/reset-password').send({ token, password: 'short' })).status).toBe(400);
     expect((await request(app).post('/api/v1/auth/reset-password').send({ token, password: 'new-password-1' })).status).toBe(204);

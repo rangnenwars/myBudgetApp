@@ -86,7 +86,7 @@ describe('renderDigest', () => {
     const report = analyzeIssues([bare], NOW);
     const fix: FixSuggestion = { suggestedFix: 'Check the loan screen' };
     const m = renderDigest([{ issue: bare, analysis: { insight: report.perIssue[5], fix, analyzedAt: '' } }], report, ['dev@example.com']);
-    expect(m.subject).toMatch(/^\[My Budget\] 1 new issue report( —|$)/);
+    expect(m.subject).toMatch(/^\[Prapanji\] 1 new issue report( —|$)/);
     expect(String(m.text)).toContain('Suggested fix:\n    Check the loan screen');
     expect(String(m.text)).not.toContain('Steps:');
     expect(String(m.text)).toContain('Duplicate clusters: none');

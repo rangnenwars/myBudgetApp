@@ -153,43 +153,7 @@ export default function DashboardScreen() {
         </Pressable>
       )}
 
-      <Card style={styles.summaryCard}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Income</Text>
-            <Text style={[styles.summaryValue, { color: COLORS.accent }]}>{fmt(summary.totalIncome)}</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Expense</Text>
-            <Text style={[styles.summaryValue, { color: COLORS.red }]}>{fmt(summary.totalExpense)}</Text>
-          </View>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.savingsRow}>
-          <Text style={styles.summaryLabel}>Net savings</Text>
-          <Text
-            style={[
-              styles.savingsValue,
-              { color: summary.netSavings >= 0 ? COLORS.accent : COLORS.red },
-            ]}
-          >
-            {fmt(summary.netSavings)}
-          </Text>
-        </View>
-      </Card>
-
-      <PeopleButton refreshKey={refreshKey} />
-
       <BudgetCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} refreshKey={refreshKey} />
-
-      {isCurrentMonth && <FreeMoneyCard refreshKey={refreshKey} />}
-
-      <View style={styles.quickLinks}>
-        <Pressable style={styles.quickLink} onPress={() => router.push('/accounts')}>
-          <Ionicons name="wallet-outline" size={18} color={COLORS.accent} />
-          <Text style={styles.quickLinkText}>Accounts</Text>
-        </Pressable>
-      </View>
 
       {budgetAlerts.length > 0 && (
         <Pressable onPress={() => router.push('/budgets')}>
@@ -216,6 +180,18 @@ export default function DashboardScreen() {
         </Pressable>
       )}
 
+      {isCurrentMonth && <FreeMoneyCard refreshKey={refreshKey} />}
+
+      <PeopleButton
+        refreshKey={refreshKey}
+        beside={
+          <Pressable style={styles.accountsBtn} onPress={() => router.push('/accounts')} accessibilityRole="button" accessibilityLabel="Accounts">
+            <Ionicons name="wallet-outline" size={20} color={COLORS.accent} />
+            <Text style={styles.accountsBtnText}>Accounts</Text>
+          </Pressable>
+        }
+      />
+
       <Text style={styles.sectionTitle}>{isCurrentMonth ? "This month's" : viewLabel} breakdown</Text>
       <Card>
         {breakdown.expense + breakdown.loan + breakdown.investment === 0 ? (
@@ -230,6 +206,31 @@ export default function DashboardScreen() {
             </View>
           ))
         )}
+      </Card>
+
+      <Card>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Income</Text>
+            <Text style={[styles.summaryValue, { color: COLORS.accent }]}>{fmt(summary.totalIncome)}</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Expense</Text>
+            <Text style={[styles.summaryValue, { color: COLORS.red }]}>{fmt(summary.totalExpense)}</Text>
+          </View>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.savingsRow}>
+          <Text style={styles.summaryLabel}>Net savings</Text>
+          <Text
+            style={[
+              styles.savingsValue,
+              { color: summary.netSavings >= 0 ? COLORS.accent : COLORS.red },
+            ]}
+          >
+            {fmt(summary.netSavings)}
+          </Text>
+        </View>
       </Card>
 
       <Text style={styles.sectionTitle}>Top expense categories</Text>
@@ -337,20 +338,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   verifyText: { flex: 1, color: COLORS.text, fontSize: 12.5 },
-  quickLinks: { flexDirection: 'row', gap: SPACING.sm },
-  quickLink: {
+  accountsBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.xs,
+    gap: SPACING.sm,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.accent,
     borderRadius: RADIUS.md,
-    paddingVertical: 10,
+    paddingVertical: 14,
     backgroundColor: COLORS.card,
   },
-  quickLinkText: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
+  accountsBtnText: { color: COLORS.accent, fontSize: 16, fontWeight: '700' },
   alertCard: { borderColor: `${COLORS.yellow}66` },
   alertTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', marginBottom: SPACING.xs },
   summaryCard: { marginTop: SPACING.sm },

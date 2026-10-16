@@ -44,6 +44,6 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 export const linkEmail = (to: string, subject: string, intro: string, linkLabel: string, link: string, outro: string): AccountMail => ({
   to,
   subject,
-  text: `${intro}\n\n${linkLabel}: ${link}\n\n${outro}\n\n— My Budget`,
-  html: `<p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(link)}">${escapeHtml(linkLabel)}</a></p><p style="color:#666">${escapeHtml(outro)}</p><p>— My Budget</p>`,
+  text: `${intro}\n\n${linkLabel}: ${link}\n\n${outro}\n\n— Prapanji`,
+  html: `<p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(link)}">${escapeHtml(linkLabel)}</a></p><p style="color:#666">${escapeHtml(outro)}</p><p>— Prapanji</p>`,
 });
