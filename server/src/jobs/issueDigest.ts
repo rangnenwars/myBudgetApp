@@ -106,7 +106,7 @@ const countsLine = (entries: { key: string; count: number }[], list?: readonly {
 
 export const renderDigest = (items: DigestItem[], report: IssueAnalysisReport, recipients: string[]): MailMessage => {
   const p1 = items.filter((i) => i.analysis.insight.priority === 'P1').length;
-  const subject = `[My Budget] ${items.length} new issue report${items.length === 1 ? '' : 's'}${p1 ? ` — ${p1} P1` : ''}`;
+  const subject = `[Prapanji] ${items.length} new issue report${items.length === 1 ? '' : 's'}${p1 ? ` — ${p1} P1` : ''}`;
   const t = report.totals;
   const trend = t.weekOverWeekPct === null ? 'n/a' : `${t.weekOverWeekPct >= 0 ? '+' : ''}${t.weekOverWeekPct}%`;
 

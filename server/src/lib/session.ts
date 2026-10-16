@@ -134,11 +134,11 @@ export const sendVerificationEmail = async (user: { id: number; email: string })
   await sendAccountMail(
     linkEmail(
       user.email,
-      'Confirm your email for My Budget',
+      'Confirm your email for Prapanji',
       'Please confirm this is your email address so you can reset your password if you ever forget it.',
       'Confirm email',
       `${appUrl()}/verify-email?token=${token}`,
-      "This link works for 7 days. If you didn't create a My Budget account, you can ignore this email."
+      "This link works for 7 days. If you didn't create a Prapanji account, you can ignore this email."
     )
   );
 };
@@ -148,8 +148,8 @@ export const sendPasswordResetEmail = async (user: { id: number; email: string }
   await sendAccountMail(
     linkEmail(
       user.email,
-      'Reset your My Budget password',
-      'Someone asked to reset the password for your My Budget account.',
+      'Reset your Prapanji password',
+      'Someone asked to reset the password for your Prapanji account.',
       'Choose a new password',
       `${appUrl()}/reset-password?token=${token}`,
       "This link works for 1 hour and only once. If you didn't ask for this, ignore this email — your password stays the same."

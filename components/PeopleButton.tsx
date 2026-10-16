@@ -8,7 +8,7 @@ import { getPeople, PeopleSummary } from '../utils/database';
 import { fmtAmount } from '../utils/people';
 
 /** The way into People from Home, with what you get and owe shown underneath. */
-export const PeopleButton: React.FC<{ refreshKey?: number }> = ({ refreshKey = 0 }) => {
+export const PeopleButton: React.FC<{ refreshKey?: number; beside?: React.ReactNode }> = ({ refreshKey = 0, beside }) => {
   const { user } = useAuth();
   const [data, setData] = useState<PeopleSummary | null>(null);
 
@@ -29,10 +29,13 @@ export const PeopleButton: React.FC<{ refreshKey?: number }> = ({ refreshKey = 0
 
   return (
     <View style={styles.wrap}>
-      <Pressable style={styles.button} onPress={() => router.push('/people')} accessibilityRole="button" accessibilityLabel="People">
-        <Ionicons name="people-outline" size={20} color={COLORS.onAccent} />
-        <Text style={styles.label}>People</Text>
-      </Pressable>
+      <View style={styles.row}>
+        <Pressable style={[styles.button, styles.grow]} onPress={() => router.push('/people')} accessibilityRole="button" accessibilityLabel="People">
+          <Ionicons name="people-outline" size={20} color={COLORS.onAccent} />
+          <Text style={styles.label}>People</Text>
+        </Pressable>
+        {beside}
+      </View>
       <Text style={styles.caption}>
         {hasPeople ? (
           <>
@@ -50,6 +53,8 @@ export const PeopleButton: React.FC<{ refreshKey?: number }> = ({ refreshKey = 0
 
 const styles = StyleSheet.create({
   wrap: { gap: SPACING.xs },
+  row: { flexDirection: 'row', gap: SPACING.sm },
+  grow: { flex: 1 },
   button: {
     flexDirection: 'row',
     alignItems: 'center',

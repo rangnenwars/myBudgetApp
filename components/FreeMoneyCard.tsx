@@ -6,6 +6,7 @@ import { Card } from './Card';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { getFreeMoneyDay, FreeMoneyDayInfo } from '../utils/database';
 import { useAuth } from '../context/AuthContext';
+import { fmtInr } from './ScreenKit';
 
 /** "19 Oct" for a day of the given month. */
 export const dayLabel = (year: number, month: number, day: number): string =>
@@ -52,47 +53,48 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
 
   if (!info) return null;
 
-  const change = weekChange(info.daysEarlier);
-  let headline = '';
-  let detail = '';
-  if (info.status === 'no_income') {
-    headline = 'Not enough to work out yet';
-    detail = 'Log your income as a transaction, or set it to repeat, and your free-money day appears here.';
-  } else if (info.status === 'over') {
-    headline = 'No free days';
-    detail = 'Your fixed bills and EMIs are as much as your income.';
-  } else if (info.day === 0) {
-    headline = 'Every day is free';
-    detail = 'No EMIs or repeating bills are set up.';
-  } else {
-    headline = dayLabel(info.year, info.month, info.day!);
-    detail = `${info.daysFree} ${info.daysFree === 1 ? 'day' : 'days'} left that are yours to spend`;
-  }
+  const free = Math.max(Math.round(info.income - info.committed), 0);
+  const perDay = Math.round(free / info.daysInMonth);
+  const short = Math.round(info.committed - info.income);
+  const sharePct = Math.min(Math.max(info.share * 100, 0), 100);
 
   return (
-    <Pressable onPress={() => router.push('/free-money-day')} accessibilityRole="button" accessibilityLabel="Free-money day, open details">
+    <Pressable onPress={() => router.push('/free-money-day')} accessibilityRole="button" accessibilityLabel="Money left after fixed bills, open details">
       <Card>
         <View style={styles.top}>
-          <Text style={styles.title}>Your free-money day</Text>
+          <Text style={styles.title}>Money left after fixed bills</Text>
           <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
         </View>
-        <Text style={styles.sub}>{info.status === 'ok' && info.day! > 0 ? 'Everything fixed is paid for by' : ' '}</Text>
-        <Text style={[styles.headline, info.status === 'over' && { color: COLORS.red }]}>{headline}</Text>
-        {info.status === 'ok' && info.day! > 0 && (
+        {info.status === 'no_income' ? (
+          <Text style={styles.detail}>Add your income as a transaction, or set it to repeat, and this shows how much is yours to spend.</Text>
+        ) : info.status === 'over' ? (
           <>
-            <FreeMoneyBar day={info.day!} daysInMonth={info.daysInMonth} />
-            <View style={styles.ends}>
-              <Text style={styles.small}>{dayLabel(info.year, info.month, 1)}</Text>
-              <Text style={styles.small}>{dayLabel(info.year, info.month, info.daysInMonth)}</Text>
+            <Text style={[styles.headline, { color: COLORS.red }]}>{fmtInr(short)} short</Text>
+            <View style={styles.bar}>
+              <View style={{ flex: 1, backgroundColor: COLORS.red }} />
             </View>
+            <Text style={styles.detail}>
+              Your EMIs and repeating entries ({fmtInr(info.committed)}) are more than your usual income ({fmtInr(info.income)}).
+            </Text>
           </>
-        )}
-        <Text style={styles.detail}>{detail}</Text>
-        {info.status !== 'no_income' && (
-          <View style={styles.footer}>
-            <Text style={styles.small}>{Math.round(info.share * 100)}% of income is committed</Text>
-            {change && <Text style={[styles.small, { color: change.color, fontWeight: '600' }]}>{change.text}</Text>}
-          </View>
+        ) : (
+          <>
+            <Text style={styles.headline}>{fmtInr(free)}</Text>
+            <Text style={styles.detail}>
+              yours to spend this month, about {fmtInr(perDay)} a day
+            </Text>
+            <View style={styles.bar} accessibilityLabel={`${Math.round(sharePct)}% of income goes to fixed bills`}>
+              <View style={{ flex: sharePct, backgroundColor: COLORS.accent }} />
+              <View style={{ flex: 100 - sharePct, backgroundColor: COLORS.positive, opacity: 0.55 }} />
+            </View>
+            <View style={styles.footer}>
+              <Text style={styles.small}>Fixed bills {fmtInr(info.committed)}</Text>
+              <Text style={styles.small}>Yours {fmtInr(free)}</Text>
+            </View>
+            <Text style={styles.small}>
+              Fixed bills are your EMIs and repeating entries. Based on your usual income of {fmtInr(info.income)} a month.
+            </Text>
+          </>
         )}
       </Card>
     </Pressable>
@@ -102,11 +104,10 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
-  sub: { color: COLORS.textDim, fontSize: 12, marginTop: SPACING.xs },
-  headline: { color: COLORS.text, fontSize: 28, fontWeight: '700', marginBottom: SPACING.xs },
-  bar: { flexDirection: 'row', height: 10, borderRadius: RADIUS.full, overflow: 'hidden', backgroundColor: COLORS.cardBorder },
+  headline: { color: COLORS.text, fontSize: 28, fontWeight: '700', marginTop: SPACING.xs },
+  bar: { flexDirection: 'row', height: 10, borderRadius: RADIUS.full, overflow: 'hidden', backgroundColor: COLORS.cardBorder, marginTop: SPACING.sm },
   ends: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   small: { color: COLORS.textDim, fontSize: 12 },
-  detail: { color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.sm },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: SPACING.xs, marginTop: SPACING.sm },
+  detail: { color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.xs },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: SPACING.xs, marginTop: 2, marginBottom: SPACING.xs },
 });

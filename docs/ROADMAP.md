@@ -1,6 +1,6 @@
 # Prapanji roadmap — money app for everyone, student-friendly
 
-Status: **in progress** · drafted 2026-10-04 · progress last checked 2026-10-06 · replaces the old parent/student PLAN.md
+Status: **in progress** · drafted 2026-10-04 · progress last checked 2026-10-16 · replaces the old parent/student PLAN.md
 
 ## Progress
 
@@ -26,7 +26,7 @@ Keep this section up to date whenever an item is built, committed or changed.
 | Phase E Later | Not started | Deferred by design. |
 | Repeat "Ends on" | **Built and committed** (2026-10-11) | Every repeating entry now needs an end: 3, 6 or 12 months, a picked date, or an explicit **No end date** (wireframe approved). After the end date the rule posts nothing more, drops out of the Repeating list and of the free-money day; entries already posted stay, so reports count only up to the end (a monthly repeat ending in July = 7 months). Catch-up never posts past the end date. Old rules keep posting and show "needs an end date" until the user chooses. Migration 0021 (`ends_on`, `no_end`); optional bulk helper `server/scripts/repeat-end-backfill.sql`. `components/RepeatEndField.tsx`, `utils/repeatEnd.ts`. Not yet checked in the browser. |
 | Calendar picker | **Built for every date field and committed** (2026-10-11) | A real calendar in a bottom sheet beside the typed `YYYY-MM-DD` box (wireframe approved). Built for the transaction date (no future days) and the repeat "Ends on" date (nothing before the first entry). Month grid, Today / Cancel / Done, tap the month name to jump by month and year. Plain components, because the Expo SDK 57 datetimepicker has no web support (`components/CalendarSheet.tsx`, `utils/calendar.ts`). Then extended to the other date fields with one shared typed-box-plus-calendar-button (`components/DateInput.tsx`): the lent/borrowed pay-back-by date (nothing before today), the goal target date (nothing before today) and the loan start date (any date). Investments has no date field in the app today (start date is set automatically, maturity date is unused). Checked in the browser for the transaction date, Ends on, Goals and Loans; the pay-back-by date uses the same component but wasn't clicked through. |
-| UX pass | Not started | Every row in the UX table below is still open. |
+| UX pass | In progress | Built 2026-10-16 (wireframes approved): People buttons moved to the top, Home card order (budget, money-left, People/Accounts, breakdown, then Income card), "Money left after fixed bills" Home card, payoff and goal dates on Reports. Not committed yet. The other rows in the UX table below are still open. |
 
 **Waiting on the owner:** approval of the optional-features wireframes, answers to "Questions for you" at the end of this doc, and a wireframe approved before any UI change.
 

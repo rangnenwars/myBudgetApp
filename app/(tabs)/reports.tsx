@@ -22,7 +22,7 @@ import {
   SavingsGoal,
   getAccounts,
 } from '../../utils/database';
-import { computeNetWorth, computeSavingsRate } from '../../utils/calculations';
+import { computeNetWorth, computeSavingsRate, computeGoalETA, monthsToRepay } from '../../utils/calculations';
 import { shareCsv } from '../../utils/exportFile';
 import { useCategories } from '../../context/CategoriesContext';
 import { showAlert } from '../../utils/alert';
@@ -85,6 +85,8 @@ export default function ReportsScreen() {
   const [netWorthTrend, setNetWorthTrend] = useState<{ month: number; year: number; net_worth: number }[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
+  // Average net savings of the last 3 months — what goal dates are projected from (same figure as the Goals screen).
+  const [avgSavings, setAvgSavings] = useState(0);
   const [chartWidth, setChartWidth] = useState(320);
 
   const load = useCallback(async () => {
@@ -108,6 +110,11 @@ export default function ReportsScreen() {
     setCategories(categoryBreakdown);
     setGoals(userGoals);
     setLoans(userLoans);
+    if (userGoals.length > 0) {
+      const from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      const recent = await getMonthlySeriesForRange(from.getMonth() + 1, from.getFullYear(), now.getMonth() + 1, now.getFullYear());
+      setAvgSavings(recent.length ? recent.reduce((sum: number, p: { net: number }) => sum + p.net, 0) / recent.length : 0);
+    }
 
     // Same formula as the server's snapshot (routes/netWorth.ts), so the headline and the trend agree.
     const currentNetWorth = computeNetWorth(investments, userGoals, userLoans, userAccounts);
@@ -307,6 +314,7 @@ export default function ReportsScreen() {
           ) : (
             loans.map((l, idx) => {
               const pct = l.principal > 0 ? ((l.principal - l.outstanding) / l.principal) * 100 : 0;
+              const monthsLeft = l.outstanding > 0 ? monthsToRepay(l.outstanding, l.interest_rate, l.emi) : 0;
               return (
                 <View key={l.id} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
                   <View style={styles.catHeader}>
@@ -314,6 +322,16 @@ export default function ReportsScreen() {
                     <Text style={styles.catValue}>{pct.toFixed(0)}% paid</Text>
                   </View>
                   <MiniBar percent={pct} color={COLORS.blue} />
+                  {l.outstanding > 0 && <Text style={styles.projectionMuted}>{fmt(l.outstanding)} left · EMI {fmt(l.emi)}/month</Text>}
+                  {monthsLeft === 0 ? (
+                    <Text style={[styles.projection, { color: COLORS.positive }]}>Paid off</Text>
+                  ) : monthsLeft == null ? (
+                    <Text style={[styles.projection, { color: COLORS.red }]}>EMI doesn&apos;t cover the interest, so this never clears</Text>
+                  ) : (
+                    <Text style={[styles.projection, { color: COLORS.accent }]}>
+                      Debt-free by {monthYearLabel(monthsFromNow(monthsLeft))} <Text style={styles.projectionMuted}>({durationLabel(monthsLeft)})</Text>
+                    </Text>
+                  )}
                 </View>
               );
             })
@@ -332,6 +350,9 @@ export default function ReportsScreen() {
           ) : (
             goals.map((g, idx) => {
               const pct = g.target_amount > 0 ? (g.saved_amount / g.target_amount) * 100 : 0;
+              const eta = computeGoalETA(g, avgSavings);
+              const deadlineMonth = g.deadline ? g.deadline.slice(0, 7) : null;
+              const behind = eta.etaDate != null && deadlineMonth != null && eta.etaDate > deadlineMonth && (eta.monthsRemaining ?? 0) > 0;
               return (
                 <View key={g.id} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
                   <View style={styles.catHeader}>
@@ -339,6 +360,23 @@ export default function ReportsScreen() {
                     <Text style={styles.catValue}>{Math.min(100, pct).toFixed(0)}%</Text>
                   </View>
                   <MiniBar percent={pct} color={g.color} />
+                  <Text style={styles.projectionMuted}>{fmt(g.saved_amount)} of {fmt(g.target_amount)}</Text>
+                  {eta.monthsRemaining === 0 ? (
+                    <Text style={[styles.projection, { color: COLORS.positive }]}>Goal reached</Text>
+                  ) : eta.etaDate == null ? (
+                    <Text style={styles.projectionMuted}>Can&apos;t predict yet — you&apos;re not saving each month</Text>
+                  ) : (
+                    <>
+                      <Text style={[styles.projection, { color: behind ? COLORS.red : COLORS.accent }]}>
+                        Reached by {monthYearLabel(eta.etaDate)} <Text style={styles.projectionMuted}>at your {fmt(avgSavings)}/month saving</Text>
+                      </Text>
+                      {deadlineMonth && (
+                        <Text style={styles.projectionMuted}>
+                          Your deadline: {monthYearLabel(deadlineMonth)} · {behind ? 'behind' : 'on track'}
+                        </Text>
+                      )}
+                    </>
+                  )}
                 </View>
               );
             })
@@ -351,7 +389,26 @@ export default function ReportsScreen() {
   );
 }
 
+// "2041-03" -> "Mar 2041"
+const monthYearLabel = (ym: string): string => {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+};
+// The YYYY-MM that is `months` from now.
+const monthsFromNow = (months: number): string => {
+  const d = new Date();
+  const t = new Date(d.getFullYear(), d.getMonth() + months, 1);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`;
+};
+const durationLabel = (months: number): string => {
+  if (months < 12) return `${months} ${months === 1 ? 'month' : 'months'}`;
+  const years = Math.round((months / 12) * 10) / 10;
+  return `about ${years} ${years === 1 ? 'year' : 'years'}`;
+};
+
 const styles = StyleSheet.create({
+  projection: { fontSize: 13, fontWeight: '600', marginTop: 4 },
+  projectionMuted: { color: COLORS.textMuted, fontSize: 12, fontWeight: '400', marginTop: 2 },
   flex: { flex: 1, backgroundColor: COLORS.bg },
   container: { padding: SPACING.lg, paddingBottom: SPACING.xl * 2, gap: SPACING.md },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
