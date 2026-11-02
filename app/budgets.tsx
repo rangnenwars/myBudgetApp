@@ -22,6 +22,7 @@ import {
   BudgetStatus,
   OverallBudget,
 } from '../utils/database';
+import { parseAmount } from '../utils/amount';
 
 export const STATUS_COLOR: Record<BudgetStatus['status'], string> = { ok: COLORS.accent, warning: COLORS.yellow, over: COLORS.red };
 
@@ -85,7 +86,7 @@ export default function BudgetsScreen() {
   };
 
   const onSaveOverall = async () => {
-    const value = Number(amount);
+    const value = parseAmount(amount);
     if (!value || value <= 0) {
       setError('Enter a monthly budget above zero.');
       return;
@@ -128,7 +129,7 @@ export default function BudgetsScreen() {
   };
 
   const onSave = async () => {
-    const value = Number(limit);
+    const value = parseAmount(limit);
     if (!category) {
       setError('Choose a category.');
       return;

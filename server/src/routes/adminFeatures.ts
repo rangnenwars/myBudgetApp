@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, asc, count, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull, not, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../db/client';
 import { appSettings, issueReports, userFeatures, users } from '../db/schema';
@@ -8,7 +8,7 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { idParam } from '../lib/validation';
 import { notFound } from '../lib/errors';
 import { recordAdminAction } from '../lib/auditLog';
-import { getSignupDefaults, signupDefaultsSchema, SIGNUP_FEATURES_KEY } from '../lib/features';
+import { activeFeature, getSignupDefaults, signupDefaultsSchema, SIGNUP_FEATURES_KEY } from '../lib/features';
 import { requireAuth } from '../middleware/auth';
 import { requireFeatureManager, requireFeatureViewer } from '../middleware/requireFeatureStaff';
 import { FEATURES, FEATURE_KEYS, FeatureKey } from '../../../constants/features';
@@ -22,7 +22,14 @@ import { FEATURES, FEATURE_KEYS, FeatureKey } from '../../../constants/features'
 const router = Router();
 
 const keyParam = z.object({ key: z.enum(FEATURE_KEYS) });
-const switchSchema = z.object({ on: z.boolean() });
+// `period` sets how long a switch-on lasts: a month or a year from now, or no end (the default).
+const switchSchema = z.object({ on: z.boolean(), period: z.enum(['month', 'year', 'none']).default('none') });
+const expiryFor = (period: 'month' | 'year' | 'none', now: Date): Date | null => {
+  if (period === 'none') return null;
+  const end = new Date(now);
+  end.setUTCMonth(end.getUTCMonth() + (period === 'year' ? 12 : 1));
+  return end;
+};
 const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(100),
   offset: z.coerce.number().int().min(0).default(0),
@@ -46,7 +53,7 @@ router.get(
       db
         .select({ key: userFeatures.featureKey, n: count() })
         .from(userFeatures)
-        .where(eq(userFeatures.status, 'on'))
+        .where(activeFeature())
         .groupBy(userFeatures.featureKey),
       db
         .select({
@@ -55,10 +62,11 @@ router.get(
           email: users.email,
           feature: userFeatures.featureKey,
           requestedAt: userFeatures.requestedAt,
+          paid: userFeatures.requestPaid,
         })
         .from(userFeatures)
         .innerJoin(users, eq(users.id, userFeatures.userId))
-        .where(and(isNotNull(userFeatures.requestedAt), eq(userFeatures.status, 'off')))
+        .where(and(isNotNull(userFeatures.requestedAt), not(activeFeature())))
         .orderBy(asc(userFeatures.requestedAt))
         .limit(200),
     ]);
@@ -66,7 +74,7 @@ router.get(
     res.json({
       defaults,
       totalUsers,
-      features: FEATURES.map((f) => ({ key: f.key, label: f.label, usersOn: byKey.get(f.key) ?? 0 })),
+      features: FEATURES.map((f) => ({ key: f.key, label: f.label, price: f.price, period: f.period, usersOn: byKey.get(f.key) ?? 0 })),
       requests,
     });
   })
@@ -108,7 +116,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { key } = keyParam.parse(req.params);
     const q = listQuery.parse(req.query);
-    const where = and(eq(userFeatures.featureKey, key), eq(userFeatures.status, 'on'));
+    const where = and(eq(userFeatures.featureKey, key), activeFeature());
     const [rows, [{ total }]] = await Promise.all([
       db
         .select({ id: users.id, name: users.name, email: users.email, source: userFeatures.source, updatedAt: userFeatures.updatedAt })
@@ -129,7 +137,7 @@ const changer = alias(users, 'changer');
 
 const loadUserFeatures = async (userId: number) => {
   const rows = await db
-    .select({ row: userFeatures, changedByEmail: changer.email })
+    .select({ row: userFeatures, changedByEmail: changer.email, active: sql<boolean>`(${activeFeature()})` })
     .from(userFeatures)
     .leftJoin(changer, eq(changer.id, userFeatures.changedBy))
     .where(eq(userFeatures.userId, userId));
@@ -139,11 +147,12 @@ const loadUserFeatures = async (userId: number) => {
     return {
       key: f.key,
       label: f.label,
-      on: r?.row.status === 'on',
+      on: r?.active === true,
+      expiresAt: r?.active ? r.row.expiresAt : null,
       source: r?.row.source ?? null,
       changedByEmail: r?.changedByEmail ?? null,
       updatedAt: r?.row.updatedAt ?? null,
-      requestedAt: r?.row.status === 'off' ? r.row.requestedAt : null,
+      requestedAt: r && !r.active ? r.row.requestedAt : null,
     };
   });
 };
@@ -176,28 +185,31 @@ router.put(
   asyncHandler(async (req, res) => {
     const target = await findUser(idParam(req));
     const { key } = keyParam.parse(req.params) as { key: FeatureKey };
-    const { on } = switchSchema.parse(req.body);
+    const { on, period } = switchSchema.parse(req.body);
     const status = on ? 'on' : 'off';
 
     const [before] = await db
       .select()
       .from(userFeatures)
       .where(and(eq(userFeatures.userId, target.id), eq(userFeatures.featureKey, key)));
-    const wasOn = before?.status === 'on';
+    const wasOn = before?.status === 'on' && (before.expiresAt == null || before.expiresAt > new Date());
     const pendingRequest = !wasOn && before?.requestedAt != null;
-    if (wasOn === on && !pendingRequest) {
+    // Switching an already-on feature on again with a period extends or changes it.
+    const changesPeriod = on && wasOn && period !== 'none';
+    if (wasOn === on && !pendingRequest && !changesPeriod) {
       res.json((await loadUserFeatures(target.id)).find((f) => f.key === key));
       return;
     }
 
     const now = new Date();
+    const expiresAt = on ? expiryFor(period, now) : null;
     await db.transaction(async (tx) => {
       await tx
         .insert(userFeatures)
-        .values({ userId: target.id, featureKey: key, status, source: 'admin', changedBy: req.userId! })
+        .values({ userId: target.id, featureKey: key, status, source: 'admin', changedBy: req.userId!, expiresAt })
         .onConflictDoUpdate({
           target: [userFeatures.userId, userFeatures.featureKey],
-          set: { status, source: 'admin', changedBy: req.userId!, requestedAt: null, requestIssueId: null, updatedAt: now },
+          set: { status, source: 'admin', changedBy: req.userId!, requestedAt: null, requestIssueId: null, requestPaid: false, expiresAt, updatedAt: now },
         });
       if (pendingRequest && before.requestIssueId) {
         await tx
@@ -209,6 +221,7 @@ router.put(
 
     const details = [wasOn === on ? `${key}: left ${status}` : `${key}: ${wasOn ? 'on' : 'off'} -> ${status}`];
     if (pendingRequest) details.push(on ? 'request granted' : 'request refused');
+    if (on && period !== 'none') details.push(`for 1 ${period}`);
     await recordAdminAction({
       actorId: req.userId!,
       actorEmail: await getActorEmail(req.userId!),

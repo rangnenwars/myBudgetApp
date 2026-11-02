@@ -11,6 +11,7 @@ import { bucketForGroup, monthlyEquivalent, EntryPeriod, CategoryBucket } from '
 import { useCategories } from '../context/CategoriesContext';
 import { showAlert } from '../utils/alert';
 import { apiErrorMessage } from '../utils/api';
+import { parseAmount } from '../utils/amount';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -51,7 +52,12 @@ export default function InputExpensesScreen() {
   const onSave = async () => {
     if (!user) return;
     setError(null);
-    const valid = rows.filter((r) => r.category && parseFloat(r.amount) > 0);
+    // A typed amount that isn't a number is an error, not a row to skip quietly.
+    if (rows.some((r) => r.amount.trim() !== '' && !(parseAmount(r.amount) > 0))) {
+      setError('One of the amounts is not a valid number. Use digits only, like 1,200 or 450.50.');
+      return;
+    }
+    const valid = rows.filter((r) => r.category && parseAmount(r.amount) > 0);
     if (valid.length === 0) {
       setError('Add at least one row with a category and an amount.');
       return;
@@ -64,7 +70,7 @@ export default function InputExpensesScreen() {
       // One all-or-nothing request: a failure saves nothing, so retrying can't duplicate rows.
       await addTransactionsBatch(
         valid.map((row) => {
-          const original = parseFloat(row.amount);
+          const original = parseAmount(row.amount);
           return {
             amount: monthlyEquivalent(original, period),
             type: 'expense' as const,

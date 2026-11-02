@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, RefreshControl, Switch } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, RefreshControl, Switch, Pressable } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { ScreenHeader, SectionTitle, Notice, Button, ErrorText, kit } from '../../components/ScreenKit';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS, SPACING } from '../../constants/theme';
-import { FEATURES, FeatureKey, featureLabel } from '../../constants/features';
+import { COLORS, RADIUS, SPACING } from '../../constants/theme';
+import { FEATURES, FeatureKey, featureLabel, featurePrice, priceLabel } from '../../constants/features';
 import { apiErrorMessage } from '../../utils/api';
 import {
   getFeatureOverview,
@@ -15,6 +15,13 @@ import {
   FeatureOverview,
   FeatureUser,
 } from '../../utils/database';
+
+type Period = 'month' | 'year' | 'none';
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'month', label: '1 month' },
+  { key: 'year', label: '1 year' },
+  { key: 'none', label: 'No end' },
+];
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -32,6 +39,8 @@ export default function AdminFeaturesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<FeatureKey | null>(null);
   const [users, setUsers] = useState<{ items: FeatureUser[]; total: number } | null>(null);
+  // How long each waiting request would be switched on for; priced features default to a month.
+  const [periods, setPeriods] = useState<Record<string, Period>>({});
 
   const load = useCallback(async () => {
     if (!canView) return;
@@ -70,7 +79,9 @@ export default function AdminFeaturesScreen() {
     run(() => saveSignupFeatureDefaults({ ...data.defaults, [key]: on }), 'Could not save the sign-up defaults.');
   };
 
-  const onAnswer = (userId: number, key: FeatureKey, on: boolean) => run(() => setUserFeature(userId, key, on), 'Could not answer this request.');
+  const periodFor = (userId: number, key: FeatureKey): Period => periods[`${userId}-${key}`] ?? (featurePrice(key).price > 0 ? 'month' : 'none');
+  const onAnswer = (userId: number, key: FeatureKey, on: boolean) =>
+    run(() => setUserFeature(userId, key, on, on ? periodFor(userId, key) : undefined), 'Could not answer this request.');
 
   const onToggleUsers = async (key: FeatureKey) => {
     if (open === key) {
@@ -139,6 +150,27 @@ export default function AdminFeaturesScreen() {
                       <Text style={kit.dim}>
                         {r.email} · asked {fmtDate(r.requestedAt)}
                       </Text>
+                      {r.paid ? (
+                        <Text style={[kit.dim, styles.paid]}>Says they paid {priceLabel(featurePrice(r.feature).price, featurePrice(r.feature).period)}. Check the payment first.</Text>
+                      ) : null}
+                      {canManage && (
+                        <>
+                          <Text style={kit.dim}>Switch on for</Text>
+                          <View style={styles.periods}>
+                            {PERIODS.map((p) => (
+                              <Pressable
+                                key={p.key}
+                                onPress={() => setPeriods((prev) => ({ ...prev, [`${r.userId}-${r.feature}`]: p.key }))}
+                                style={[styles.period, periodFor(r.userId, r.feature) === p.key && styles.periodActive]}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Switch on for ${p.label}`}
+                              >
+                                <Text style={[styles.periodText, periodFor(r.userId, r.feature) === p.key && styles.periodTextActive]}>{p.label}</Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </>
+                      )}
                       {canManage && (
                         <View style={styles.actions}>
                           <Button label="Switch on" onPress={() => onAnswer(r.userId, r.feature, true)} disabled={busy} style={styles.action} />
@@ -208,4 +240,10 @@ const styles = StyleSheet.create({
   action: { flex: 1, paddingVertical: 9 },
   viewBtn: { paddingVertical: 7, paddingHorizontal: SPACING.md },
   userList: { gap: 2, paddingTop: SPACING.xs },
+  paid: { color: COLORS.positive, fontWeight: '600' },
+  periods: { flexDirection: 'row', gap: SPACING.xs },
+  period: { borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 6 },
+  periodActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  periodText: { color: COLORS.text, fontSize: 13 },
+  periodTextActive: { color: COLORS.onAccent, fontWeight: '600' },
 });

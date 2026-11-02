@@ -13,6 +13,7 @@ import loansRoutes from './routes/loans';
 import investmentsRoutes from './routes/investments';
 import goalsRoutes from './routes/goals';
 import reportsRoutes from './routes/reports';
+import forecastRoutes from './routes/forecast';
 import netWorthRoutes from './routes/netWorth';
 import adminUsersRoutes from './routes/admin';
 import adminFeaturesRoutes from './routes/adminFeatures';
@@ -72,6 +73,7 @@ export const createApp = () => {
   app.use('/api/v1/investments', investmentsRoutes);
   app.use('/api/v1/goals', goalsRoutes);
   app.use('/api/v1/reports', reportsRoutes);
+  app.use('/api/v1/forecast', forecastRoutes);
   app.use('/api/v1/net-worth', netWorthRoutes);
   app.use('/api/v1/features', featuresRoutes);
   // Ahead of the users router: it serves /admin/users/:id/features too.

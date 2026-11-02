@@ -1,6 +1,6 @@
 # User Usage Workflows — One Flow per Screen
 
-Every screen of My Budget as a picture. Read left to right (or top to bottom). Dotted line = optional link, diamond = a choice.
+Every screen of Prapanji as a picture. Read left to right (or top to bottom). Dotted line = optional link, diamond = a choice.
 
 **Legend**
 
@@ -256,14 +256,15 @@ flowchart TB
     a6 -->|"Monthly / Quarterly / Yearly"| a7["Monthly equivalent"]
     a8 --> a9{"Repeat switch"}
     a7 --> a9
-    a9 -->|on| a10["Added again every period"]:::ok --> a11["Save"]
+    a9 -->|on| a12["Ends on: 3, 6, 12 months, a date, or No end date"] --> a10["Added every period until then"]:::ok --> a11["Save"]
     a9 -->|off| a11
   end
   subgraph CHANGE["Change"]
     direction LR
     b1["Tap a row"] --> b2["Edit + Save"]:::ok
     b3["Trash"] --> b4{"Confirm?"} -->|yes| b5["Deleted"]:::bad
-    b6["Repeating button"] --> b7["Change amount / day, or stop"]
+    b6["Repeating button"] --> b7["Change amount / day / end, or stop"]
+    b8["Calendar button on any date field"] --> b9["Pick a day in the sheet, Done"]
   end
   subgraph FIND["Find"]
     direction LR

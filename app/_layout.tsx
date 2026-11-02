@@ -53,6 +53,10 @@ export default function RootLayout() {
               <Stack.Screen name="accounts" />
               <Stack.Screen name="budgets" />
               <Stack.Screen name="free-money-day" />
+              <Stack.Screen name="loan-payments" />
+              <Stack.Screen name="more-features" />
+              <Stack.Screen name="plan-ahead/index" />
+              <Stack.Screen name="plan-ahead/[ym]" />
               <Stack.Screen name="people/index" />
               <Stack.Screen name="people/[id]" />
               <Stack.Screen name="people/split" />

@@ -119,4 +119,40 @@ describe('GET /api/v1/reports/goal-eta', () => {
     expect(res.status).toBe(200);
     expect(res.body.goals).toHaveLength(2);
   });
+
+  const dateBack = (n: number, day = 10) => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - n, day)).toISOString().slice(0, 10);
+  };
+  const addTxn = (token: string, type: 'income' | 'expense', category_key: string, amount: number, date: string) =>
+    request(app).post('/api/v1/transactions').set(auth(token)).send({ amount, type, category_key, date });
+
+  it('averages the last 3 full months, not counting the half-finished current month', async () => {
+    const { accessToken } = await registerUser();
+    for (const n of [3, 2, 1]) {
+      await addTxn(accessToken, 'income', 'salary_1', 50000, dateBack(n));
+      await addTxn(accessToken, 'expense', 'shopping', 40000, dateBack(n));
+    }
+    // This month so far: a bill and no salary yet.
+    await addTxn(accessToken, 'expense', 'shopping', 30000, new Date().toISOString().slice(0, 10));
+    const res = await request(app).get('/api/v1/reports/goal-eta').set(auth(accessToken));
+    expect(res.body.avgMonthlySavings).toBe(10000);
+  });
+
+  it('does not average in months before the first entry as zeros', async () => {
+    const { accessToken } = await registerUser();
+    await addTxn(accessToken, 'income', 'salary_1', 60000, dateBack(1));
+    await addTxn(accessToken, 'expense', 'shopping', 20000, dateBack(1));
+    const res = await request(app).get('/api/v1/reports/goal-eta').set(auth(accessToken));
+    expect(res.body.avgMonthlySavings).toBe(40000);
+  });
+
+  it('uses the current month so far when there is no full month yet', async () => {
+    const { accessToken } = await registerUser();
+    const today = new Date().toISOString().slice(0, 10);
+    await addTxn(accessToken, 'income', 'salary_1', 50000, today);
+    await addTxn(accessToken, 'expense', 'shopping', 10000, today);
+    const res = await request(app).get('/api/v1/reports/goal-eta').set(auth(accessToken));
+    expect(res.body.avgMonthlySavings).toBe(40000);
+  });
 });

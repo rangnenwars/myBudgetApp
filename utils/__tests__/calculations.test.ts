@@ -21,6 +21,8 @@ import {
   monthsToRepay,
   countsTowardBudget,
   computeOverallBudget,
+  averageMonthlySavings,
+  MonthPoint,
 } from '../calculations';
 import { Transaction, Loan, Investment, SavingsGoal } from '../types';
 
@@ -578,5 +580,30 @@ describe('computeOverallBudget', () => {
 
   it('gives the whole remainder on the last day of the month', () => {
     expect(computeOverallBudget(10000, 9000, 30, 30)).toMatchObject({ daysLeft: 1, perDay: 1000 });
+  });
+});
+
+describe('averageMonthlySavings', () => {
+  const pt = (month: number, income: number, expense: number): MonthPoint => ({ month, year: 2026, label: `m${month}`, income, expense, net: income - expense });
+  const current = { month: 6, year: 2026 };
+
+  it('averages the last three full months and ignores the current one', () => {
+    const series = [pt(2, 100, 90), pt(3, 100, 80), pt(4, 100, 70), pt(5, 100, 60), pt(6, 0, 500)];
+    expect(averageMonthlySavings(series, current)).toBe(30); // months 3-5: 20, 30, 40
+  });
+
+  it('starts at the first month with any activity, so earlier empty months are not zeros', () => {
+    const series = [pt(3, 0, 0), pt(4, 0, 0), pt(5, 100, 40), pt(6, 0, 0)];
+    expect(averageMonthlySavings(series, current)).toBe(60);
+  });
+
+  it('keeps a quiet month after the first one as zero savings', () => {
+    const series = [pt(3, 100, 40), pt(4, 0, 0), pt(5, 100, 40)];
+    expect(averageMonthlySavings(series, current)).toBe(40); // (60 + 0 + 60) / 3
+  });
+
+  it('falls back to the current month so far when no full month has activity', () => {
+    expect(averageMonthlySavings([pt(4, 0, 0), pt(5, 0, 0), pt(6, 100, 30)], current)).toBe(70);
+    expect(averageMonthlySavings([], current)).toBe(0);
   });
 });

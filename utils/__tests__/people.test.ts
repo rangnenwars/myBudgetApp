@@ -73,6 +73,12 @@ describe('planPeopleSplit', () => {
     expect(plan.shares).toEqual({ 1: 1000, 2: 300 });
     expect(plan.myShare).toBe(200);
   });
+
+  it('reads a custom share typed with commas as the whole number, not the digits before the comma', () => {
+    const plan = planPeopleSplit(5000, { ...emptyPeopleSplit(), method: 'custom', picked: [1, 2], shares: { 1: '1,500', 2: '₹2,000.50' } });
+    expect(plan.shares).toEqual({ 1: 1500, 2: 2000.5 });
+    expect(plan.myShare).toBe(1499.5);
+  });
 });
 
 describe('peopleSplitProblem', () => {

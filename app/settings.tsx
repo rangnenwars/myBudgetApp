@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { Card } from '../components/Card';
+import { MoreFeaturesRow } from '../components/MoreFeaturesLink';
 import { ScreenHeader, SectionTitle, Field, Button, ErrorText, Notice, kit } from '../components/ScreenKit';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, SPACING } from '../constants/theme';
@@ -123,6 +124,8 @@ export default function SettingsScreen() {
         )}
         {!user.emailVerified && <Button label="Send confirmation email" variant="outline" onPress={onResend} />}
         {verifyMessage && <Text style={kit.muted}>{verifyMessage}</Text>}
+
+        <MoreFeaturesRow />
 
         <SectionTitle>Change password</SectionTitle>
         <Card style={styles.formCard}>

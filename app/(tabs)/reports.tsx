@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { LineChart, PieChart } from 'react-native-chart-kit';
 import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
@@ -22,7 +22,7 @@ import {
   SavingsGoal,
   getAccounts,
 } from '../../utils/database';
-import { computeNetWorth, computeSavingsRate, computeGoalETA, monthsToRepay } from '../../utils/calculations';
+import { averageMonthlySavings, computeNetWorth, computeSavingsRate, computeGoalETA, monthsToRepay } from '../../utils/calculations';
 import { shareCsv } from '../../utils/exportFile';
 import { useCategories } from '../../context/CategoriesContext';
 import { showAlert } from '../../utils/alert';
@@ -111,9 +111,9 @@ export default function ReportsScreen() {
     setGoals(userGoals);
     setLoans(userLoans);
     if (userGoals.length > 0) {
-      const from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      const from = new Date(now.getFullYear(), now.getMonth() - 3, 1);
       const recent = await getMonthlySeriesForRange(from.getMonth() + 1, from.getFullYear(), now.getMonth() + 1, now.getFullYear());
-      setAvgSavings(recent.length ? recent.reduce((sum: number, p: { net: number }) => sum + p.net, 0) / recent.length : 0);
+      setAvgSavings(averageMonthlySavings(recent, { month: now.getMonth() + 1, year: now.getFullYear() }));
     }
 
     // Same formula as the server's snapshot (routes/netWorth.ts), so the headline and the trend agree.
@@ -384,6 +384,14 @@ export default function ReportsScreen() {
         </Card>
         </>
         )}
+      {hasFeature('forecast') && (
+        <Pressable onPress={() => router.push('/plan-ahead')} accessibilityRole="link" accessibilityLabel="Plan ahead, next 12 months">
+          <Card style={styles.planLink}>
+            <Text style={styles.planLinkText}>Plan ahead: see the next 12 months</Text>
+            <Text style={styles.planLinkText}>›</Text>
+          </Card>
+        </Pressable>
+      )}
       </ProGate>
     </ScrollView>
   );
@@ -407,6 +415,8 @@ const durationLabel = (months: number): string => {
 };
 
 const styles = StyleSheet.create({
+  planLink: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  planLinkText: { color: COLORS.accent, fontSize: 14, fontWeight: '600' },
   projection: { fontSize: 13, fontWeight: '600', marginTop: 4 },
   projectionMuted: { color: COLORS.textMuted, fontSize: 12, fontWeight: '400', marginTop: 2 },
   flex: { flex: 1, backgroundColor: COLORS.bg },
