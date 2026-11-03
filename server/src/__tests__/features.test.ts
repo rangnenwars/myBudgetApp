@@ -212,7 +212,7 @@ describe('sign-up defaults', () => {
     const manager = await staff(promoteToSystemManager, 'feat-sm');
     const before = (await request(app).get('/api/v1/admin/features').set(auth(manager)).expect(200)).body.defaults;
     try {
-      const next = { goals: false, loans: true, investments: false };
+      const next = { goals: false, loans: true, investments: false, forecast: false };
       await request(app).put('/api/v1/admin/features/defaults').set(auth(manager)).send(next).expect(200);
       expect((await request(app).get('/api/v1/admin/features').set(auth(manager))).body.defaults).toEqual(next);
 

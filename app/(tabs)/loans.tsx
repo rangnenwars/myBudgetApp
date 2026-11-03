@@ -10,7 +10,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform, ScrollView } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { MiniBar } from '../../components/MiniBar';
@@ -23,6 +23,7 @@ import { todayLocalIso, isValidIsoDate } from '../../utils/dates';
 import { DateInput } from '../../components/DateInput';
 import { apiErrorMessage } from '../../utils/api';
 import { withFeature } from '../../components/FeatureGate';
+import { parseAmount } from '../../utils/amount';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -89,10 +90,10 @@ function LoansScreen() {
 
   const onSave = async () => {
     if (!user) return;
-    const p = parseFloat(principal);
-    const o = parseFloat(outstanding);
-    const e = parseFloat(emi);
-    const r = interestRate ? parseFloat(interestRate) : null;
+    const p = parseAmount(principal);
+    const o = parseAmount(outstanding);
+    const e = parseAmount(emi);
+    const r = interestRate.trim() ? parseAmount(interestRate) : null;
     if (!name.trim()) { setError('Enter a loan name.'); return; }
     if (!p || !o || !e) { setError('Enter valid principal, outstanding, and EMI amounts.'); return; }
     if (r != null && (Number.isNaN(r) || r < 0 || r >= 100)) { setError('Interest rate must be between 0 and 100%.'); return; }
@@ -160,7 +161,7 @@ function LoansScreen() {
 
   const onSavePart = async () => {
     if (!partLoan) return;
-    const amount = parseFloat(partAmount);
+    const amount = parseAmount(partAmount);
     if (!amount || amount <= 0) { setPartError('Enter the amount you are paying.'); return; }
     if (amount > partLoan.outstanding) { setPartError(`Amount can't exceed the outstanding balance (${fmt(partLoan.outstanding)}).`); return; }
     setPartSaving(true);
@@ -231,7 +232,7 @@ function LoansScreen() {
                     keyboardType="numeric"
                   />
 
-                  {simulateDebtPayoff(items, strategy, parseFloat(extraPerMonth) || 0).map((r, idx) => (
+                  {simulateDebtPayoff(items, strategy, parseAmount(extraPerMonth) || 0).map((r, idx) => (
                     <View key={r.loanId} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
                       <View style={styles.cardHeader}>
                         <Text style={styles.cardMuted}>{idx + 1}. {r.name}</Text>
@@ -278,6 +279,7 @@ function LoansScreen() {
                 <Text style={styles.cardMuted}>Outstanding {fmt(item.outstanding)} of {fmt(item.principal)}</Text>
                 {item.outstanding > 0 && <Text style={styles.cardMuted}>{monthsLeft == null ? "EMI doesn't cover interest" : `${monthsLeft} mo left`}</Text>}
               </View>
+              {(item.part_paid ?? 0) > 0 && <Text style={styles.cardMuted}>Paid so far: {fmt(item.part_paid ?? 0)} in part payments</Text>}
               {nextSplit && item.outstanding > 0 && (
                 <Text style={styles.cardMuted}>
                   Next EMI: {fmt(nextSplit.interest)} interest · {fmt(nextSplit.principal)} principal
@@ -313,6 +315,17 @@ function LoansScreen() {
               ) : (
                 <Text style={styles.paidOffText}>Fully paid off</Text>
               )}
+              <Pressable
+                style={styles.historyBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Payments on ${item.name}`}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  router.push({ pathname: '/loan-payments', params: { id: String(item.id), name: item.name } });
+                }}
+              >
+                <Text style={styles.historyBtnText}>Payments</Text>
+              </Pressable>
             </Pressable>
           );
         }}
@@ -410,7 +423,7 @@ function LoansScreen() {
             </View>
 
             {partLoan && (() => {
-              const amount = parseFloat(partAmount);
+              const amount = parseAmount(partAmount);
               const valid = amount > 0 && amount <= partLoan.outstanding;
               const next = valid ? computePartPayment(partLoan, amount) : null;
               return (
@@ -500,6 +513,8 @@ const styles = StyleSheet.create({
   payBtn: { backgroundColor: `${COLORS.blue}22`, borderRadius: RADIUS.sm, paddingVertical: 8, alignItems: 'center' },
   payBtnText: { color: COLORS.blue, fontWeight: '600', fontSize: 13 },
   payBtnDisabled: { opacity: 0.5 },
+  historyBtn: { borderColor: COLORS.blue, borderWidth: 1, borderRadius: RADIUS.sm, paddingVertical: 8, alignItems: 'center' },
+  historyBtnText: { color: COLORS.blue, fontWeight: '600', fontSize: 13 },
   payRow: { flexDirection: 'row', gap: SPACING.sm },
   payBtnFlex: { flex: 1 },
   previewBox: { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.xs },

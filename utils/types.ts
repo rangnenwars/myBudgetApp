@@ -52,6 +52,17 @@ export interface Loan {
   // false = EMI payments don't become expense transactions, but the
   // outstanding balance still counts as a liability (Reports net worth).
   counts_as_expense: boolean;
+  /** Total of this loan's part payments so far (from the loan list). */
+  part_paid?: number;
+}
+
+/** One row of a loan's Payments page: a part payment or an EMI. balance_after is null for rows recovered from old transactions. */
+export interface LoanPayment {
+  id: number;
+  kind: 'part_payment' | 'emi';
+  amount: number;
+  date: string;
+  balance_after: number | null;
 }
 
 export interface Investment {
@@ -197,4 +208,35 @@ export interface LedgerEntry {
   amount: number;
   date: string;
   note: string | null;
+}
+
+/** One line of a Plan ahead month; computed by GET /forecast. */
+export interface ForecastItem {
+  kind: 'income' | 'bill' | 'loan';
+  label: string;
+  amount: number;
+  /** YYYY-MM-DD, or null for an estimated average income. */
+  date: string | null;
+  frequency?: 'monthly' | 'quarterly' | 'yearly';
+}
+
+export interface ForecastMonth {
+  year: number;
+  month: number;
+  income: number;
+  fixed: number;
+  /** income − fixed bills and EMIs. */
+  known: number;
+  /** known − typical spending (same as known without an estimate). */
+  likely: number;
+  items: ForecastItem[];
+}
+
+/** The next 12 months for the Plan ahead screens. */
+export interface Forecast {
+  basis: 'likely' | 'known';
+  incomeSource: 'repeating' | 'average' | 'none';
+  typical: { available: boolean; monthsUsed: number; perMonth: number; categories: { category: string; label: string; amount: number }[] };
+  months: ForecastMonth[];
+  summary: { tightest: { year: number; month: number; left: number } | null; averageLeft: number };
 }

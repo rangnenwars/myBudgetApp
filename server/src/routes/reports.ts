@@ -13,6 +13,7 @@ import { getFreeMoneyDay } from '../lib/freeMoneyDay';
 import {
   computeMonthSummary,
   computeMonthlySeries,
+  averageMonthlySavings,
   computeCategoryBreakdown,
   generateMonthRange,
   transactionsToCsvRows,
@@ -96,11 +97,12 @@ router.get(
   requireFeature('goals'),
   asyncHandler(async (req, res) => {
     const today = localToday();
-    const start = addMonths(today.year, today.month, -2);
+    // Last 3 full months plus the current one (which only the brand-new-account fallback uses).
+    const start = addMonths(today.year, today.month, -3);
     const range = generateMonthRange(start.month, start.year, today.month, today.year);
     const rows = await getTotalsInRange(req.userId!, start.month, start.year, today.month, today.year);
     const series = computeMonthlySeries(rows, range);
-    const avgMonthlySavings = series.length ? series.reduce((s, p) => s + p.net, 0) / series.length : 0;
+    const avgMonthlySavings = averageMonthlySavings(series, today);
 
     const userGoals = await db.select().from(savingsGoals).where(eq(savingsGoals.userId, req.userId!));
     const results = userGoals.map((g) => ({ goalId: g.id, name: g.name, ...computeGoalETA(g, avgMonthlySavings) }));

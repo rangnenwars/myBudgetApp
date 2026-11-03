@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { COLORS, SPACING } from '../constants/theme';
-import { FeatureKey, featureLabel } from '../constants/features';
+import { FeatureKey, featureLabel, featurePrice } from '../constants/features';
 import { useAuth } from '../context/AuthContext';
 import { getMyFeatures, requestFeature } from '../utils/database';
 import { apiErrorMessage } from '../utils/api';
@@ -51,6 +51,8 @@ const NotOn: React.FC<{ feature: FeatureKey }> = ({ feature }) => {
   };
 
   const goHome = () => router.replace('/');
+  // A priced feature is asked for from More features, which shows how to pay.
+  const priced = featurePrice(feature).price > 0;
 
   return (
     <View style={kit.screen}>
@@ -68,7 +70,11 @@ const NotOn: React.FC<{ feature: FeatureKey }> = ({ feature }) => {
         ) : (
           <>
             <Text style={styles.title}>{label} isn't on for your account</Text>
-            <Button label={sending ? 'Sending…' : 'Request access'} onPress={onRequest} disabled={sending} style={styles.btn} />
+            {priced ? (
+              <Button label="See how to get it" onPress={() => router.replace('/more-features')} style={styles.btn} />
+            ) : (
+              <Button label={sending ? 'Sending…' : 'Request access'} onPress={onRequest} disabled={sending} style={styles.btn} />
+            )}
             <ErrorText message={error} />
             <Text style={styles.link} onPress={goHome} accessibilityRole="link">
               Go to Home

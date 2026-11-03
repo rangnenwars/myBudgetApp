@@ -284,6 +284,21 @@ CREATE TABLE loans (
 CREATE INDEX idx_loans_user_active ON loans(user_id) WHERE is_active;
 
 -- ============================================================
+-- loan_payments (migration 0023) — a loan's payment history: part payments and EMIs
+-- ============================================================
+CREATE TABLE loan_payments (
+  id            BIGSERIAL PRIMARY KEY,
+  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  loan_id       BIGINT NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+  kind          TEXT NOT NULL CHECK (kind IN ('part_payment', 'emi')),
+  amount        NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  date          DATE NOT NULL,
+  balance_after NUMERIC(12,2),                      -- NULL for rows backfilled from old transactions
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_loan_payments_loan_date ON loan_payments(loan_id, date);
+
+-- ============================================================
 -- investments
 -- ============================================================
 CREATE TABLE investments (

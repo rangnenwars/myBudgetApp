@@ -9,12 +9,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { FONTS, RADIUS, T } from '../../constants/theme';
 import { LogoMark } from './LogoMark';
 import { useWebAttributes } from './webAttributes';
+import { AuthSlides } from './AuthSlides';
+import { AUTH_WIDE_MIN_WIDTH } from '../ResponsiveContainer';
 
 export const TAGLINE = 'Nothing forgotten, nothing hidden.';
 export const TAGLINE_HI = 'कुछ छूटे ना, कुछ छुपे ना';
@@ -52,6 +55,43 @@ export const AuthLayout: React.FC<{
   onSubmit?: () => void;
 }> = ({ title, subtitle, children, footer, onSubmit }) => {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const wide = width >= AUTH_WIDE_MIN_WIDTH;
+
+  const form = (
+    <>
+      <View style={wide ? styles.bodyWide : styles.body}>
+        {/* The page's one <h1> on web. */}
+        <Text style={styles.title} role="heading" aria-level={1}>
+          {title}
+        </Text>
+        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <WebForm onSubmit={onSubmit}>{children}</WebForm>
+      </View>
+      {footer && <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>{footer}</View>}
+    </>
+  );
+
+  // Wide screens: marketing slides on the left, sign-in/register on the right.
+  if (wide) {
+    return (
+      <View style={styles.split}>
+        <View style={styles.slidesPane}>
+          <View style={styles.brandRow}>
+            <LogoMark size={40} />
+            <Text style={styles.brandName}>Prapanji</Text>
+          </View>
+          <AuthSlides />
+        </View>
+        <KeyboardAvoidingView style={styles.formPane}>
+          <ScrollView contentContainerStyle={styles.formScroll} keyboardShouldPersistTaps="handled">
+            <View style={styles.formColumn}>{form}</View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -64,18 +104,9 @@ export const AuthLayout: React.FC<{
           <Text style={styles.taglineHi}>
             {TAGLINE_HI}
           </Text>
+          <AuthSlides compact />
         </View>
-
-        <View style={styles.body}>
-          {/* The page's one <h1> on web. */}
-          <Text style={styles.title} role="heading" aria-level={1}>
-            {title}
-          </Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-          <WebForm onSubmit={onSubmit}>{children}</WebForm>
-        </View>
-
-        {footer && <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>{footer}</View>}
+        {form}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -207,6 +238,12 @@ const styles = StyleSheet.create({
   tagline: { fontFamily: FONTS.bold, color: T.onBrand, fontSize: 17, fontWeight: '700', marginBottom: 4 },
   taglineHi: { fontFamily: FONTS.hindiMedium, color: T.onBrand, fontSize: 16, opacity: 0.92 },
   body: { paddingHorizontal: 28, paddingTop: 32 },
+  bodyWide: { paddingTop: 0 },
+  split: { flex: 1, flexDirection: 'row', backgroundColor: T.bg },
+  slidesPane: { flex: 3, backgroundColor: T.brand, paddingHorizontal: 56, paddingTop: 56, paddingBottom: 40 },
+  formPane: { flex: 2, backgroundColor: T.bg },
+  formScroll: { flexGrow: 1, justifyContent: 'center', paddingVertical: 32 },
+  formColumn: { width: '100%', maxWidth: 460, alignSelf: 'center', paddingHorizontal: 28 },
   title: { fontFamily: FONTS.display, color: T.ink, fontSize: 26, fontWeight: '700', marginBottom: 6 },
   subtitle: { fontFamily: FONTS.regular, color: T.inkSoft, fontSize: 15, lineHeight: 22, marginBottom: 22 },
   footer: { marginTop: 'auto', paddingTop: 32, paddingHorizontal: 28, gap: 10 },

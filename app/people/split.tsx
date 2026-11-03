@@ -10,6 +10,7 @@ import { apiErrorMessage } from '../../utils/api';
 import { addPerson, addSplitWithPeople, getPeople, Person } from '../../utils/database';
 import { todayLocalIso } from '../../utils/dates';
 import { emptyPeopleSplit, fmtAmount, NEW_PERSON, PeopleSplitState, peopleSplitProblem, planPeopleSplit } from '../../utils/people';
+import { parseAmount } from '../../utils/amount';
 
 /** Split a bill you paid with friends: how much, what for, who shared it. Only your own share counts as spending. */
 export default function SplitBillScreen() {
@@ -36,7 +37,7 @@ export default function SplitBillScreen() {
     }, [user?.id])
   );
 
-  const total = parseFloat(amount) || 0;
+  const total = parseAmount(amount) || 0;
   const plan = planPeopleSplit(total, split);
   const nameOf = (k: number) => (k === NEW_PERSON ? split.newName.trim() : people.find((p) => p.id === k)?.name ?? '');
   const toggle = (id: number) => setSplit({ ...split, picked: split.picked.includes(id) ? split.picked.filter((x) => x !== id) : [...split.picked, id] });

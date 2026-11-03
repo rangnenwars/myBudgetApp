@@ -155,6 +155,27 @@
       "when": 1791693564617,
       "tag": "0021_repeat_end_date",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793433528574,
+      "tag": "0022_forecast_feature",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793434176134,
+      "tag": "0023_loan_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793434400943,
+      "tag": "0024_feature_pricing",
+      "breakpoints": true
     }
   ]
 }

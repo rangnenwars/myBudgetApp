@@ -39,6 +39,7 @@ import {
 import { monthlyEquivalent, EntryPeriod } from '../../utils/calculations';
 import { todayLocalIso, entryDateError, monthYearOf } from '../../utils/dates';
 import { useCategories } from '../../context/CategoriesContext';
+import { parseAmount } from '../../utils/amount';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -186,7 +187,7 @@ export default function TransactionsScreen() {
 
   const onSave = async () => {
     if (!user) return;
-    const value = parseFloat(amount);
+    const value = parseAmount(amount);
     if (!value || value <= 0) {
       setError('Enter a valid amount.');
       return;

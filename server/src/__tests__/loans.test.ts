@@ -1,8 +1,10 @@
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
 import { app, registerUser } from './helpers';
-import { db } from '../db/client';
-import { loans } from '../db/schema';
+import { db, pool } from '../db/client';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { loans, transactions } from '../db/schema';
 import { monthsToPost } from '../lib/loanEmiExpenses';
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -523,5 +525,130 @@ describe('POST /api/v1/loans/:id/part-payment under concurrency', () => {
 
     const [row] = await db.select().from(loans).where(eq(loans.id, loan.body.id));
     expect(row.outstanding).toBe(5000);
+  });
+});
+
+describe('loan payment history', () => {
+  const createLoan = async (token: string, extra: Record<string, unknown> = {}) =>
+    (await request(app).post('/api/v1/loans').set(auth(token)).send({ name: 'Home loan', principal: 500000, outstanding: 100000, emi: 10000, ...extra })).body;
+  const payments = async (token: string, id: number) =>
+    (await request(app).get(`/api/v1/loans/${id}/payments`).set(auth(token))).body as { kind: string; amount: number; date: string; balance_after: number | null }[];
+  const partPayments = async (token: string, id: number) => (await payments(token, id)).filter((p) => p.kind === 'part_payment');
+
+  it('records a part payment with the balance after it, for a loan that counts as an expense', async () => {
+    const { accessToken } = await registerUser();
+    const loan = await createLoan(accessToken);
+    await request(app).post(`/api/v1/loans/${loan.id}/part-payment`).set(auth(accessToken)).send({ amount: 25000, date: '2026-09-05' });
+    expect(await partPayments(accessToken, loan.id)).toEqual([{ id: expect.any(Number), kind: 'part_payment', amount: 25000, date: '2026-09-05', balance_after: 75000 }]);
+  });
+
+  it('records a part payment for a loan that does not count as an expense, where no transaction exists', async () => {
+    const { accessToken } = await registerUser();
+    const loan = await createLoan(accessToken, { counts_as_expense: false });
+    await request(app).post(`/api/v1/loans/${loan.id}/part-payment`).set(auth(accessToken)).send({ amount: 20000, date: '2026-09-05' });
+    expect(await listTxns(accessToken)).toHaveLength(0);
+    expect(await payments(accessToken, loan.id)).toEqual([{ id: expect.any(Number), kind: 'part_payment', amount: 20000, date: '2026-09-05', balance_after: 80000 }]);
+  });
+
+  it('records a manual mark-EMI-paid, newest first', async () => {
+    const { accessToken } = await registerUser();
+    const loan = await createLoan(accessToken, { counts_as_expense: false });
+    await request(app).post(`/api/v1/loans/${loan.id}/pay-emi`).set(auth(accessToken)).send({ date: '2026-09-01' });
+    await request(app).post(`/api/v1/loans/${loan.id}/part-payment`).set(auth(accessToken)).send({ amount: 20000, date: '2026-09-05' });
+    const rows = await payments(accessToken, loan.id);
+    expect(rows.map((p) => [p.kind, p.date, p.amount, p.balance_after])).toEqual([
+      ['part_payment', '2026-09-05', 20000, 70000],
+      ['emi', '2026-09-01', 10000, 90000],
+    ]);
+  });
+
+  it('records the EMI that is posted automatically each month', async () => {
+    const { accessToken } = await registerUser();
+    const loan = await createLoan(accessToken);
+    expect(await payments(accessToken, loan.id)).toEqual([{ id: expect.any(Number), kind: 'emi', amount: 10000, date: CUR_START, balance_after: 100000 }]);
+  });
+
+  it('shows what has been part-paid so far on the loan list, and zero for a loan with none', async () => {
+    const { accessToken } = await registerUser();
+    const loan = await createLoan(accessToken);
+    await request(app).post(`/api/v1/loans/${loan.id}/part-payment`).set(auth(accessToken)).send({ amount: 10000, date: '2026-09-05' });
+    await request(app).post(`/api/v1/loans/${loan.id}/part-payment`).set(auth(accessToken)).send({ amount: 5000.5, date: '2026-09-06' });
+    const fresh = await createLoan(accessToken, { name: 'Untouched' });
+    const list = (await request(app).get('/api/v1/loans').set(auth(accessToken))).body as { id: number; part_paid: number }[];
+    expect(list.find((l) => l.id === loan.id)!.part_paid).toBe(15000.5);
+    expect(list.find((l) => l.id === fresh.id)!.part_paid).toBe(0);
+  });
+
+  it('will not show another user a loan history, and is a 404 for a loan that does not exist', async () => {
+    const owner = await registerUser();
+    const other = await registerUser();
+    const loan = await createLoan(owner.accessToken);
+    expect((await request(app).get(`/api/v1/loans/${loan.id}/payments`).set(auth(other.accessToken))).status).toBe(404);
+    expect((await request(app).get('/api/v1/loans/99999999/payments').set(auth(owner.accessToken))).status).toBe(404);
+    expect((await request(app).get(`/api/v1/loans/${loan.id}/payments`)).status).toBe(401);
+  });
+
+  it('does not record a refused part payment', async () => {
+    const { accessToken } = await registerUser();
+    const loan = await createLoan(accessToken);
+    await request(app).post(`/api/v1/loans/${loan.id}/part-payment`).set(auth(accessToken)).send({ amount: 999999, date: '2026-09-05' });
+    expect(await partPayments(accessToken, loan.id)).toHaveLength(0);
+  });
+
+  describe('backfill from old part-payment transactions (migration 0023)', () => {
+    const backfillSql = (userId: number) => {
+      const sql = readFileSync(path.join(__dirname, '../../drizzle/0023_loan_payments.sql'), 'utf8');
+      const insert = sql.slice(sql.indexOf('INSERT INTO "loan_payments"'));
+      // Limited to the test user, so other tests' rows in the shared database are untouched.
+      return insert.replace('WHERE t."category_key"', `WHERE t."user_id" = ${userId} AND t."category_key"`);
+    };
+    const oldPartPayment = (userId: number, name: string, amount: number, date: string) =>
+      db.insert(transactions).values({
+        userId,
+        category: 'loan_part_payment',
+        amount,
+        type: 'expense',
+        subcategory: null,
+        note: `Part payment - ${name}`,
+        date,
+        month: Number(date.slice(5, 7)),
+        year: Number(date.slice(0, 4)),
+      });
+
+    it('files each old part payment under the one loan with that name, without a balance', async () => {
+      const { accessToken, user } = await registerUser();
+      const loan = await createLoan(accessToken);
+      await oldPartPayment(user.id, 'Home loan', 25000, '2026-03-05');
+      await oldPartPayment(user.id, 'Home loan', 10000, '2026-04-05');
+      await pool.query(backfillSql(user.id));
+      const rows = await partPayments(accessToken, loan.id);
+      expect(rows.map((p) => [p.date, p.amount, p.balance_after])).toEqual([
+        ['2026-04-05', 10000, null],
+        ['2026-03-05', 25000, null],
+      ]);
+    });
+
+    it('skips payments whose loan name is shared by two loans, or no longer exists', async () => {
+      const { accessToken, user } = await registerUser();
+      const a = await createLoan(accessToken, { name: 'Car loan' });
+      const b = await createLoan(accessToken, { name: 'Car loan' });
+      await createLoan(accessToken, { name: 'Phone' });
+      await oldPartPayment(user.id, 'Car loan', 5000, '2026-03-05');
+      await oldPartPayment(user.id, 'Renamed away', 7000, '2026-03-06');
+      await pool.query(backfillSql(user.id));
+      expect(await partPayments(accessToken, a.id)).toHaveLength(0);
+      expect(await partPayments(accessToken, b.id)).toHaveLength(0);
+      const all = await pool.query('select count(*)::int as n from loan_payments where user_id = $1 and kind = $2', [user.id, 'part_payment']);
+      expect(all.rows[0].n).toBe(0);
+    });
+
+    it('never files one user payment under another user loan of the same name', async () => {
+      const mine = await registerUser();
+      const theirs = await registerUser();
+      const theirLoan = await createLoan(theirs.accessToken);
+      await oldPartPayment(mine.user.id, 'Home loan', 5000, '2026-03-05');
+      await pool.query(backfillSql(mine.user.id));
+      expect(await partPayments(theirs.accessToken, theirLoan.id)).toHaveLength(0);
+    });
   });
 });

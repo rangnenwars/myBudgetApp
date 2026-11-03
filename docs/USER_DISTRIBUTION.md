@@ -1,4 +1,4 @@
-# Distributing My Budget to End Users
+# Distributing Prapanji to End Users
 
 How to get the app (and the [User Manual](USER_MANUAL.md)) into people's hands, what each channel costs, and which to start with.
 
@@ -35,7 +35,7 @@ Verify current prices and store policies before committing; they change.
 
 **Message template (WhatsApp / email):**
 
-> Hi! I've set up *My Budget* — a simple app to track income, expenses, loans, investments and savings goals in ₹.
+> Hi! I've set up *Prapanji* — a simple app to track income, expenses, loans, investments and savings goals in ₹.
 > 👉 https://prapanji.in  (works on any phone or computer)
 > Create an account with your email, then confirm the email we send. Guide: <link to USER_MANUAL — see §5>.
 > Stuck? Use the little 🐞 icon on the dashboard to report a problem, or reply to me.
@@ -50,7 +50,7 @@ Verify current prices and store policies before committing; they change.
 **Prerequisite checklist before inviting anyone** (see [CONFIGURATION_STATE.md](CONFIGURATION_STATE.md) §2):
 * [ ] `https://prapanji.in` loads with a valid certificate; `/health` is OK
 * [ ] An admin account exists and demo accounts do **not**
-* [ ] **SMTP configured** — otherwise users never receive the confirmation / password-reset emails (the app still works, but "Forgot password" will be dead and you'll be resetting passwords by hand)
+* [ ] **Email configured** (Resend API key + sender address, or SMTP) — otherwise users never receive the confirmation / password-reset emails (the app still works, but "Forgot password" will be dead and you'll be resetting passwords by hand)
 * [ ] Nightly backup running and a restore tested
 * [ ] Uptime alert pointing at you
 
@@ -110,7 +110,7 @@ EAS returns a build page with an install link and QR code. Send it to testers; t
 
 | Phase | Audience | Channels | Exit criteria |
 |---|---|---|---|
-| **0 — Prepare** (now) | you | — | prerequisite checklist in §2 all ticked; User Manual proofread; SMTP working; test with a fresh account end-to-end |
+| **0 — Prepare** (now) | you | — | prerequisite checklist in §2 all ticked; User Manual proofread; email sending working; test with a fresh account end-to-end |
 | **1 — Pilot** | 5–15 trusted users | A (web) | no data-loss or login bugs for 2 weeks; Report-issue inbox under control; backups verified |
 | **2 — Android pilot** (optional) | pilot users who want an app | A + B (APK) | `eas.json` env fixed; APK installs and signs in against production |
 | **3 — Wider launch** | friends/community/public | A + C (Play); D if iOS demand | privacy policy published; store listings approved; support routine in place |
@@ -136,3 +136,20 @@ Keep the manual in step with the app: when a screen changes, update the matching
 2. Account problems (forgotten password with no email, locked/deactivated account, Pro request) go to the admin: DB_ADMIN_QUERIES §3–§5.
 3. Announce planned downtime or changes through the same channel you used to invite people (WhatsApp group / email list). Deploys cause only a few seconds of interruption, so most releases need no notice.
 4. Review monthly: signups, active users, open issue reports (DB_ADMIN_QUERIES §8–§9).
+
+---
+
+## 7. Marketing: how people first hear about it
+
+**One idea to carry everywhere:** *Split a bill with friends, and see where your month goes.* Splitting is the hook (every split brings friends in); tracking is why they stay. Keep the message to that single line and one link, **prapanji.in**.
+
+| Channel | How it works | Cost | Why it fits | What to measure |
+|---|---|---|---|---|
+| **WhatsApp groups** (class, hostel, flat, trip, office) | Post the link with a 3-line message and one screenshot of Split a bill. Ask each early user to use it in their own group. | Free | Students live in these groups, and each split sends a real group into the app. | Signups per group posted in |
+| **College leaflets and posters** | A5 leaflet or poster with a QR code to prapanji.in, left on hostel mess boards, canteens, libraries and with society heads. One picture, one line, the QR. | Printing only; get local quotes | Reaches a whole campus in one visit, trusted because it's on campus. | Signups after each campus (use a different QR link per campus) |
+| **YouTube ads** (Shorts and in-stream) | A 15 to 30 second video: a restaurant bill, "who owes whom?", the app sorts it. Target 18 to 24 in India. Start with a small test budget. | Pay per view or click; set a daily cap | A short video explains splitting faster than text. | Cost per signup, and how many of those still use it a week later |
+| **Campus ambassadors and student creators** | A few students per college share it with their circle, or a small creator posts a real bill split. | Small thank-you or free perks | Friends trust friends more than ads. | Signups per ambassador |
+
+**Order to try them:** WhatsApp groups first (free, fastest feedback), then leaflets at 2 to 3 campuses, then a small YouTube test once the first two show people stay. Don't scale a channel until its signups keep using the app a week later.
+
+**Numbers that matter before spending more:** signups, still active after 7 days, splits created per user, and friends invited per user. Prices change, so check current rates before budgeting.

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, eq, desc, sql, SQL } from 'drizzle-orm';
 import { db } from '../db/client';
-import { loans, transactions } from '../db/schema';
+import { loanPayments, loans, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { isoDate, money, idParam } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
@@ -51,7 +51,14 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     const rows = await db.select().from(loans).where(and(eq(loans.userId, req.userId!), eq(loans.is_active, true))).orderBy(desc(loans.id));
-    res.json(rows);
+    // What each loan has had paid in part payments, for the "Paid so far" line on its card.
+    const totals = await db
+      .select({ loanId: loanPayments.loanId, total: sql<string>`sum(${loanPayments.amount})` })
+      .from(loanPayments)
+      .where(and(eq(loanPayments.userId, req.userId!), eq(loanPayments.kind, 'part_payment')))
+      .groupBy(loanPayments.loanId);
+    const paid = new Map(totals.map((t) => [t.loanId, Number(t.total)]));
+    res.json(rows.map((r) => ({ ...r, part_paid: paid.get(r.id) ?? 0 })));
   })
 );
 
@@ -141,6 +148,22 @@ router.patch(
   })
 );
 
+// A loan's payment history: part payments and EMIs, newest first.
+router.get(
+  '/:id/payments',
+  asyncHandler(async (req, res) => {
+    const id = idParam(req);
+    const [loan] = await db.select({ id: loans.id }).from(loans).where(and(eq(loans.id, id), eq(loans.userId, req.userId!)));
+    if (!loan) throw notFound('Loan not found.');
+    const rows = await db
+      .select({ id: loanPayments.id, kind: loanPayments.kind, amount: loanPayments.amount, date: loanPayments.date, balance_after: loanPayments.balanceAfter })
+      .from(loanPayments)
+      .where(eq(loanPayments.loanId, id))
+      .orderBy(desc(loanPayments.date), desc(loanPayments.id));
+    res.json(rows);
+  })
+);
+
 // Marks one EMI as paid on a loan that does NOT count as an expense (e.g.
 // money borrowed from family): lowers the outstanding balance by min(emi,
 // outstanding) so the final instalment can't overshoot, and logs no expense.
@@ -151,7 +174,7 @@ router.post(
   '/:id/pay-emi',
   asyncHandler(async (req, res) => {
     const id = idParam(req);
-    payEmiSchema.parse(req.body);
+    const { date } = payEmiSchema.parse(req.body);
 
     const [loan] = await db
       .select()
@@ -171,6 +194,7 @@ router.post(
       .where(and(eq(loans.id, id), eq(loans.outstanding, loan.outstanding)))
       .returning();
     if (!updatedLoan) throw badRequest('This loan changed while paying — please try again.');
+    await db.insert(loanPayments).values({ userId: req.userId!, loanId: id, kind: 'emi', amount: payment, date, balanceAfter: nextOutstanding });
 
     res.status(201).json({ loan: updatedLoan });
   })
@@ -208,6 +232,8 @@ router.post(
         .set({ outstanding: next.outstanding, emi: next.emi, updated_at: new Date() })
         .where(eq(loans.id, id))
         .returning();
+
+      await tx.insert(loanPayments).values({ userId: req.userId!, loanId: id, kind: 'part_payment', amount: body.amount, date: body.date, balanceAfter: next.outstanding });
 
       if (!loan.counts_as_expense) return { loan: updatedLoan, transaction: null };
 

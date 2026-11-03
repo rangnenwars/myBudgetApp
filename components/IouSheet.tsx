@@ -8,6 +8,7 @@ import { Segmented } from './ScreenKit';
 import { apiErrorMessage } from '../utils/api';
 import { addPerson, addPersonEntry, Person } from '../utils/database';
 import { entryDateError, todayLocalIso } from '../utils/dates';
+import { parseAmount } from '../utils/amount';
 
 interface Props {
   visible: boolean;
@@ -49,7 +50,7 @@ export const IouSheet: React.FC<Props> = ({ visible, onClose, onSaved, people = 
   }, [visible, person?.id]);
 
   const onSave = async () => {
-    const value = parseFloat(amount);
+    const value = parseAmount(amount);
     const name = newName.trim();
     if (pickedId == null && !name) return setError('Choose a person or type a name.');
     if (!(value > 0)) return setError('Enter an amount.');

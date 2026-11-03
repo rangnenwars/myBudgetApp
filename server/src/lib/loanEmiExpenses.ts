@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { and, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import { db } from '../db/client';
-import { loans, transactions } from '../db/schema';
+import { loanPayments, loans, transactions } from '../db/schema';
 import { recomputeBudgetClass } from './budgetClass';
 import { splitEmi } from '../calculations';
 import { localToday } from './clock';
@@ -92,6 +92,7 @@ export const postDueLoanEmis = async (userId: number, now: Date = new Date(), kn
           month,
           year,
         });
+        await tx.insert(loanPayments).values({ userId, loanId: loan.id, kind: 'emi', amount, date: monthStart(year, month), balanceAfter: outstanding });
         count++;
       }
       await tx

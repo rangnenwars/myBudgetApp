@@ -90,7 +90,8 @@ router.get(
     const includeCommitments = budget?.includeCommitments ?? false;
 
     const start = addMonths(year, month, -3);
-    const totals = (await getTotalsInRange(userId, start.month, start.year, month, year)).filter((t) => t.type === 'expense');
+    const allTotals = await getTotalsInRange(userId, start.month, start.year, month, year);
+    const totals = allTotals.filter((t) => t.type === 'expense');
     const keys = [...new Set(totals.map((t) => t.category))];
     const groups = new Map(
       keys.length ? (await db.select({ key: categories.key, group: categories.group }).from(categories).where(inArray(categories.key, keys))).map((c) => [c.key, c.group]) : []
@@ -98,14 +99,17 @@ router.get(
     const counted = totals.filter((t) => countsTowardBudget(groups.get(t.category) ?? '', includeCommitments));
 
     const spent = counted.filter((t) => t.month === month && t.year === year).reduce((s, t) => s + t.amount, 0);
-    const pastByMonth = new Map<string, number>();
-    for (const t of counted) {
-      if (t.month === month && t.year === year) continue;
-      const k = `${t.year}-${t.month}`;
-      pastByMonth.set(k, (pastByMonth.get(k) ?? 0) + t.amount);
-    }
-    const pastTotal = [...pastByMonth.values()].reduce((s, v) => s + v, 0);
-    const suggested = pastByMonth.size ? Math.round(pastTotal / pastByMonth.size / 100) * 100 || null : null;
+    // Average over the full months from the first one with any activity up to
+    // last month: a month with no counted spending is a month of ₹0, not a month
+    // to leave out of the average (that would overstate it), while months before
+    // the user started tracking aren't averaged in.
+    const index = (y: number, m: number) => y * 12 + m;
+    const current = index(year, month);
+    const activeMonths = allTotals.map((t) => index(t.year, t.month)).filter((i) => i < current);
+    const firstActive = activeMonths.length ? Math.min(...activeMonths) : null;
+    const monthsAveraged = firstActive == null ? 0 : current - firstActive;
+    const pastTotal = counted.filter((t) => index(t.year, t.month) < current).reduce((s, t) => s + t.amount, 0);
+    const suggested = monthsAveraged ? Math.round(pastTotal / monthsAveraged / 100) * 100 || null : null;
 
     // Only limits on categories that count toward the total are "set aside" from it.
     const limits = await db

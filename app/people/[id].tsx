@@ -12,6 +12,7 @@ import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 import { addPersonEntry, deletePerson, deletePersonEntry, getPerson, updatePerson, LedgerEntry, Person } from '../../utils/database';
 import { fmtAmount, KIND_LABEL, shortDate } from '../../utils/people';
+import { parseAmount } from '../../utils/amount';
 
 type Sheet = 'none' | 'payment' | 'lend' | 'due';
 
@@ -78,7 +79,7 @@ export default function PersonScreen() {
   };
 
   const savePayment = () => {
-    const value = parseFloat(amount);
+    const value = parseAmount(amount);
     if (!(value > 0)) return setError('Enter an amount.');
     run(() => addPersonEntry(id, { kind: owed ? 'received' : 'repaid', amount: value, note: note.trim() || null }));
   };

@@ -7,6 +7,7 @@ import { useCategories } from '../context/CategoriesContext';
 import { apiErrorMessage } from '../utils/api';
 import { addTransaction, getTransactionsPage, TxnType } from '../utils/database';
 import { monthYearOf, todayLocalIso } from '../utils/dates';
+import { parseAmount } from '../utils/amount';
 
 const CHIP_COUNT = 4;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back'] as const;
@@ -81,7 +82,7 @@ export const QuickAddSheet: React.FC<Props> = ({ visible, onClose, onSaved }) =>
   };
 
   const onSave = async () => {
-    const value = parseFloat(amount);
+    const value = parseAmount(amount);
     if (!(value > 0)) {
       setError('Enter an amount.');
       return;

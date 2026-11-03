@@ -74,7 +74,7 @@ Tap the orange **+** on the dashboard: pick Expense or Income, type the amount o
 **Add one:** Transactions tab → **+** → choose **Income** or **Expense** → pick a **category** → enter the **amount** → (optional) a note → **Save**.
 
 * **Category** — tap the field for the list (Household, Food & dining, Transport, Health, Family, Loans & EMIs, Credit cards, Shopping, Property, Investments & savings, Income…). Use the search box to find one fast. Can't find yours? Add your own **custom category** from the same list (you can rename or delete your own later; a category that still has transactions can't be deleted).
-* **Date** — today by default. Choose *Yesterday* or any past date. Future dates aren't allowed.
+* **Date** — today by default. Choose *Yesterday* or *Other date*, then type it as `YYYY-MM-DD` or tap the calendar button and pick a day. Future dates aren't allowed. Every date box in the app (Ends on, goal target date, loan start date, "pay back by") has the same calendar button.
 * **How often** — *Once* records the exact amount on that date. *Monthly / Quarterly / Yearly* converts the amount to its monthly equivalent (a ₹12,000 yearly bill is recorded as ₹1,000/month). This choice is hidden when **Repeat** is on.
 * **Repeat** — switch it on for salary, rent, insurance or any fixed amount. The same entry is added automatically every month, quarter or year on the same day (29th–31st use the month's last day). A quarterly or yearly repeat adds the **full** amount each time. A **Loan EMI** can't be set to repeat — add the loan under Loans and its EMI is added every month for you. Choose **Ends on**: 3, 6 or 12 months, a date, or **No end date** (for salary or rent). After the end date nothing more is added, the repeat leaves the Repeating list and your free-money day, and entries already added stay in your reports. Repeats made before this existed show "needs an end date" until you choose one. To change the amount, the frequency, the day or the end — or to stop it — tap the **Repeating** button.
 * **Edit** — tap a row, change it, save. **Delete** — the trash icon (you'll be asked to confirm).
@@ -107,7 +107,7 @@ Loans tab → **+**. Enter name, principal, outstanding balance and EMI; optiona
 
 ## 6. Investments
 
-Investments tab → **+**: name, type, amount invested, current value, optional start/maturity dates and a note. The app calculates the **gain %** and shows a portfolio summary. Tap a card to edit; trash icon to delete. Keep **current value** up to date for an accurate net worth.
+Investments tab → **+**: name, type, amount invested, current value and a note. The app calculates the **gain %** and shows a portfolio summary. Tap a card to edit; trash icon to delete. Keep **current value** up to date for an accurate net worth.
 
 ---
 
