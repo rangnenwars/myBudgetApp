@@ -269,6 +269,29 @@ export const monthsToRepay = (outstanding: number, annualRatePercent: number | n
   return months;
 };
 
+// ---------- Average savings (goal dates) ----------
+
+/**
+ * What a goal date is projected from: the average net savings of the last 3
+ * full months, counted from the first of them in which the user logged
+ * anything — months before they started aren't zeros to average in, and the
+ * half-finished current month isn't a month's savings. A quiet month after
+ * that still counts as it was. `series` must be chronological and may include
+ * the current month; with no full month of activity yet, the current month so
+ * far is used so a brand-new account still gets an answer.
+ */
+export const averageMonthlySavings = (series: MonthPoint[], current: MonthKey): number => {
+  const isCurrent = (p: MonthPoint) => p.month === current.month && p.year === current.year;
+  const full = series.filter((p) => !isCurrent(p));
+  const first = full.findIndex((p) => p.income > 0 || p.expense > 0);
+  if (first >= 0) {
+    const months = full.slice(first).slice(-3);
+    return months.reduce((s, p) => s + p.net, 0) / months.length;
+  }
+  const now = series.find(isCurrent);
+  return now ? now.net : 0;
+};
+
 // ---------- Goal ETA ----------
 
 export interface GoalETA {

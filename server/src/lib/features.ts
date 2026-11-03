@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { appSettings, userFeatures } from '../db/schema';
 import { AppError } from './errors';
@@ -14,12 +14,19 @@ export type SignupDefaults = Record<FeatureKey, boolean>;
 
 const allOff = (): SignupDefaults => Object.fromEntries(FEATURE_KEYS.map((k) => [k, false])) as SignupDefaults;
 
+/**
+ * A feature row counts as on only while status is 'on' and any access period
+ * (expires_at) hasn't ended. Checked when read, so lapsed access needs no job
+ * to switch it off, and nothing the user saved is touched.
+ */
+export const activeFeature = () => and(eq(userFeatures.status, 'on'), or(isNull(userFeatures.expiresAt), gt(userFeatures.expiresAt, sql`now()`)))!;
+
 /** The features switched on for this user. */
 export const getUserFeatures = async (userId: number): Promise<FeatureKey[]> => {
   const rows = await db
     .select({ key: userFeatures.featureKey })
     .from(userFeatures)
-    .where(and(eq(userFeatures.userId, userId), eq(userFeatures.status, 'on')));
+    .where(and(eq(userFeatures.userId, userId), activeFeature()));
   const on = new Set(rows.map((r) => r.key));
   return FEATURE_KEYS.filter((k) => on.has(k));
 };
@@ -28,7 +35,7 @@ export const hasFeature = async (userId: number, key: FeatureKey): Promise<boole
   const [row] = await db
     .select({ key: userFeatures.featureKey })
     .from(userFeatures)
-    .where(and(eq(userFeatures.userId, userId), eq(userFeatures.featureKey, key), eq(userFeatures.status, 'on')));
+    .where(and(eq(userFeatures.userId, userId), eq(userFeatures.featureKey, key), activeFeature()));
   return !!row;
 };
 

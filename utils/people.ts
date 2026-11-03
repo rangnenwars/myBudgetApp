@@ -1,6 +1,7 @@
 import { COLORS } from '../constants/theme';
 import { splitEqually } from './calculations';
 import { LedgerKind, Person } from './types';
+import { parseAmount } from './amount';
 
 /** ₹1,200 for whole rupees, ₹1,200.50 when there are paise. */
 export const fmtAmount = (n: number): string => {
@@ -67,7 +68,7 @@ export const planPeopleSplit = (total: number, v: PeopleSplitState): { keys: num
     const { friendShare } = splitEqually(total, keys.length);
     for (const k of keys) shares[k] = friendShare;
   } else {
-    for (const k of keys) shares[k] = parseFloat(v.shares[k] ?? '') || 0;
+    for (const k of keys) shares[k] = parseAmount(v.shares[k] ?? '') || 0;
   }
   const friendsCents = keys.reduce((s, k) => s + Math.round(shares[k] * 100), 0);
   return { keys, shares, myShare: (Math.round(total * 100) - friendsCents) / 100 };

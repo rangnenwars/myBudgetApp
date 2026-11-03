@@ -18,6 +18,7 @@ import {
   RecurringTransaction,
   RepeatFrequency,
   Loan,
+  LoanPayment,
   Investment,
   SavingsGoal,
   GoalContribution,
@@ -28,6 +29,7 @@ import {
   BudgetStatus,
   OverallBudget,
   FreeMoneyDayInfo,
+  Forecast,
   Person,
   PeopleSummary,
   LedgerEntry,
@@ -188,6 +190,11 @@ export const getFreeMoneyDay = async (): Promise<FreeMoneyDayInfo> => {
   return data;
 };
 
+export const getForecast = async (): Promise<Forecast> => {
+  const { data } = await api.get('/forecast');
+  return data;
+};
+
 /** CSV text for the range, straight from the server (same transactionsToCsv the client's own calculations.ts exports — see reports.ts on the server). */
 export const getExportCsv = async (startMonth: number, startYear: number, endMonth: number, endYear: number): Promise<string> => {
   const { data } = await api.get('/reports/export.csv', { params: { startMonth, startYear, endMonth, endYear }, responseType: 'text' });
@@ -282,6 +289,12 @@ export const deleteLoan = async (id: number): Promise<void> => {
 
 export const getLoans = async (): Promise<Loan[]> => {
   const { data } = await api.get('/loans');
+  return data;
+};
+
+/** A loan's part payments and EMIs, newest first. */
+export const getLoanPayments = async (id: number): Promise<LoanPayment[]> => {
+  const { data } = await api.get(`/loans/${id}/payments`);
   return data;
 };
 
@@ -584,7 +597,16 @@ export interface MyFeature {
   key: FeatureKey;
   label: string;
   description: string;
+  /** Rupees for one `period`; 0 = free for now. */
+  price: number;
+  period: 'month' | 'year';
+  /** Where to pay a priced feature; null when the server has none set. */
+  upiId: string | null;
   on: boolean;
+  /** When a paid period ends (ISO); null for access with no end. */
+  expiresAt: string | null;
+  /** Was on, and its period has run out. */
+  ended: boolean;
   /** Asked for and waiting on staff. */
   requested: boolean;
 }
@@ -594,8 +616,9 @@ export const getMyFeatures = async (): Promise<MyFeature[]> => {
   return data;
 };
 
-export const requestFeature = async (key: FeatureKey): Promise<MyFeature> => {
-  const { data } = await api.post(`/features/${key}/request`);
+/** Ask staff to switch a feature on. `paid` says the user already paid the price shown. */
+export const requestFeature = async (key: FeatureKey, paid = false): Promise<MyFeature> => {
+  const { data } = await api.post(`/features/${key}/request`, { paid });
   return data;
 };
 
@@ -610,6 +633,8 @@ export interface UserFeatureAccess {
   updatedAt: string | null;
   /** The user asked for it and is waiting. */
   requestedAt: string | null;
+  /** When a paid period ends (ISO); null for access with no end. */
+  expiresAt?: string | null;
 }
 
 export type SignupFeatureDefaults = Record<FeatureKey, boolean>;
@@ -617,8 +642,8 @@ export type SignupFeatureDefaults = Record<FeatureKey, boolean>;
 export interface FeatureOverview {
   defaults: SignupFeatureDefaults;
   totalUsers: number;
-  features: { key: FeatureKey; label: string; usersOn: number }[];
-  requests: { userId: number; name: string; email: string; feature: FeatureKey; requestedAt: string }[];
+  features: { key: FeatureKey; label: string; price: number; period: 'month' | 'year'; usersOn: number }[];
+  requests: { userId: number; name: string; email: string; feature: FeatureKey; requestedAt: string; paid: boolean }[];
 }
 
 export interface FeatureUser {
@@ -649,7 +674,8 @@ export const getUserFeatureAccess = async (userId: number): Promise<UserFeatureA
   return data;
 };
 
-export const setUserFeature = async (userId: number, key: FeatureKey, on: boolean): Promise<UserFeatureAccess> => {
-  const { data } = await api.put(`/admin/users/${userId}/features/${key}`, { on });
+/** `period` limits a switch-on to a month or a year; leave it out for no end. */
+export const setUserFeature = async (userId: number, key: FeatureKey, on: boolean, period?: 'month' | 'year' | 'none'): Promise<UserFeatureAccess> => {
+  const { data } = await api.put(`/admin/users/${userId}/features/${key}`, { on, ...(period ? { period } : {}) });
   return data;
 };

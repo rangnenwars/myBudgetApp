@@ -111,6 +111,18 @@ So: authentication is unified; authorization is role-based and enforced server-s
 
 ---
 
+### 9a. Should life insurance go under Expenses or Investments?
+
+**Expenses**, using the "Life insurance" category (group "Health & protection"). A premium for term, health or any protection-only plan buys cover, not an asset you can get back, so it belongs in spending. Put it under Investments and your net worth looks higher and your monthly spending lower than they really are. Set it to Repeat (yearly suits most premiums) with an **Ends on** date for the policy term. For a savings-type plan (endowment, money-back, ULIP), still log each premium as an expense and record the payout as income when it matures, or add the policy under Investments as "Other" with its current surrender value if you want it in net worth.
+
+---
+
+### 9b. What happens when a repeating entry reaches its end date?
+
+It stops by itself. Nothing more is added, it disappears from the Repeating list and from the free-money day, and you don't need to delete it. Entries already added stay in Transactions and in reports, so reports count only up to the end (a monthly repeat that ends in July counts 7 months from January). Repeats made before the Ends on feature existed keep running and show "needs an end date" until you choose one.
+
+---
+
 ### 10. Test accounts — 1 user, 1 admin
 
 Seeded automatically by `server/src/db/seed-accounts.ts` on every `docker compose up` (also re-runnable manually via `cd server && npm run db:seed:accounts`). Local dev credentials only — see the hardening note in question 8 before any real deployment.

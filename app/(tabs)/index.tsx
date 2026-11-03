@@ -8,6 +8,8 @@ import { BudgetClassBadge } from '../../components/BudgetClassBadge';
 import { ProGate } from '../../components/ProGate';
 import { QuickAddSheet } from '../../components/QuickAddSheet';
 import { FreeMoneyCard } from '../../components/FreeMoneyCard';
+import { PlanAheadCard } from '../../components/PlanAheadCard';
+import { MoreFeaturesLink } from '../../components/MoreFeaturesLink';
 import { BudgetCard } from '../../components/BudgetCard';
 import { PeopleButton } from '../../components/PeopleButton';
 import { useAuth } from '../../context/AuthContext';
@@ -181,6 +183,10 @@ export default function DashboardScreen() {
       )}
 
       {isCurrentMonth && <FreeMoneyCard refreshKey={refreshKey} />}
+
+      {isCurrentMonth && <PlanAheadCard refreshKey={refreshKey} />}
+
+      <MoreFeaturesLink />
 
       <PeopleButton
         refreshKey={refreshKey}

@@ -127,3 +127,15 @@ Full findings and their status: [SECURITY_REVIEW.md](SECURITY_REVIEW.md). What c
 | Screenshot retention | ✅ In repo | Runs nightly on every server (`ISSUE_SCREENSHOT_RETENTION_DAYS`, default 90) even with the digest off. Production runs it at 02:00 **UTC** until `TZ` is passed through (gap 2). |
 | Database dumps in git | ✅ In repo | `.gitignore` now covers `/db dump/`, `*.dump`, `*.sql.gz`. Nothing of the kind was ever committed. |
 | Server coverage floor | ⚠ Not enforced | `server/package.json` `quality` runs `npm test`, not `test:coverage`, so CI and the pre-commit hook don't check the 80/90% floor. Coverage itself is 88% branches. |
+
+---
+
+## Change log: 2026-10-16
+
+| Area | Change |
+|---|---|
+| Repeating entries | Every repeat now has an end: "Ends on" date or an explicit "No end date" (migration 0021: `ends_on`, `no_end`). Ended rules stop posting and leave the free-money day. Older rules keep posting and show "needs an end date". Optional bulk helper: `server/scripts/repeat-end-backfill.sql` (preview first, back up before applying). |
+| Dates | Calendar bottom sheet beside the typed date box on every date field (`CalendarSheet`, `DateInput`). |
+| Email | Production sends through Resend (`RESEND_API_KEY` + `MAIL_FROM`); SMTP remains as a fallback. |
+| Tests | Client 142, server 456 in 35 suites, all passing. |
+| Docs | README, USER_MANUAL, USER_WORKFLOWS, SYSTEM_ARCHITECTURE_GUIDE, FAQ, USER_DISTRIBUTION (new marketing section), API_REFERENCE, DATABASE_DESIGN and ROADMAP brought up to date; new `INVESTOR_PITCH.md` and the pitch deck. |

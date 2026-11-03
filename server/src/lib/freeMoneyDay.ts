@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, lt } from 'drizzle-orm';
+import { and, asc, eq, gt } from 'drizzle-orm';
 import { db } from '../db/client';
 import { categories, freeMoneySnapshots, loans, recurringTransactions, transactions } from '../db/schema';
 import { addMonths, localToday } from './clock';
@@ -26,32 +26,44 @@ export const weekStartOf = (iso: string): string => {
 
 export const INCOME_MONTHS = 3;
 
+/** The date seven days before the YYYY-MM-DD date. */
+const weekBefore = (iso: string): string => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d - 7));
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+};
+
 /**
  * Income used for the calculation, from what the user has told the app:
- * 1. the average of the last 3 full months, counting only months since the
- *    user's first entry — a tracked month with no income counts as ₹0, so an
- *    irregular earner isn't shown a month's income they didn't get. Repeating
- *    income is already in these months once it has posted;
+ * 1. the average of the last 3 full months. Tracking starts at the earliest of
+ *    those months in which the user logged anything, so an old backdated entry
+ *    doesn't stretch the average over months the app wasn't in use. From there
+ *    a month with no income counts as ₹0, so an irregular earner isn't shown a
+ *    month's income they didn't get. The month of the user's very first entry
+ *    is skipped when it has no income: they only started part-way through it.
+ *    Repeating income is already in these months once it has posted;
  * 2. otherwise (no full month tracked yet, or nothing earned in it) their
  *    repeating income entries;
  * 3. otherwise what they have logged this month so far, so a brand-new account
  *    with a salary entered today still gets an answer.
  */
-const monthlyIncome = async (userId: number, repeating: number, today: { year: number; month: number }) => {
-  const [first] = await db
-    .select({ year: transactions.year, month: transactions.month })
-    .from(transactions)
-    .where(eq(transactions.userId, userId))
-    .orderBy(asc(transactions.year), asc(transactions.month))
-    .limit(1);
-  const firstIndex = first ? first.year * 12 + first.month : Infinity;
+export const monthlyIncome = async (userId: number, repeating: number, today: { year: number; month: number }) => {
   const start = addMonths(today.year, today.month, -INCOME_MONTHS);
   const end = addMonths(today.year, today.month, -1);
-  const tracked = Math.min(INCOME_MONTHS, Math.max(0, end.year * 12 + end.month - Math.max(firstIndex, start.year * 12 + start.month) + 1));
-  if (tracked > 0) {
-    const rows = await getTotalsInRange(userId, start.month, start.year, end.month, end.year);
+  const rows = await getTotalsInRange(userId, start.month, start.year, end.month, end.year);
+  if (rows.length > 0) {
+    let from = Math.min(...rows.map((r) => r.year * 12 + r.month));
+    const [first] = await db
+      .select({ year: transactions.year, month: transactions.month })
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(asc(transactions.year), asc(transactions.month))
+      .limit(1);
+    const firstHasIncome = rows.some((r) => r.type === 'income' && r.year * 12 + r.month === from);
+    if (first && first.year * 12 + first.month === from && !firstHasIncome) from += 1;
+    const tracked = end.year * 12 + end.month - from + 1;
     const earned = rows.filter((r) => r.type === 'income').reduce((s, r) => s + r.amount, 0);
-    if (earned > 0) return { amount: earned / tracked, source: 'average' as const };
+    if (tracked > 0 && earned > 0) return { amount: earned / tracked, source: 'average' as const };
   }
 
   if (repeating > 0) return { amount: repeating, source: 'repeating' as const };
@@ -97,6 +109,7 @@ export const getFreeMoneyDay = async (userId: number) => {
   const result = computeFreeMoneyDay(income.amount, committed, daysInMonth);
 
   // This week's first reading is kept, so next week can say how the day moved.
+  // Only last week's reading is compared: an older one would be mislabelled "last week".
   const weekStart = weekStartOf(today.iso);
   let previous: { weekStart: string; day: number } | null = null;
   let daysEarlier: number | null = null;
@@ -105,8 +118,7 @@ export const getFreeMoneyDay = async (userId: number) => {
     const [prev] = await db
       .select()
       .from(freeMoneySnapshots)
-      .where(and(eq(freeMoneySnapshots.userId, userId), lt(freeMoneySnapshots.weekStart, weekStart)))
-      .orderBy(desc(freeMoneySnapshots.weekStart))
+      .where(and(eq(freeMoneySnapshots.userId, userId), eq(freeMoneySnapshots.weekStart, weekBefore(weekStart))))
       .limit(1);
     if (prev) {
       // Last week's share, laid over this month's length, so the two days are comparable.

@@ -271,6 +271,27 @@ export const loans = pgTable('loans', {
 ]);
 
 // ============================================================
+// loan_payments — what the user (or the monthly auto-posting) has paid on a
+// loan: part payments and EMIs, newest first on the loan's Payments page.
+// balance_after is null for rows backfilled from old transactions, whose
+// balance at the time isn't known.
+// ============================================================
+export const loanPayments = pgTable('loan_payments', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  loanId: bigint('loan_id', { mode: 'number' }).notNull().references(() => loans.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['part_payment', 'emi'] }).notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  date: date('date').notNull(),
+  balanceAfter: numeric('balance_after', { precision: 12, scale: 2, mode: 'number' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_loan_payments_loan_date').on(table.loanId, table.date),
+  check('loan_payments_amount_check', sql`${table.amount} > 0`),
+  check('loan_payments_kind_check', sql`${table.kind} IN ('part_payment', 'emi')`),
+]);
+
+// ============================================================
 // investments — snake_case JS properties, see loans comment above
 // ============================================================
 export const investments = pgTable('investments', {
@@ -530,13 +551,19 @@ export const userFeatures = pgTable('user_features', {
   changedBy: bigint('changed_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   requestedAt: timestamp('requested_at', { withTimezone: true }),
   requestIssueId: bigint('request_issue_id', { mode: 'number' }).references(() => issueReports.id, { onDelete: 'set null' }),
+  // When switching on for a period (a paid month or year), the instant access ends. Null = no end.
+  // Checked at read time (lib/features.ts activeFeature): an ended row stays 'on' but counts as off,
+  // so nothing has to run to switch it off and the user's data is never touched.
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  // The user said they paid when they asked (staff still confirm before switching on).
+  requestPaid: boolean('request_paid').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   primaryKey({ columns: [table.userId, table.featureKey] }),
   index('idx_user_features_key_status').on(table.featureKey, table.status),
   index('idx_user_features_requested').on(table.requestedAt).where(sql`${table.requestedAt} IS NOT NULL`),
-  check('user_features_key_check', sql`${table.featureKey} IN ('goals', 'loans', 'investments')`),
+  check('user_features_key_check', sql`${table.featureKey} IN ('goals', 'loans', 'investments', 'forecast')`),
   check('user_features_status_check', sql`${table.status} IN ('on', 'off')`),
   check('user_features_source_check', sql`${table.source} IN ('default', 'existing_data', 'admin', 'request')`),
 ]);

@@ -1,6 +1,6 @@
 # System Architecture Guide — How It Works and Which File Changes What
 
-For anyone who has to modify, debug or operate My Budget. The deeper per-topic docs are linked where relevant: [README.md](README.md) (features, screens, testing), [API_REFERENCE.md](API_REFERENCE.md), [DATABASE_DESIGN.md](DATABASE_DESIGN.md), [INFRASTRUCTURE_REFERENCE.md](INFRASTRUCTURE_REFERENCE.md).
+For anyone who has to modify, debug or operate Prapanji. The deeper per-topic docs are linked where relevant: [README.md](README.md) (features, screens, testing), [API_REFERENCE.md](API_REFERENCE.md), [DATABASE_DESIGN.md](DATABASE_DESIGN.md), [INFRASTRUCTURE_REFERENCE.md](INFRASTRUCTURE_REFERENCE.md).
 
 ---
 
@@ -96,18 +96,22 @@ Tier (`standard` / `pro`) gates the Reports tab, debt-payoff planner, goal ETA, 
 ```
 app/                  screens (expo-router)             ← client UI
   (tabs)/             Dashboard, Transactions, Loans, Investments, Goals, Reports
+  people/             People list, one person, Split a bill
   admin/              Users, Audit log, System metrics  ← staff screens
   login · register · forgot-password · reset-password · verify-email
-  settings · budgets · accounts · input-expenses · report-issue
-components/           shared UI (Card, CategoryPicker, ProGate, BudgetClassBadge, MiniBar, ResponsiveContainer)
+  settings · budgets · accounts · input-expenses · free-money-day · report-issue
+components/           shared UI (Card, CategoryPicker, ProGate, FeatureGate, BudgetClassBadge, MiniBar, ResponsiveContainer,
+                      FreeMoneyCard, BudgetCard, QuickAddSheet, IouSheet, RepeatingEntries, RepeatEndField,
+                      CalendarSheet + DateInput + DateField + DueDateField for dates)
 constants/            categories.ts (system categories), theme.ts (colours/spacing), issues.ts (report-issue options)
 context/              AuthContext (session + role), CategoriesContext
-utils/                api.ts · database.ts · calculations.ts · dates.ts · types.ts · alert* · exportFile* · tokenStorage*
+utils/                api.ts · database.ts · calculations.ts · dates.ts · calendar.ts · repeatEnd.ts · types.ts · alert* · exportFile* · tokenStorage*
 server/
   src/app.ts          Express app: middleware order, route mounting, /health
   src/index.ts        process start; production safety checks
   src/routes/         one file per resource (auth, account, admin, adminAuditLog, system, transactions, recurring,
-                      loans, investments, goals, accounts, budgets, categories, netWorth, reports, issues)
+                      loans, investments, goals, accounts, budgets, categories, netWorth, reports, issues,
+                      people, features, adminFeatures)
   src/middleware/     auth, rateLimit, requireAdmin, requireStaff, requireSystemManager, errorHandler
   src/lib/            queries, tokens, session, cookies, errors, auditLog, accountMail + mailer, autoPost / recurringTransactions / loanEmiExpenses, issueAnalysis + issueSuggestions
   src/jobs/           scheduler + nightly issue digest

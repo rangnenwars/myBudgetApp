@@ -27,12 +27,13 @@ import {
   SavingsGoal,
   GoalContribution,
 } from '../../utils/database';
-import { computeGoalETA } from '../../utils/calculations';
+import { averageMonthlySavings, computeGoalETA } from '../../utils/calculations';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 import { withFeature } from '../../components/FeatureGate';
 import { DateInput } from '../../components/DateInput';
 import { todayLocalIso } from '../../utils/dates';
+import { parseAmount } from '../../utils/amount';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -59,9 +60,9 @@ function GoalsScreen() {
     if (!user) return;
     setItems(await getGoals());
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
     const series = await getMonthlySeriesForRange(start.getMonth() + 1, start.getFullYear(), now.getMonth() + 1, now.getFullYear());
-    setAvgMonthlySavings(series.length ? series.reduce((s: number, p: { net: number }) => s + p.net, 0) / series.length : 0);
+    setAvgMonthlySavings(averageMonthlySavings(series, { month: now.getMonth() + 1, year: now.getFullYear() }));
   }, [user]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -83,7 +84,7 @@ function GoalsScreen() {
 
   const onSave = async () => {
     if (!user) return;
-    const t = parseFloat(target);
+    const t = parseAmount(target);
     const deadlineTrimmed = deadline.trim();
     if (!name.trim()) { setError('Enter a goal name.'); return; }
     if (!t || t <= 0) { setError('Enter a valid target amount.'); return; }
@@ -132,7 +133,7 @@ function GoalsScreen() {
 
   const onContribute = async () => {
     if (!contributeFor || !user) return;
-    const amt = parseFloat(contributeAmount);
+    const amt = parseAmount(contributeAmount);
     if (!amt || amt <= 0) { setContributeError('Enter a valid amount.'); return; }
     if (contributeMode === 'remove' && amt > contributeFor.saved_amount) {
       setContributeError(`You can remove at most ${fmt(contributeFor.saved_amount)}.`);

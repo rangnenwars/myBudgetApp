@@ -9,6 +9,7 @@ import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { apiErrorMessage } from '../utils/api';
 import { confirmAction } from '../utils/alert';
 import { getAccounts, addAccount, updateAccount, deleteAccount, Account, AccountType } from '../utils/database';
+import { parseAmount } from '../utils/amount';
 
 const TYPE_OPTIONS: { key: AccountType; label: string }[] = [
   { key: 'bank', label: 'Bank' },
@@ -79,7 +80,7 @@ export default function AccountsScreen() {
   };
 
   const onSave = async () => {
-    const value = balance.trim() === '' ? 0 : Number(balance);
+    const value = balance.trim() === '' ? 0 : parseAmount(balance, { allowNegative: true });
     if (!name.trim()) {
       setError('Give the account a name.');
       return;

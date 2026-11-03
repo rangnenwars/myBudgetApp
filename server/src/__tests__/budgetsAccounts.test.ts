@@ -168,6 +168,28 @@ describe('overall monthly budget', () => {
     expect(res.body).toMatchObject({ amount: null, spent: 0, suggested: 14200, status: null, per_day: null });
   });
 
+  it('counts a month with no spending as zero in the suggestion, instead of leaving it out', async () => {
+    const { accessToken } = await registerUser();
+    const back = (n: number) => {
+      const d = new Date(Date.UTC(year, month - 1 - n, 1));
+      return iso(d.getUTCFullYear(), d.getUTCMonth() + 1);
+    };
+    const add = (n: number, amount: number) =>
+      request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount, type: 'expense', category_key: 'groceries_milk', date: back(n) });
+    await add(3, 3000);
+    await add(1, 6000);
+    // Nothing two months ago: (3,000 + 0 + 6,000) / 3, not (3,000 + 6,000) / 2.
+    const res = await request(app).get('/api/v1/budgets/overall').set(auth(accessToken));
+    expect(res.body.suggested).toBe(3000);
+  });
+
+  it('does not average in months before the first entry', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 8000, type: 'expense', category_key: 'groceries_milk', date: iso(lastMonth.y, lastMonth.m) });
+    const res = await request(app).get('/api/v1/budgets/overall').set(auth(accessToken));
+    expect(res.body.suggested).toBe(8000);
+  });
+
   it('counts day-to-day spending, leaves EMIs and investments out, and works out per day', async () => {
     const { accessToken } = await registerUser();
     expect((await request(app).put('/api/v1/budgets/overall').set(auth(accessToken)).send({ amount: 15000 })).body).toEqual({ amount: 15000, include_commitments: false });

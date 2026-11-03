@@ -200,6 +200,30 @@ describe('GET /reports/free-money-day', () => {
     expect(res.body).toMatchObject({ incomeSource: 'average', income: 45000 });
   });
 
+  it('is not stretched by an old backdated entry from before the app was in use', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 300, type: 'expense', category_key: 'shopping', date: monthStart(-24) });
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 60000, type: 'income', category_key: 'salary_1', date: monthStart(-1) });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ incomeSource: 'average', income: 60000 });
+  });
+
+  it('skips a first month that has no income, since the user started part-way through it', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 300, type: 'expense', category_key: 'shopping', date: monthStart(-2) });
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 60000, type: 'income', category_key: 'salary_1', date: monthStart(-1) });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ incomeSource: 'average', income: 60000 });
+  });
+
+  it('counts a first month that does have income', async () => {
+    const { accessToken } = await registerUser();
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 40000, type: 'income', category_key: 'salary_1', date: monthStart(-2) });
+    await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 60000, type: 'income', category_key: 'salary_1', date: monthStart(-1) });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body).toMatchObject({ incomeSource: 'average', income: 50000 });
+  });
+
   it('reports no_income when nothing was earned in the last three tracked months', async () => {
     const { accessToken } = await registerUser();
     await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ amount: 60000, type: 'income', category_key: 'business_income', date: monthStart(-4) });
@@ -291,6 +315,17 @@ describe('GET /reports/free-money-day', () => {
     const snaps = await db.select().from(freeMoneySnapshots).where(eq(freeMoneySnapshots.userId, user.id));
     expect(snaps).toHaveLength(2);
     expect(snaps.find((s) => s.weekStart === thisWeek)?.committed).toBe(10000);
+  });
+
+  it("does not call a reading older than last week's \"last week\"", async () => {
+    const { accessToken, user } = await registerUser();
+    await addRule(accessToken, { amount: 50000, type: 'income', category_key: 'salary_1' });
+    await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ name: 'Home loan', principal: 1000000, outstanding: 900000, emi: 10000 });
+    const twoWeeksAgo = weekStartOf(new Date(Date.parse(`${weekStartOf(TODAY)}T00:00:00Z`) - 8 * 86400000).toISOString().slice(0, 10));
+    await db.insert(freeMoneySnapshots).values({ userId: user.id, weekStart: twoWeeksAgo, income: 50000, committed: 25000 });
+    const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
+    expect(res.body.previous).toBeNull();
+    expect(res.body.daysEarlier).toBeNull();
   });
 
   it("never mixes in another user's data", async () => {

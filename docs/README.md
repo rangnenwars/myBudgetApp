@@ -27,7 +27,8 @@ Prapanji (formerly "My Budget") is a personal money app for everyone — student
 | [CONFIGURATION_STATE.md](CONFIGURATION_STATE.md) | Dated change log (2026-10-03), configuration matrix of what is in the repo vs what must be confirmed in external accounts, known gaps |
 | [USER_MANUAL.md](USER_MANUAL.md) | End-user guide to every screen, plus a section for staff accounts |
 | [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (25 total, Mermaid) — almost no prose; renders on GitHub |
-| [USER_DISTRIBUTION.md](USER_DISTRIBUTION.md) | How to get the app and manual to end users — web first, Android APK / Play / TestFlight later — with onboarding message and rollout plan |
+| [INVESTOR_PITCH.md](INVESTOR_PITCH.md) · [deck](Prapanji_Investor_Pitch.pptx) | The 12-slide investor deck, the talking line for each slide, and what is built versus not yet built |
+| [USER_DISTRIBUTION.md](USER_DISTRIBUTION.md) | How to get the app and manual to end users, plus the marketing plan (WhatsApp groups, leaflets, YouTube ads) — web first, Android APK / Play / TestFlight later — with onboarding message and rollout plan |
 | [MASTER_BUILD_PROMPT_v3_BACKEND.md](MASTER_BUILD_PROMPT_v3_BACKEND.md) | Server structure, API endpoints, auth flow, Docker changes, client integration — implemented and verified |
 | [pro-roadmap.html](pro-roadmap.html) · [live](https://claude.ai/code/artifact/80837269-945e-4a79-b5da-678c946641a1) | Rendered version of the Pro roadmap |
 | [architecture-flows.html](architecture-flows.html) · [live](https://claude.ai/code/artifact/3787e434-ead3-4e0a-881d-119411b2a53d) | Layered architecture, debt-payoff simulation, bulk-entry/bucketing, Docker deployment, test coverage map |
@@ -60,8 +61,8 @@ The `.html` files are self-contained — open them directly in any browser, no s
 | **Auth** | bcrypt (password hashing, cost 12) + jsonwebtoken (15-min access token, 30-day rotated refresh token, hashed at rest) |
 | **Server validation** | zod (request body/query validation) |
 | **Security headers** | helmet (API) + nginx CSP / frame-deny / no-referrer (web app) |
-| **Email** | nodemailer over SMTP — account emails and the nightly issue digest |
-| **Server testing** | Jest + Supertest, against a real Postgres instance — the database is never mocked; only the SMTP connection is |
+| **Email** | Resend's HTTPS API in production (`RESEND_API_KEY` + `MAIL_FROM`; DigitalOcean blocks outbound SMTP), or plain SMTP via nodemailer where it is open — account emails and the nightly issue digest |
+| **Server testing** | Jest + Supertest, against a real Postgres instance — the database is never mocked; only the outgoing mail connection is |
 | Local deployment | Docker Compose — three services: `mybudget-web` (static export → nginx), `server` (Express), `postgres` |
 
 ---
@@ -103,8 +104,9 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 - **Accounts** (Dashboard → Accounts) — bank, cash, wallet/UPI and credit-card balances you type in; they count toward net worth (card dues subtract)
 - **Dashboard** — income/expense/net savings for the current month (‹ › arrows step back to earlier months), top-5 expense categories, budget-class badge, Expense/Loan/Investment breakdown
 - **Input expenses** — bulk entry screen: pick Monthly/Quarterly/Yearly, add one row per category+amount, save all at once (mirrors the original Excel workflow)
-- **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, a date for every entry (Today by default, or Yesterday / any past date via the date control; future dates are rejected; editing can change it too), and a Once/Monthly/Quarterly/Yearly period on new entries (Once logs the exact amount on the chosen date; Quarterly/Yearly are converted to a monthly-equivalent amount, same as Input Expenses), and a "Repeat" switch for salary, rent, insurance or any fixed amount (income or expense) — monthly, quarterly or yearly, added again on the same day of the month (29–31 fall back to the month's end) until stopped from the "Repeating" button (change the amount, how often or the day, or stop it). Search (notes, category names, amounts) and the All/Expenses/Income filter run on the server, and the list loads 50 at a time as you scroll — tap a row to edit it, tap the trash icon to delete it
+- **Transactions** — add/edit/delete, income or expense, all 50+ categories from the source Excel data, a date for every entry (Today by default, or Yesterday / any past date via the date control; future dates are rejected; editing can change it too), and a Once/Monthly/Quarterly/Yearly period on new entries (Once logs the exact amount on the chosen date; Quarterly/Yearly are converted to a monthly-equivalent amount, same as Input Expenses), and a "Repeat" switch for salary, rent, insurance or any fixed amount (income or expense) — monthly, quarterly or yearly, added again on the same day of the month (29–31 fall back to the month's end) until its **Ends on** date (3, 6 or 12 months, a picked date, or an explicit "No end date"), and sooner if stopped from the "Repeating" button (change the amount, how often, the day or the end, or stop it). After the end date nothing more is added, the repeat leaves the list and the free-money day, and entries already added stay in reports. Search (notes, category names, amounts) and the All/Expenses/Income filter run on the server, and the list loads 50 at a time as you scroll — tap a row to edit it, tap the trash icon to delete it
 - **People** (Dashboard → People button, `/people`) — **Split a bill** (a simple page: how much, what for, who shared it; equal or changed amounts; only your own share counts as spending) and **Lent or borrowed**: a per-person running ledger with part payments, due dates and an Overdue flag, write-off, and per-line undo. Not counted as spending (`/api/v1/people`, `POST /transactions/split-people`)
+- **Calendar for every date** — each date field (transaction date, repeat Ends on, goal target date, loan start date, "pay back by") keeps the typed `YYYY-MM-DD` box and adds a calendar button that opens a bottom-sheet month calendar (`components/CalendarSheet.tsx`, shared by `DateField` and `DateInput`). Each field greys out days it can't accept: no future days for a transaction, nothing before today for due and target dates. Built from plain components because the Expo SDK 57 date picker has no web support
 - **Quick add** (orange + on the Dashboard) — amount keypad, your most-used category chips, Save; logs for today
 - **Free-money day** (Dashboard card → `/free-money-day`) — the day of the month by which income has covered every EMI and repeating bill, with a week-on-week change and a "what if I prepay a loan" preview (`GET /reports/free-money-day`)
 - **Custom categories** — add, rename, and delete your own category (name + income/expense) from any category picker, with a search box to find items once the list grows — see §3a
@@ -266,7 +268,7 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 
 **Client** (repo root):
 ```bash
-npm test              # run once — 109 tests (utils/calculations.ts, utils/dates.ts, utils/issues.ts, theme)
+npm test              # run once — 142 tests (utils/calculations.ts, dates, issues, repeatEnd, calendar, people, theme)
 npm run test:watch    # watch mode
 npm run test:coverage # with coverage report
 npm run typecheck     # tsc --noEmit
@@ -278,7 +280,7 @@ Coverage is measured over `utils/calculations.ts`, `utils/dates.ts` and `utils/i
 **Server** (`server/`):
 ```bash
 npm run typecheck     # tsc --noEmit
-npm test               # 386 tests in 31 files — one per resource (auth, account,
+npm test               # 456 tests in 35 files — one per resource (auth, account,
                         # categories, transactions, recurring, loans, goals,
                         # investments, budgets/accounts, reports, net worth,
                         # admin, issues …), security, DB-integrity, mail and

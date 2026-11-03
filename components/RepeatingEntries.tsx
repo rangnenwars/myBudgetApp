@@ -10,6 +10,7 @@ import { Segmented } from './ScreenKit';
 import { RepeatEndField } from './RepeatEndField';
 import { RepeatEndChoice, endPayload, endStatus, repeatEndError } from '../utils/repeatEnd';
 import { todayLocalIso } from '../utils/dates';
+import { parseAmount } from '../utils/amount';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -58,7 +59,7 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
 
   const onSave = async () => {
     if (!editing) return;
-    const value = parseFloat(amount);
+    const value = parseAmount(amount);
     if (!value || value <= 0) {
       setError('Enter a valid amount.');
       return;

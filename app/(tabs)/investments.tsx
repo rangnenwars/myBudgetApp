@@ -18,6 +18,7 @@ import { addInvestment, updateInvestment, deleteInvestment, getInvestments, Inve
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 import { withFeature } from '../../components/FeatureGate';
+import { parseAmount } from '../../utils/amount';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -64,10 +65,11 @@ function InvestmentsScreen() {
 
   const onSave = async () => {
     if (!user) return;
-    const amt = parseFloat(amount);
-    const cur = currentValue ? parseFloat(currentValue) : amt;
+    const amt = parseAmount(amount);
+    const cur = currentValue.trim() ? parseAmount(currentValue) : amt;
     if (!name.trim()) { setError('Enter an investment name.'); return; }
     if (!amt || amt <= 0) { setError('Enter a valid invested amount.'); return; }
+    if (Number.isNaN(cur)) { setError('Enter a valid current value.'); return; }
     setSaving(true);
     setError(null);
     try {
