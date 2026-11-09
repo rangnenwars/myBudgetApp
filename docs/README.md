@@ -23,10 +23,12 @@ Prapanji (formerly "My Budget") is a personal money app for everyone — student
 | [SYSTEM_ARCHITECTURE_GUIDE.md](SYSTEM_ARCHITECTURE_GUIDE.md) | How the stack works end to end, request flow, roles, repo map, and a "which file do I edit to change X" table |
 | [SECURITY_REVIEW.md](SECURITY_REVIEW.md) | Code, database and user-confidentiality review (2026-10-06): what was found, what was fixed, what is still open |
 | [ROADMAP.md](ROADMAP.md) · [PRAPANJI_SPEC.md](PRAPANJI_SPEC.md) | What's planned next for Prapanji, and the product spec it draws ideas from |
+| [OPERATOR_CONSOLE_DESIGN.md](OPERATOR_CONSOLE_DESIGN.md) | Planned separate operator console: operator vs customer database, features, MFA, audit log, wireframes W1–W9 (draft, awaiting approval) |
 | [DB_ADMIN_QUERIES.md](DB_ADMIN_QUERIES.md) | SQL cookbook: make a user admin, grant Pro, deactivate, reset a password, delete test accounts, audit log, usage and issue-report queries |
 | [CONFIGURATION_STATE.md](CONFIGURATION_STATE.md) | Dated change log (2026-10-03), configuration matrix of what is in the repo vs what must be confirmed in external accounts, known gaps |
 | [USER_MANUAL.md](USER_MANUAL.md) | End-user guide to every screen, plus a section for staff accounts |
 | [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (25 total, Mermaid) — almost no prose; renders on GitHub |
+| [PAID_PLAN.md](PAID_PLAN.md) | The paid plan: six months free then ₹200 a year, who has access, how people pay by QR or UPI ID, admin controls, and how to switch it on safely |
 | [INVESTOR_PITCH.md](INVESTOR_PITCH.md) · [deck](Prapanji_Investor_Pitch.pptx) | The 12-slide investor deck, the talking line for each slide, and what is built versus not yet built |
 | [USER_DISTRIBUTION.md](USER_DISTRIBUTION.md) | How to get the app and manual to end users, plus the marketing plan (WhatsApp groups, leaflets, YouTube ads) — web first, Android APK / Play / TestFlight later — with onboarding message and rollout plan |
 | [MASTER_BUILD_PROMPT_v3_BACKEND.md](MASTER_BUILD_PROMPT_v3_BACKEND.md) | Server structure, API endpoints, auth flow, Docker changes, client integration — implemented and verified |

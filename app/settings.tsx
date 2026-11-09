@@ -3,6 +3,7 @@ import { ScrollView, View, Text, StyleSheet, KeyboardAvoidingView, Platform } fr
 import { Redirect, router } from 'expo-router';
 import { Card } from '../components/Card';
 import { MoreFeaturesRow } from '../components/MoreFeaturesLink';
+import { PlanRow } from '../components/PlanRow';
 import { ScreenHeader, SectionTitle, Field, Button, ErrorText, Notice, kit } from '../components/ScreenKit';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, SPACING } from '../constants/theme';
@@ -124,6 +125,8 @@ export default function SettingsScreen() {
         )}
         {!user.emailVerified && <Button label="Send confirmation email" variant="outline" onPress={onResend} />}
         {verifyMessage && <Text style={kit.muted}>{verifyMessage}</Text>}
+
+        <PlanRow />
 
         <MoreFeaturesRow />
 

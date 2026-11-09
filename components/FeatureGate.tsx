@@ -15,8 +15,10 @@ import { Button, ErrorText, ScreenHeader, kit } from './ScreenKit';
 // ask. The wrapped screen isn't mounted at all, so it never calls a route
 // the server would refuse.
 const NotOn: React.FC<{ feature: FeatureKey }> = ({ feature }) => {
-  const { reloadUser } = useAuth();
+  const { user, reloadUser } = useAuth();
   const label = featureLabel(feature);
+  // The free period or plan ended: say so, say the data is safe, and offer to renew.
+  const lapsed = !!user?.plan?.enforced && user.plan.state === 'none';
   const [requested, setRequested] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +61,19 @@ const NotOn: React.FC<{ feature: FeatureKey }> = ({ feature }) => {
       <ScreenHeader title={label} />
       <View style={styles.body}>
         <Ionicons name={requested ? 'time-outline' : 'lock-closed-outline'} size={28} color={COLORS.textMuted} />
-        {requested ? (
+        {lapsed ? (
+          <>
+            <Text style={styles.title}>{label} needs Pro</Text>
+            <Text style={[kit.muted, styles.center]}>
+              Your free access ended{user?.plan?.ended_on ? ` on ${new Date(user.plan.ended_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}. Your {label.toLowerCase()} and everything you saved are safe, and nothing was deleted.
+            </Text>
+            <Button label="Renew to turn it back on" onPress={() => router.replace('/renew')} style={styles.btn} />
+            <Button label="See what is included" variant="outline" onPress={() => router.replace('/plan')} style={styles.btn} />
+            <Text style={styles.link} onPress={goHome} accessibilityRole="link">
+              Go to Home
+            </Text>
+          </>
+        ) : requested ? (
           <>
             <Text style={styles.title}>Request sent</Text>
             <Text style={[kit.muted, styles.center]}>

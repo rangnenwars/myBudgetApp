@@ -41,7 +41,7 @@ import { monthlyEquivalent, EntryPeriod } from '../../utils/calculations';
 import { todayLocalIso, entryDateError, monthYearOf } from '../../utils/dates';
 import { useCategories } from '../../context/CategoriesContext';
 import { parseAmount } from '../../utils/amount';
-import { filterFromParams } from '../../utils/txnLink';
+import { filterFromParams, monthBounds } from '../../utils/txnLink';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -62,6 +62,19 @@ const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
 ];
 
 const PAGE_SIZE = 50;
+
+// Two slim tabs above the list show what was spent today and this month; tapping one lists only that period.
+type PeriodTab = 'today' | 'month';
+const PERIOD_TABS: { key: PeriodTab; label: string; shown: string }[] = [
+  { key: 'today', label: 'Today', shown: 'today' },
+  { key: 'month', label: 'This month', shown: 'this month' },
+];
+const periodRange = (tab: PeriodTab): { from: string; to: string } => {
+  const today = todayLocalIso();
+  if (tab === 'today') return { from: today, to: today };
+  const [year, month] = today.split('-').map(Number);
+  return monthBounds(year, month);
+};
 
 const ordinal = (n: number) => {
   const v = n % 100;
@@ -86,6 +99,9 @@ export default function TransactionsScreen() {
   // Set when a figure on Home or Reports was tapped: that category / date range, shown as chips.
   const [link, setLink] = useState<{ category?: string; from?: string; to?: string; label?: string } | null>(null);
   const [summary, setSummary] = useState<TransactionPageSummary | null>(null);
+  const [tab, setTab] = useState<PeriodTab | null>(null);
+  // Expense totals for the tabs, whatever the list below is showing.
+  const [totals, setTotals] = useState<{ today: number; month: number } | null>(null);
   const params = useLocalSearchParams();
   const fromLink = filterFromParams(params);
   const linkId = fromLink?.n;
@@ -116,7 +132,8 @@ export default function TransactionsScreen() {
     setListLoading(true);
     try {
       // Transactions first: the server posts any due repeating entries while serving this request.
-      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: link?.from, to: link?.to, limit: PAGE_SIZE });
+      const range = tab ? periodRange(tab) : { from: link?.from, to: link?.to };
+      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: range.from, to: range.to, limit: PAGE_SIZE });
       if (id !== requestId.current) return;
       setItems(page.items);
       setNextCursor(page.nextCursor);
@@ -125,14 +142,36 @@ export default function TransactionsScreen() {
     } finally {
       if (id === requestId.current) setListLoading(false);
     }
-  }, [user, search, typeFilter, link]);
+  }, [user, search, typeFilter, link, tab]);
+
+  // The two tab totals: expenses only, one cheap query each. Refreshed after the list loads (so
+  // repeating entries that just came due are included), and after every add, edit or delete.
+  const loadTotals = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [today, month] = await Promise.all(
+        (['today', 'month'] as const).map((key) => {
+          const range = periodRange(key);
+          return getTransactionsPage({ type: 'expense', from: range.from, to: range.to, limit: 1 });
+        })
+      );
+      setTotals({ today: today.summary?.expense ?? 0, month: month.summary?.expense ?? 0 });
+    } catch {
+      // Keep the last figures; the list itself still loads.
+    }
+  }, [user]);
+  const totalsRef = useRef(loadTotals);
+  useEffect(() => {
+    totalsRef.current = loadTotals;
+  }, [loadTotals]);
 
   const loadMore = async () => {
     if (!nextCursor || listLoading) return;
     const id = requestId.current;
     setListLoading(true);
     try {
-      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: link?.from, to: link?.to, limit: PAGE_SIZE, cursor: nextCursor });
+      const range = tab ? periodRange(tab) : { from: link?.from, to: link?.to };
+      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: range.from, to: range.to, limit: PAGE_SIZE, cursor: nextCursor });
       if (id !== requestId.current) return;
       setItems((prev) => [...prev, ...page.items]);
       setNextCursor(page.nextCursor);
@@ -151,11 +190,12 @@ export default function TransactionsScreen() {
       loadRef.current().catch(() => {});
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, typeFilter, link]);
+  }, [search, typeFilter, link, tab]);
 
   // A tapped figure arrives as route params: apply its filters (a new `n` re-applies even the same ones).
   useEffect(() => {
     if (!fromLink) return;
+    setTab(null);
     setLink({ category: fromLink.category, from: fromLink.from, to: fromLink.to, label: fromLink.label });
     setTypeFilter(fromLink.type ?? 'all');
     setSearch('');
@@ -170,9 +210,16 @@ export default function TransactionsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadRef.current().catch(() => {});
+      loadRef.current().then(() => totalsRef.current()).catch(() => {});
     }, [])
   );
+
+  // Tapping a tab lists only that period; tapping it again goes back to everything. A date range
+  // that came in from Home or Reports is replaced by the tab.
+  const onTab = (next: PeriodTab) => {
+    setLink((l) => (l?.category ? { ...l, from: undefined, to: undefined, label: undefined } : null));
+    setTab((current) => (current === next ? null : next));
+  };
 
   const resetForm = () => {
     setEditingId(null);
@@ -274,6 +321,7 @@ export default function TransactionsScreen() {
       resetForm();
       setModalOpen(false);
       await load();
+      await loadTotals();
     } catch (err) {
       setError(apiErrorMessage(err, 'Could not save the transaction.'));
     } finally {
@@ -287,6 +335,7 @@ export default function TransactionsScreen() {
     confirmAction('Delete transaction', message, 'Delete', async () => {
       await deleteTransaction(item.id, repeats);
       await load();
+      await loadTotals();
     });
   };
 
@@ -308,6 +357,26 @@ export default function TransactionsScreen() {
             <Ionicons name="add" size={22} color={COLORS.onAccent} />
           </Pressable>
         </View>
+      </View>
+
+      <View style={styles.periodRow}>
+        {PERIOD_TABS.map((t) => {
+          const active = tab === t.key;
+          const value = totals ? fmt(totals[t.key]) : '–';
+          return (
+            <Pressable
+              key={t.key}
+              style={[styles.periodTab, active && styles.periodTabActive]}
+              onPress={() => onTab(t.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${t.label} expenses ${value}${active ? ', showing, tap to clear' : ''}`}
+            >
+              <Text style={[styles.periodLabel, active && styles.periodLabelActive]}>{t.label}</Text>
+              <Text style={[styles.periodAmount, active && styles.periodAmountActive]}>{value}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.searchWrap}>
@@ -348,8 +417,9 @@ export default function TransactionsScreen() {
         </View>
       )}
 
-      {summary && (link || query || typeFilter !== 'all') && (
+      {summary && (link || query || tab || typeFilter !== 'all') && (
         <Text style={styles.summaryText}>
+          {tab ? `Showing ${PERIOD_TABS.find((t) => t.key === tab)!.shown} · ` : ''}
           {summary.count} {summary.count === 1 ? 'entry' : 'entries'}
           {typeFilter === 'expense' ? ` · ${fmt(summary.expense)}` : typeFilter === 'income' ? ` · ${fmt(summary.income)}` : ''}
         </Text>
@@ -373,7 +443,7 @@ export default function TransactionsScreen() {
         ListEmptyComponent={
           listLoading ? null : (
             <Text style={styles.emptyText}>
-              {query || typeFilter !== 'all' ? `No transactions match${query ? ` "${query}"` : ' this filter'}` : 'No transactions yet. Tap + to add one.'}
+              {query || tab || typeFilter !== 'all' ? `No transactions match${query ? ` "${query}"` : ' this filter'}` : 'No transactions yet. Tap + to add one.'}
             </Text>
           )
         }
@@ -588,6 +658,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
   },
   searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 9 },
+  // Slim on purpose: one line each, since each is only a label and a number.
+  periodRow: { flexDirection: 'row', gap: SPACING.xs, marginHorizontal: SPACING.lg, marginBottom: SPACING.xs },
+  periodTab: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    gap: SPACING.xs,
+  },
+  periodTabActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  periodLabel: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600' },
+  periodLabelActive: { color: COLORS.onAccent },
+  periodAmount: { color: COLORS.text, fontSize: 13, fontWeight: '700' },
+  periodAmountActive: { color: COLORS.onAccent },
   filterRow: { flexDirection: 'row', gap: SPACING.xs, marginHorizontal: SPACING.lg, marginTop: SPACING.sm },
   filterChip: { borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 5 },
   filterChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },

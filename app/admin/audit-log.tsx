@@ -14,6 +14,16 @@ const ACTION_LABEL: Record<string, string> = {
   account_deleted: 'Deleted account',
   feature_changed: 'Changed feature access',
   signup_features_changed: 'Changed what new users get',
+  plan_changed: 'Changed the plan and pricing',
+  plan_enforcement: 'Turned the plan on or off',
+  plan_notice_sent: 'Sent the notice to existing users',
+  payment_details_changed: 'Changed the payment details',
+  payment_confirmed: 'Confirmed a payment',
+  payment_rejected: 'Rejected a payment',
+  payment_marked: 'Recorded a payment by hand',
+  exception_set: 'Set an exception',
+  exception_cleared: 'Turned off an exception',
+  account_kind_changed: 'Changed account type',
 };
 
 const fmtWhen = (iso: string) =>
