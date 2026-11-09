@@ -14,7 +14,7 @@ const add = (token: string, body: Record<string, unknown>) =>
 
 describe('Transactions page totals for a filter', () => {
   it('counts and adds up exactly what the filters match', async () => {
-    const { accessToken } = await registerUser();
+    const { accessToken } = await registerUser({ features: [] });
     await add(accessToken, { amount: 640 });
     await add(accessToken, { amount: 1900 });
     await add(accessToken, { amount: 5000, category_key: 'salary_1', type: 'income' });
@@ -30,7 +30,7 @@ describe('Transactions page totals for a filter', () => {
   });
 
   it('respects a date range, and only the first page carries the totals', async () => {
-    const { accessToken } = await registerUser();
+    const { accessToken } = await registerUser({ features: [] });
     await add(accessToken, { amount: 10, date: '2026-01-05' });
     await add(accessToken, { amount: 20, date: '2026-01-20' });
     await add(accessToken, { amount: 30, date: '2026-02-03' });
@@ -45,8 +45,8 @@ describe('Transactions page totals for a filter', () => {
   });
 
   it("never counts another user's entries", async () => {
-    const a = await registerUser();
-    const b = await registerUser();
+    const a = await registerUser({ features: [] });
+    const b = await registerUser({ features: [] });
     await add(a.accessToken, { amount: 999 });
     const res = await request(app).get('/api/v1/transactions/page').set(auth(b.accessToken));
     expect(res.body.summary).toEqual({ count: 0, income: 0, expense: 0 });
@@ -55,7 +55,7 @@ describe('Transactions page totals for a filter', () => {
 
 describe('Ids on plan-ahead and free-money lines', () => {
   it('lets the app open the repeating bill behind a line', async () => {
-    const { accessToken } = await registerUser();
+    const { accessToken } = await registerUser({ features: ['forecast'] });
     await add(accessToken, { amount: 50000, category_key: 'salary_1', type: 'income', repeat_monthly: true, repeat_no_end: true });
     await add(accessToken, { amount: 10000, category_key: 'internet', note: 'Rent', repeat_monthly: true, repeat_no_end: true });
 

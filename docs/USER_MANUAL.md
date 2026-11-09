@@ -156,6 +156,8 @@ Your friends don't need Prapanji, and nothing is sent to them. Your bank balance
 
 ## 10. Reports and Pro features
 
+**Monthly expenses (the first view on Reports).** The top switch has **Monthly** and **Overview**. Monthly lists your last 12 months of expenses, newest first, each with a bar and the change from the month before (hidden when the month before had no expenses). Months with no expenses show ₹0. The ‹ › arrows move to the 12 months before. Tap a month to see its biggest categories (the top three, then Others) and a **See all transactions** button that opens Transactions filtered to that month. Home has a small **This month** card with the same total and the change from last month; tap it to open Monthly. Overview is the Reports screen with the trend chart, category breakdown, loans and goals.
+
 The **Reports** tab and a few extras are **Pro** features — **included for everyone**, nothing to switch on or pay for:
 
 * Income / expense / net trend chart and category breakdown — pick this month, 3 months, 6 months, a year or all time

@@ -12,6 +12,7 @@ import { PlanAheadCard } from '../../components/PlanAheadCard';
 import { MoreFeaturesLink } from '../../components/MoreFeaturesLink';
 import { BudgetCard } from '../../components/BudgetCard';
 import { PeopleButton } from '../../components/PeopleButton';
+import { ThisMonthCard } from '../../components/ThisMonthCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCategories } from '../../context/CategoriesContext';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
@@ -37,6 +38,7 @@ export default function DashboardScreen() {
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, netSavings: 0 });
   const [topCategories, setTopCategories] = useState<{ category: string; total: number }[]>([]);
   const [deltas, setDeltas] = useState<CategoryDelta[]>([]);
+  const [prevExpense, setPrevExpense] = useState(0);
   const [breakdown, setBreakdown] = useState<Record<CategoryBucket, number>>({ expense: 0, loan: 0, investment: 0 });
   // Budgets at 80% or more of their limit in the viewed month.
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
@@ -66,6 +68,7 @@ export default function DashboardScreen() {
         setBudgetAlerts(budgets.filter((b) => b.status !== 'ok'));
 
         setSummary(monthSummary);
+        setPrevExpense(prevCategories.reduce((sum, c) => sum + c.total, 0));
         setTopCategories(monthCategories.slice(0, 5));
 
         const buckets: Record<CategoryBucket, number> = { expense: 0, loan: 0, investment: 0 };
@@ -155,6 +158,8 @@ export default function DashboardScreen() {
           <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
         </Pressable>
       )}
+
+      <ThisMonthCard title={isCurrentMonth ? 'This month' : viewLabel} total={summary.totalExpense} previousTotal={prevExpense} />
 
       <BudgetCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} refreshKey={refreshKey} />
 
