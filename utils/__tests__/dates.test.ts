@@ -1,4 +1,4 @@
-import { todayLocalIso, isValidIsoDate, shiftIsoDate, monthYearOf, entryDateError, shiftMonth } from '../dates';
+import { todayLocalIso, isValidIsoDate, shiftIsoDate, monthYearOf, entryDateError, shiftMonth, recentDateLabel } from '../dates';
 
 describe('todayLocalIso', () => {
   it('uses the local calendar date, zero-padded', () => {
@@ -66,5 +66,18 @@ describe('shiftMonth', () => {
     expect(shiftMonth({ month: 1, year: 2026 }, -1)).toEqual({ month: 12, year: 2025 });
     expect(shiftMonth({ month: 12, year: 2026 }, 1)).toEqual({ month: 1, year: 2027 });
     expect(shiftMonth({ month: 3, year: 2026 }, -15)).toEqual({ month: 12, year: 2024 });
+  });
+});
+
+describe('recentDateLabel', () => {
+  it('says today and yesterday, and otherwise the day and month', () => {
+    expect(recentDateLabel('2026-11-09', '2026-11-09')).toBe('today');
+    expect(recentDateLabel('2026-11-08', '2026-11-09')).toBe('yesterday');
+    expect(recentDateLabel('2026-11-07', '2026-11-09')).toBe('7 Nov');
+  });
+
+  it('handles yesterday across a month and year end', () => {
+    expect(recentDateLabel('2026-10-31', '2026-11-01')).toBe('yesterday');
+    expect(recentDateLabel('2025-12-31', '2026-01-01')).toBe('yesterday');
   });
 });

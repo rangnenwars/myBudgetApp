@@ -35,7 +35,7 @@ interface Props {
 }
 
 export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
-  const { user } = useAuth();
+  const { user, hasFeature } = useAuth();
   const [info, setInfo] = useState<FreeMoneyDayInfo | null>(null);
 
   useFocusEffect(
@@ -96,6 +96,11 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
             </Text>
           </>
         )}
+        {hasFeature('forecast') && (
+          <Pressable style={styles.planLink} onPress={() => router.push('/plan-ahead')} accessibilityRole="link" accessibilityLabel="Plan ahead, open the next 12 months">
+            <Text style={styles.planLinkText}>Plan ahead: next 12 months ›</Text>
+          </Pressable>
+        )}
       </Card>
     </Pressable>
   );
@@ -109,5 +114,7 @@ const styles = StyleSheet.create({
   ends: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   small: { color: COLORS.textDim, fontSize: 12 },
   detail: { color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.xs },
+  planLink: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder, marginTop: SPACING.sm, paddingTop: SPACING.sm },
+  planLinkText: { color: COLORS.accent, fontSize: 13, fontWeight: '600' },
   footer: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: SPACING.xs, marginTop: 2, marginBottom: SPACING.xs },
 });

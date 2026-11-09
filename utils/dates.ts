@@ -39,3 +39,10 @@ export const shiftMonth = (value: { month: number; year: number }, delta: number
   const d = new Date(value.year, value.month - 1 + delta, 1);
   return { month: d.getMonth() + 1, year: d.getFullYear() };
 };
+
+/** "today", "yesterday" or "7 Nov", for lists of recent entries. */
+export const recentDateLabel = (iso: string, today: string): string => {
+  if (iso === today) return 'today';
+  if (iso === shiftIsoDate(today, -1)) return 'yesterday';
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+};
