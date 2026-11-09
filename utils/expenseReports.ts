@@ -114,3 +114,60 @@ export const categoryRows = (
     })),
   };
 };
+/**
+ * One line for the top of the Categories view, from simple rules (no AI):
+ * "Food is your top spend, up 18%". Says nothing when there are no expenses.
+ */
+export const topSpendInsight = (rows: CategoryRow[], labelOf: (category: string) => string): string | null => {
+  const top = rows.find((r) => r.category !== OTHERS_KEY);
+  if (!top || top.total <= 0) return null;
+  const change = top.changePct == null || top.changePct === 0 ? '' : top.changePct > 0 ? `, up ${top.changePct}%` : `, down ${Math.abs(top.changePct)}%`;
+  return `${labelOf(top.category)} is your top spend${change}`;
+};
+
+export interface MonthTotal {
+  month: number;
+  total: number;
+}
+
+/** One category's spending in each month of a year, January to December, from that year's transactions; empty months are 0. */
+export const categoryByMonth = (transactions: { category: string; type: string; amount: number; month: number }[], category: string): MonthTotal[] => {
+  const totals = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, total: 0 }));
+  for (const t of transactions) {
+    if (t.type === 'expense' && t.category === category) totals[t.month - 1].total += t.amount;
+  }
+  return totals;
+};
+
+export interface MonthKey {
+  month: number;
+  year: number;
+}
+
+export interface PeriodRange {
+  startMonth: number;
+  startYear: number;
+  endMonth: number;
+  endYear: number;
+}
+
+/**
+ * The months a Categories view covers, and the previous period to compare with.
+ * A month is compared with the month before. A year is compared with the year
+ * before; for the current year, which isn't over, both cover only the months so
+ * far (January to this month), so the change compares like with like.
+ */
+export const categoryPeriod = (mode: 'month' | 'year', anchor: MonthKey, today: MonthKey): { current: PeriodRange; previous: PeriodRange } => {
+  if (mode === 'month') {
+    const prev = anchor.month === 1 ? { month: 12, year: anchor.year - 1 } : { month: anchor.month - 1, year: anchor.year };
+    return {
+      current: { startMonth: anchor.month, startYear: anchor.year, endMonth: anchor.month, endYear: anchor.year },
+      previous: { startMonth: prev.month, startYear: prev.year, endMonth: prev.month, endYear: prev.year },
+    };
+  }
+  const endMonth = anchor.year === today.year ? today.month : 12;
+  return {
+    current: { startMonth: 1, startYear: anchor.year, endMonth, endYear: anchor.year },
+    previous: { startMonth: 1, startYear: anchor.year - 1, endMonth, endYear: anchor.year - 1 },
+  };
+};

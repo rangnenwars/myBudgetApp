@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MonthlyExpensesView } from '../../components/MonthlyExpensesView';
+import { CategoriesView } from '../../components/CategoriesView';
 import { Segmented } from '../../components/ScreenKit';
 import { monthFilter, rangeBounds, txnLink } from '../../utils/txnLink';
 import { LineChart, PieChart } from 'react-native-chart-kit';
@@ -76,9 +77,10 @@ const chartConfig = {
   propsForBackgroundLines: { stroke: COLORS.cardBorder },
 };
 
-type ReportsView = 'monthly' | 'overview';
+type ReportsView = 'monthly' | 'categories' | 'overview';
 const VIEW_OPTIONS: { key: ReportsView; label: string }[] = [
   { key: 'monthly', label: 'Monthly' },
+  { key: 'categories', label: 'Categories' },
   { key: 'overview', label: 'Overview' },
 ];
 
@@ -89,7 +91,7 @@ export default function ReportsScreen() {
   const [view, setView] = useState<ReportsView>('monthly');
   const { view: viewParam, n: viewNonce } = useLocalSearchParams<{ view?: string; n?: string }>();
   useEffect(() => {
-    if (viewParam === 'monthly' || viewParam === 'overview') setView(viewParam);
+    if (viewParam === 'monthly' || viewParam === 'categories' || viewParam === 'overview') setView(viewParam);
   }, [viewParam, viewNonce]);
   const [range, setRange] = useState<RangePreset>('6m');
   const [metric, setMetric] = useState<TrendMetric>('net');
@@ -184,14 +186,14 @@ export default function ReportsScreen() {
     };
   });
 
-  if (view === 'monthly') {
+  if (view === 'monthly' || view === 'categories') {
     return (
       <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Reports</Text>
         </View>
         <Segmented<ReportsView> options={VIEW_OPTIONS} value={view} onChange={setView} />
-        <MonthlyExpensesView />
+        {view === 'monthly' ? <MonthlyExpensesView /> : <CategoriesView />}
       </ScrollView>
     );
   }
