@@ -5,7 +5,10 @@ import { db } from '../db/client';
 import { issueReports, userFeatures } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
-import { activeFeature } from '../lib/features';
+import { activeFeature, getUserFeatures } from '../lib/features';
+import { getAccess } from '../lib/access';
+import { getPlan } from '../lib/plan';
+import { loadPaymentDetails } from '../lib/paymentDetails';
 import { FEATURES, FEATURE_KEYS, featureLabel, featurePrice, priceLabel } from '../../../constants/features';
 
 // The signed-in user's own view of the optional features. They can't switch
@@ -17,28 +20,35 @@ router.use(requireAuth);
 const keyParam = z.object({ key: z.enum(FEATURE_KEYS) });
 const requestBody = z.object({ paid: z.boolean().optional() }).default({});
 
-// Where a user pays for a priced feature (UPI id). Unset = they're told to ask their admin.
-const paymentUpiId = () => process.env.PAYMENT_UPI_ID?.trim() || null;
-
 const loadOwn = async (userId: number) => {
-  const rows = await db.select({ row: userFeatures, active: sql<boolean>`(${activeFeature()})` }).from(userFeatures).where(eq(userFeatures.userId, userId));
-  const byKey = new Map(rows.map((r) => [r.row.featureKey, r]));
+  const [rows, effective, plan, access, payment] = await Promise.all([
+    db.select().from(userFeatures).where(eq(userFeatures.userId, userId)),
+    getUserFeatures(userId),
+    getPlan(),
+    getAccess(userId),
+    loadPaymentDetails(),
+  ]);
+  const byKey = new Map(rows.map((r) => [r.featureKey, r]));
+  const on = new Set(effective);
   return FEATURES.map((f) => {
     const found = byKey.get(f.key);
-    const on = found?.active === true;
+    const isOn = on.has(f.key);
+    // Included through the plan: it ends when the plan does. Switched on by hand: its own end date.
+    const viaPlan = plan.enforced && access.state !== 'none' && plan.features.includes(f.key) && !(found?.source === 'admin' && found.status === 'on' && !found.denied && (found.expiresAt == null || found.expiresAt > new Date()));
     return {
       key: f.key,
       label: f.label,
       description: f.description,
-      price: f.price,
-      period: f.period,
-      upiId: f.price > 0 ? paymentUpiId() : null,
-      on,
-      // When the paid period ends; null for access with no end.
-      expiresAt: on ? found?.row.expiresAt ?? null : null,
+      // The plan's price: one price covers every feature, set by an admin.
+      price: plan.price_inr,
+      period: plan.period,
+      upiId: payment?.upiId ?? null,
+      on: isOn,
+      // When access ends; null for no end.
+      expiresAt: isOn ? (viaPlan ? access.until : found?.expiresAt ?? null) : null,
       // Access that was on and has run out: shown as "Access ended", can be asked for again.
-      ended: !on && found?.row.status === 'on',
-      requested: !on && found?.row.requestedAt != null,
+      ended: !isOn && (found?.status === 'on' || (plan.enforced && access.state === 'none' && access.endedOn != null)),
+      requested: !isOn && found?.requestedAt != null,
     };
   });
 };
@@ -59,6 +69,11 @@ router.post(
     const { key } = keyParam.parse(req.params);
     const userId = req.userId!;
     const { paid } = requestBody.parse(req.body);
+    // Already included (a running plan, or switched on by staff): nothing to ask for.
+    if ((await getUserFeatures(userId)).includes(key)) {
+      res.json((await loadOwn(userId)).find((f) => f.key === key));
+      return;
+    }
 
     await db.transaction(async (tx) => {
       // Make sure a row exists to lock, so two taps at once can't file two requests.

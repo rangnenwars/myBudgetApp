@@ -27,11 +27,11 @@ const myFeature = async (u: RegisteredUser, key: string) =>
 const DAY = 24 * 60 * 60 * 1000;
 
 describe('feature catalog for users', () => {
-  it('lists every feature with its price and period', async () => {
+  it("lists every feature with the plan's price and period", async () => {
     const u = await registerUser({ features: [] });
     const res = await request(app).get('/api/v1/features').set(auth(u)).expect(200);
     expect(res.body.map((f: { key: string }) => f.key)).toEqual(['goals', 'loans', 'investments', 'forecast']);
-    expect(res.body[0]).toMatchObject({ price: 0, period: 'month', on: false, ended: false, requested: false, expiresAt: null });
+    expect(res.body[0]).toMatchObject({ price: 200, period: 'year', on: false, ended: false, requested: false, expiresAt: null });
   });
 });
 

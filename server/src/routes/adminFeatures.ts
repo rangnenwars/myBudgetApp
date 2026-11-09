@@ -8,7 +8,8 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { idParam } from '../lib/validation';
 import { notFound } from '../lib/errors';
 import { recordAdminAction } from '../lib/auditLog';
-import { activeFeature, getSignupDefaults, signupDefaultsSchema, SIGNUP_FEATURES_KEY } from '../lib/features';
+import { activeFeature, getSignupDefaults, getUserFeatures, signupDefaultsSchema, SIGNUP_FEATURES_KEY } from '../lib/features';
+import { getPlan } from '../lib/plan';
 import { requireAuth } from '../middleware/auth';
 import { requireFeatureManager, requireFeatureViewer } from '../middleware/requireFeatureStaff';
 import { FEATURES, FEATURE_KEYS, FeatureKey } from '../../../constants/features';
@@ -136,18 +137,28 @@ router.get(
 const changer = alias(users, 'changer');
 
 const loadUserFeatures = async (userId: number) => {
-  const rows = await db
-    .select({ row: userFeatures, changedByEmail: changer.email, active: sql<boolean>`(${activeFeature()})` })
-    .from(userFeatures)
-    .leftJoin(changer, eq(changer.id, userFeatures.changedBy))
-    .where(eq(userFeatures.userId, userId));
+  const [rows, effective, plan] = await Promise.all([
+    db
+      .select({ row: userFeatures, changedByEmail: changer.email, active: sql<boolean>`(${activeFeature()})` })
+      .from(userFeatures)
+      .leftJoin(changer, eq(changer.id, userFeatures.changedBy))
+      .where(eq(userFeatures.userId, userId)),
+    getUserFeatures(userId),
+    getPlan(),
+  ]);
   const byKey = new Map(rows.map((r) => [r.row.featureKey, r]));
+  const on = new Set(effective);
   return FEATURES.map((f) => {
     const r = byKey.get(f.key);
     return {
       key: f.key,
       label: f.label,
-      on: r?.active === true,
+      // What the user actually has: a switched-on row, or the plan including it.
+      on: on.has(f.key),
+      // Staff turned this one off for this user on purpose, even though the plan includes it.
+      denied: r?.row.denied === true,
+      // Included only because the plan is running, not because staff switched it on.
+      viaPlan: on.has(f.key) && plan.enforced && !(r?.active && r.row.source === 'admin'),
       expiresAt: r?.active ? r.row.expiresAt : null,
       source: r?.row.source ?? null,
       changedByEmail: r?.changedByEmail ?? null,
@@ -192,7 +203,8 @@ router.put(
       .select()
       .from(userFeatures)
       .where(and(eq(userFeatures.userId, target.id), eq(userFeatures.featureKey, key)));
-    const wasOn = before?.status === 'on' && (before.expiresAt == null || before.expiresAt > new Date());
+    // What the user has right now, plan included, so switching off a feature the plan gives is a real change.
+    const wasOn = (await getUserFeatures(target.id)).includes(key);
     const pendingRequest = !wasOn && before?.requestedAt != null;
     // Switching an already-on feature on again with a period extends or changes it.
     const changesPeriod = on && wasOn && period !== 'none';
@@ -206,10 +218,10 @@ router.put(
     await db.transaction(async (tx) => {
       await tx
         .insert(userFeatures)
-        .values({ userId: target.id, featureKey: key, status, source: 'admin', changedBy: req.userId!, expiresAt })
+        .values({ userId: target.id, featureKey: key, status, source: 'admin', changedBy: req.userId!, expiresAt, denied: !on })
         .onConflictDoUpdate({
           target: [userFeatures.userId, userFeatures.featureKey],
-          set: { status, source: 'admin', changedBy: req.userId!, requestedAt: null, requestIssueId: null, requestPaid: false, expiresAt, updatedAt: now },
+          set: { status, source: 'admin', changedBy: req.userId!, requestedAt: null, requestIssueId: null, requestPaid: false, expiresAt, denied: !on, updatedAt: now },
         });
       if (pendingRequest && before.requestIssueId) {
         await tx

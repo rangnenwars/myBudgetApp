@@ -17,10 +17,15 @@ import {
   pgErrorCode,
   sendTokens,
   sendVerificationEmail,
-  toUserResponse,
   wantsCookie,
 } from '../lib/session';
-import { applySignupDefaults, getUserFeatures } from '../lib/features';
+import { applySignupDefaults } from '../lib/features';
+import { addMonths, createTrialGrant } from '../lib/access';
+import { getPlan } from '../lib/plan';
+import { buildSessionUser } from '../lib/sessionUser';
+import { welcomeMail } from '../lib/accessMail';
+import { sendAccountMail } from '../lib/accountMail';
+import { accessNotices } from '../db/schema';
 
 const router = Router();
 export const BCRYPT_COST = 12;
@@ -87,11 +92,20 @@ router.post(
 
     await applySignupDefaults(user.id);
 
+    // The free period, counted from this account's own sign-up. Always recorded, so
+    // turning the plan on later has every account's end date ready; nothing is enforced until then.
+    const plan = await getPlan();
+    await createTrialGrant(user.id, user.createdAt, plan.trial_months);
+    const trialEnd = addMonths(user.createdAt, plan.trial_months);
+    await sendAccountMail(welcomeMail(user.email, user.name, trialEnd, plan))
+      .then(() => db.insert(accessNotices).values({ userId: user.id, kind: 'welcome', accessEnd: trialEnd }).onConflictDoNothing())
+      .catch((err) => console.error('Welcome email failed:', err));
+
     // Best-effort: a mail outage must not block sign-up — the app offers "resend".
     await sendVerificationEmail(user).catch((err) => console.error('Verification email failed:', err));
 
     const tokens = await issueTokenPair(user.id);
-    res.status(201).json({ user: { ...toUserResponse(user), features: await getUserFeatures(user.id) }, ...sendTokens(req, res, tokens) });
+    res.status(201).json({ user: await buildSessionUser(user), ...sendTokens(req, res, tokens) });
   })
 );
 
@@ -115,7 +129,7 @@ router.post(
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
     const tokens = await issueTokenPair(user.id);
-    res.json({ user: { ...toUserResponse(user), features: await getUserFeatures(user.id) }, ...sendTokens(req, res, tokens) });
+    res.json({ user: await buildSessionUser(user), ...sendTokens(req, res, tokens) });
   })
 );
 
@@ -181,7 +195,7 @@ router.get(
     const [user] = await db.select().from(users).where(eq(users.id, req.userId!));
     if (!user) throw unauthorized('User no longer exists.');
     // features: which optional screens (goals, loans, investments) staff have switched on.
-    res.json({ ...toUserResponse(user), features: await getUserFeatures(user.id) });
+    res.json(await buildSessionUser(user));
   })
 );
 
@@ -203,7 +217,7 @@ router.patch(
     const { tier } = tierSchema.parse(req.body);
     const [user] = await db.update(users).set({ tier, updatedAt: new Date() }).where(eq(users.id, req.userId!)).returning();
     if (!user) throw badRequest('User not found.');
-    res.json(toUserResponse(user));
+    res.json(await buildSessionUser(user));
   })
 );
 

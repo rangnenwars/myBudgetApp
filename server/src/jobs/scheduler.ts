@@ -1,5 +1,7 @@
 import { runIssueDigestExclusive } from './issueDigest';
 import { purgeExpiredScreenshots } from '../lib/issuePrivacy';
+import { runAccessNotices } from '../lib/accessNotices';
+import { purgeClaimScreenshots } from '../lib/payments';
 
 // In-process nightly jobs — no cron daemon or extra container needed. Fires
 // daily at ISSUE_DIGEST_TIME (HH:MM, server-local time — set TZ, e.g.
@@ -28,6 +30,14 @@ export const parseDigestTime = (value: string | undefined): { hour: number; minu
 export const runNightlyJobs = async (now: Date = new Date()): Promise<void> => {
   const purged = await purgeExpiredScreenshots(now);
   if (purged > 0) console.log(`[retention] removed ${purged} expired issue-report screenshot(s)`);
+  const claimShots = await purgeClaimScreenshots(now);
+  if (claimShots > 0) console.log(`[retention] removed ${claimShots} payment screenshot(s)`);
+  // Plan reminders: only once the plan is enforced, each sent once (lib/accessNotices.ts).
+  const reminders = await runAccessNotices(now).catch((err) => {
+    console.error('[access] reminders failed:', err);
+    return 0;
+  });
+  if (reminders > 0) console.log(`[access] sent ${reminders} plan reminder(s)`);
   if (process.env.ISSUE_DIGEST_ENABLED === 'true') await runIssueDigestExclusive({ now });
 };
 

@@ -18,6 +18,8 @@ import netWorthRoutes from './routes/netWorth';
 import adminUsersRoutes from './routes/admin';
 import adminFeaturesRoutes from './routes/adminFeatures';
 import featuresRoutes from './routes/features';
+import planRoutes from './routes/plan';
+import adminPlanRoutes from './routes/adminPlan';
 import adminAuditLogRoutes from './routes/adminAuditLog';
 import systemRoutes from './routes/system';
 import issuesRoutes from './routes/issues';
@@ -48,6 +50,9 @@ export const createApp = () => {
   // so that one route gets a bigger body limit; everything else keeps the
   // 100 kB default. Runs first, and express.json() skips an already-parsed body.
   app.use('/api/v1/issues', express.json({ limit: '3mb' }));
+  // Payment proof: a 2 MB screenshot (≈2.7 MB encoded) and a 1 MB QR image (≈1.4 MB). The web proxy's own cap is 4 MB.
+  app.use('/api/v1/plan/claims', express.json({ limit: '3mb' }));
+  app.use('/api/v1/admin/payment-details', express.json({ limit: '2mb' }));
   app.use(express.json());
 
   // Also pings the database, so the uptime check and the deploy smoke test
@@ -76,8 +81,10 @@ export const createApp = () => {
   app.use('/api/v1/forecast', forecastRoutes);
   app.use('/api/v1/net-worth', netWorthRoutes);
   app.use('/api/v1/features', featuresRoutes);
+  app.use('/api/v1/plan', planRoutes);
   // Ahead of the users router: it serves /admin/users/:id/features too.
   app.use('/api/v1/admin', adminFeaturesRoutes);
+  app.use('/api/v1/admin', adminPlanRoutes);
   app.use('/api/v1/admin/users', adminUsersRoutes);
   app.use('/api/v1/admin/audit-log', adminAuditLogRoutes);
   app.use('/api/v1/system', systemRoutes);
