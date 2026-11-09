@@ -85,10 +85,12 @@ describe('when access ends', () => {
     const a = await admin();
     const u = await registerUser({ features: [] });
     await switchOn(a, u.user.id, 'investments', 'month').expect(200);
-    const before = (await request(app).get('/api/v1/admin/features').set(auth(a)).expect(200)).body.features.find((f: { key: string }) => f.key === 'investments').usersOn;
+    // Per-user, not a global count: other test files add users at the same time.
+    const state = async () =>
+      ((await request(app).get(`/api/v1/admin/users/${u.user.id}/features`).set(auth(a)).expect(200)).body as { key: string; on: boolean }[]).find((f) => f.key === 'investments')!.on;
+    expect(await state()).toBe(true);
     await expireNow(u.user.id, 'investments');
-    const after = (await request(app).get('/api/v1/admin/features').set(auth(a)).expect(200)).body.features.find((f: { key: string }) => f.key === 'investments').usersOn;
-    expect(after).toBe(before - 1);
+    expect(await state()).toBe(false);
   });
 
   it('lets the user ask again, and staff see the request with whether they said they paid', async () => {

@@ -10,7 +10,13 @@ export const isoDate = (field = 'date') => z.string().refine(isValidIsoDate, { m
 
 /** Upper bound for numeric(12,2) money columns, so an oversized amount is a 400 instead of a database overflow. */
 export const MAX_AMOUNT = 9_999_999_999.99;
-export const money = () => z.coerce.number().positive().max(MAX_AMOUNT, 'Amount is too large.');
+// numeric(12,2): anything that rounds to 0.00 would trip the amount > 0 CHECK and surface as a 500, so refuse it here.
+export const money = () =>
+  z.coerce
+    .number()
+    .positive()
+    .max(MAX_AMOUNT, 'Amount is too large.')
+    .refine((n) => Math.round(n * 100) >= 1, 'Amount must be at least ₹0.01.');
 
 /** `:id` route param as a positive integer — a non-numeric id is a 400, not a database error (500). */
 export const idParam = (req: { params: Record<string, string> }, name = 'id'): number => {

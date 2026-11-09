@@ -134,7 +134,7 @@ $ scp deploy/docker-compose.prod.yml deploy/Caddyfile deploy/remote-deploy.sh de
 ```bash
 $ git checkout main && git pull
 $ git log -1 --format=%H            # the full 40-char SHA = the release tag
-$ npm run verify                    # client + server typecheck & tests (needs local Postgres: docker compose up -d postgres)
+$ npm run check                     # client + server typecheck & tests (starts local Postgres itself if it is not running) (was: docker compose up -d postgres)
 ```
 
 Taking a database backup first is cheap insurance, **mandatory** if the release adds a migration (look at `server/drizzle/` for new `.sql` files since the last release). Skip it on the very first deploy — there is no database yet, and `release.env` doesn't exist:

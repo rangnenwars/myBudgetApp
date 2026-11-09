@@ -25,7 +25,7 @@ Keep this section up to date whenever an item is built, committed or changed.
 | C1 Goal templates | Not started | |
 | C2 Lent & borrowed (People) | **Slices 1–2 built and simplified; committed (2026-10-06)** | Home has one People button (with totals). People has two buttons: **Split a bill** (own simple page, paid by me, equal or changed amounts) and **Lent or borrowed**, plus per-person history, part payments, due dates, write-off, undo (migrations 0017–0018). The Split switch was removed from Add transaction and Quick add; splitting one payment across categories is **parked** (API only, `POST /transactions/split`). Still to do: slice 3 (remind message + UPI link), slice 4 (invite flow F/G/H, approved). |
 | C3 Event & term budgets | Not started | |
-| Phase D Habits | Not started | Weekly look-back is planned with B4. |
+| Phase D Habits | Not started | The weekly look-back became a **monthly review** (2026-11-09). AI insights are parked in the Backlog section. |
 | Phase E Later | Not started | Deferred by design. |
 | Repeat "Ends on" | **Built and committed** (2026-10-11) | Every repeating entry now needs an end: 3, 6 or 12 months, a picked date, or an explicit **No end date** (wireframe approved). After the end date the rule posts nothing more, drops out of the Repeating list and of the free-money day; entries already posted stay, so reports count only up to the end (a monthly repeat ending in July = 7 months). Catch-up never posts past the end date. Old rules keep posting and show "needs an end date" until the user chooses. Migration 0021 (`ends_on`, `no_end`); optional bulk helper `server/scripts/repeat-end-backfill.sql`. `components/RepeatEndField.tsx`, `utils/repeatEnd.ts`. Not yet checked in the browser. |
 | Calendar picker | **Built for every date field and committed** (2026-10-11) | A real calendar in a bottom sheet beside the typed `YYYY-MM-DD` box (wireframe approved). Built for the transaction date (no future days) and the repeat "Ends on" date (nothing before the first entry). Month grid, Today / Cancel / Done, tap the month name to jump by month and year. Plain components, because the Expo SDK 57 datetimepicker has no web support (`components/CalendarSheet.tsx`, `utils/calendar.ts`). Then extended to the other date fields with one shared typed-box-plus-calendar-button (`components/DateInput.tsx`): the lent/borrowed pay-back-by date (nothing before today), the goal target date (nothing before today) and the loan start date (any date). Investments has no date field in the app today (start date is set automatically, maturity date is unused). Checked in the browser for the transaction date, Ends on, Goals and Loans; the pay-back-by date uses the same component but wasn't clicked through. |
@@ -94,7 +94,7 @@ Keep this section up to date whenever an item is built, committed or changed.
 
 ## Phase D — Good habits (from spec Feature 3)
 
-- **Weekly look-back** card every Monday: spent, how it compares with the limit, the biggest category, the change from last week, and one tip.
+- **Monthly review** (replaces the weekly look-back, decided 2026-11-09): on the 1st, a card on Home links to a review of last month. It shows total spent, change against the month before, the 3 biggest category movers, a 6-month trend, the largest single spend and the weekend share, with a history of past months. It's rule-based maths on the user's own transactions, saved once per user and month so past months never change. Wireframes (Home card, review screen, past months) were shown for weekly and need re-showing as monthly for approval before building.
 - **Nudges**, at most one a day and shown in-app only (no push yet), each with an on/off switch in Settings: 80% of the weekly limit with 3+ days left; income arrived but nothing added to a goal; no entries for 3 days; an IOU unsettled for 7+ days.
 - **Tip library:** 30–50 short tagged tips covering basics for everyone (emergency fund, 50/30/20, EMIs and interest, credit-card minimum-due trap) and student topics (pocket-money planning, education-loan moratorium interest, student discounts).
 - **Goal streaks:** consecutive weeks with any goal contribution, with milestones at 4, 12 and 26 weeks. A missed week resets quietly.
@@ -104,6 +104,10 @@ Keep this section up to date whenever an item is built, committed or changed.
 - **Group bill splitting** (spec Feature 1). It needs invites and multiple users per group, so it builds on C2's people/settle logic.
 - Push notifications (expo-notifications), and OTP login once an SMS provider exists.
 - Sharing a UPI receipt into the app to prefill quick-add.
+
+## Backlog (parked, not planned)
+
+- **AI-written insights** (parked 2026-11-09). An LLM (for example `claude-haiku-5-5`, called from the server only) turns the monthly review's computed facts into a short personal summary and one suggestion. Notes for when it's picked up: send aggregates only, never raw merchant names or notes; opt-in toggle in Settings; saved once per user and period; discard the output if its numbers don't match the facts and fall back to the rule-based text; "AI-generated" label with thumbs up/down. Builds on the monthly review, so do that first.
 
 ---
 

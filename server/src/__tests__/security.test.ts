@@ -57,6 +57,11 @@ describe('input validation returns 400, never 500', () => {
     expect((await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ ...base, amount: 1e13 })).status).toBe(400);
     expect((await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ ...base, amount: 5, note: 'x'.repeat(501) })).status).toBe(400);
     expect((await request(app).post('/api/v1/goals').set(auth(accessToken)).send({ name: 'G', target_amount: 1e13 })).status).toBe(400);
+    // An amount that rounds to 0.00 is a 400, not a database CHECK failure (500).
+    expect((await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ ...base, amount: 0.001 })).status).toBe(400);
+    const ok = await request(app).post('/api/v1/transactions').set(auth(accessToken)).send({ ...base, amount: 0.01 });
+    expect(ok.status).toBe(201);
+    expect((await request(app).patch(`/api/v1/transactions/${ok.body.id}`).set(auth(accessToken)).send({ amount: 0.004 })).status).toBe(400);
     expect((await request(app).post('/api/v1/investments').set(auth(accessToken)).send({ name: 'I', type: 'MF', amount: 100, current_value: -5 })).status).toBe(400);
   });
 });

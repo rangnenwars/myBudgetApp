@@ -22,6 +22,15 @@ export const errorHandler = (err: unknown, _req: Request, res: Response, _next: 
     res.status(400).json({ error: 'Malformed JSON body.' });
     return;
   }
+  // Postgres "data exception" errors (class 22) mean the client sent a value the database
+  // cannot store: a null byte or invalid UTF-8 in text, a number out of range, a date that
+  // does not exist. That is the client's mistake, so answer 400, not 500.
+  const pg = err as { code?: string; cause?: { code?: string } };
+  const pgCode = pg?.cause?.code ?? pg?.code;
+  if (typeof pgCode === 'string' && pgCode.startsWith('22')) {
+    res.status(400).json({ error: "Some of that text or those numbers can't be saved. Check what you entered and try again." });
+    return;
+  }
   // Never log the raw error: Drizzle's message embeds the failed SQL and its
   // parameters (amounts, notes, emails). Log only the driver code/message.
   const e = err as { name?: string; message?: string; code?: string; cause?: { code?: string; message?: string } };

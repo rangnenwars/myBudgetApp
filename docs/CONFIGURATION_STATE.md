@@ -153,3 +153,16 @@ Full findings and their status: [SECURITY_REVIEW.md](SECURITY_REVIEW.md). What c
 | Jobs | Nightly: reminder emails (only when enforced) and payment screenshot purge after 30 days. |
 | Tests | Server 655 in 45 suites, client 191 in 11, all passing. Test pool capped with `PG_POOL_MAX=3`. |
 | Docs | New PAID_PLAN.md; updated README, ROADMAP, USER_MANUAL, USER_WORKFLOWS, FAQ, API_REFERENCE, DATABASE_DESIGN, SYSTEM_ARCHITECTURE_GUIDE, OPERATIONS_RUNBOOK, PRO_FEATURES_DESIGN, INVESTOR_PITCH. |
+
+
+---
+
+## Change log: 2026-11-09 (tests and build checks)
+
+| Area | Change |
+|---|---|
+| Docker build | Every `docker compose build` now runs the checks and fails the build on any failure: web image runs the app type check and tests; server image (stage `quality`) runs the type check and the seven test suites that need no database. The database suites are not run in the build (a build has no database, and a Postgres inside the build crashed Docker's build engine); they run in `npm run check`, the commit hook and CI. `RUN_QUALITY=0` skips them in an emergency. |
+| Steps | New `npm run check`, `check:fast`, `check:docker` (`scripts/check.sh`); `npm run verify` is an alias. |
+| Server gate | `server` `npm run quality` now runs with coverage, so the floors in `jest.config.js` are enforced by the commit hook too (before it ran tests only). |
+| Tests | New `numberEdges.test.ts` (money bounds, rounding, sums that must not drift, shares that add back, balances that end on exactly zero) and `negativeApi.test.ts` (no token, forged token, wrong role, other users data, bad ids, bodies, dates, queries, sign-up and sign-in abuse, payment abuse). |
+| Fix found by the new tests | A text value containing a null byte caused a 500; any Postgres "data exception" (class 22) is now a 400. |
