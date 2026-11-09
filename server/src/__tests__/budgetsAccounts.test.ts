@@ -137,6 +137,18 @@ describe('GET /transactions/page', () => {
     expect((await page({ category: 'salary_1' })).body.items).toHaveLength(1);
   });
 
+  it('adds up expenses for one day and for a month, whatever the page size (the Transactions tabs)', async () => {
+    const { accessToken } = await registerUser();
+    await seed(accessToken);
+    const total = async (from: string, to: string) =>
+      (await request(app).get('/api/v1/transactions/page').query({ type: 'expense', from, to, limit: 1 }).set(auth(accessToken)).expect(200)).body.summary;
+
+    expect(await total('2026-08-03', '2026-08-03')).toEqual({ count: 1, income: 0, expense: 103 });
+    // Aug 1 to 5 are 101 to 105; the 9,000 salary on the 10th is income, so it is left out.
+    expect(await total('2026-08-01', '2026-08-31')).toEqual({ count: 5, income: 0, expense: 515 });
+    expect(await total('2026-09-01', '2026-09-30')).toEqual({ count: 0, income: 0, expense: 0 });
+  });
+
   it("never returns another user's rows and rejects a bad cursor or limit", async () => {
     const { accessToken } = await registerUser();
     const other = await registerUser();

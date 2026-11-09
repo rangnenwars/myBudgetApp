@@ -16,7 +16,7 @@ import { claimRejectedMail, paymentDetailsChangedMail, receiptMail } from '../li
 import { notifyExistingUsers } from '../lib/accessNotices';
 import { sendAccountMail } from '../lib/accountMail';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../lib/errors';
-import { decodeImageUpload } from '../lib/imageUpload';
+import { decodeImageUpload, toDataUrl } from '../lib/imageUpload';
 import { UPI_ID_RE, checkQr, loadPaymentDetails, normalizeUpiId } from '../lib/paymentDetails';
 import { addPaidPeriod, duplicateTxnError, isDuplicateTxn, normalizeTxnId } from '../lib/payments';
 import { getPlan, planEditSchema, savePlan } from '../lib/plan';
@@ -265,8 +265,13 @@ router.get(
   asyncHandler(async (req, res) => {
     const [row] = await db.select({ shot: paymentClaims.screenshot, mime: paymentClaims.screenshotMimeType }).from(paymentClaims).where(eq(paymentClaims.id, idParam(req)));
     if (!row?.shot || !row.mime) throw notFound('No screenshot for this payment.');
-    res.setHeader('Content-Type', row.mime);
     res.setHeader('Cache-Control', 'private, no-store');
+    // The app asks for ?format=json (a data: URL it can show on every platform); a browser tab gets the raw image.
+    if (req.query.format === 'json') {
+      res.json({ data_url: toDataUrl(row.shot, row.mime) });
+      return;
+    }
+    res.setHeader('Content-Type', row.mime);
     res.send(row.shot);
   })
 );
