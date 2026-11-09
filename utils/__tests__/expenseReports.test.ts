@@ -1,4 +1,4 @@
-import { OTHERS_KEY, categoryRows, changePct, changeText, monthlyExpenseRows } from '../expenseReports';
+import { OTHERS_KEY, categoryByMonth, categoryPeriod, categoryRows, changePct, changeText, monthlyExpenseRows, topSpendInsight } from '../expenseReports';
 
 const m = (month: number, expense: number, year = 2026) => ({ year, month, label: `M${month}`, expense });
 
@@ -114,5 +114,70 @@ describe('categoryRows', () => {
 
   it('is empty for a period with no expenses', () => {
     expect(categoryRows([], [], 3, known)).toEqual({ total: 0, rows: [] });
+  });
+});
+
+describe('topSpendInsight', () => {
+  const label = (c: string) => ({ food: 'Food', travel: 'Travel' }[c] ?? c);
+  const rows = (changePct: number | null) => [
+    { category: 'food', total: 2900, sharePct: 39, changePct, barPct: 100 },
+    { category: OTHERS_KEY, total: 4500, sharePct: 61, changePct: 3, barPct: 100 },
+  ];
+
+  it('names the top category and how it moved', () => {
+    expect(topSpendInsight(rows(18), label)).toBe('Food is your top spend, up 18%');
+    expect(topSpendInsight(rows(-5), label)).toBe('Food is your top spend, down 5%');
+  });
+
+  it('leaves the change out when there is none to report', () => {
+    expect(topSpendInsight(rows(0), label)).toBe('Food is your top spend');
+    expect(topSpendInsight(rows(null), label)).toBe('Food is your top spend');
+  });
+
+  it('skips Others as the top spend, and says nothing without expenses', () => {
+    expect(topSpendInsight([{ category: OTHERS_KEY, total: 100, sharePct: 100, changePct: null, barPct: 100 }], label)).toBeNull();
+    expect(topSpendInsight([], label)).toBeNull();
+  });
+});
+
+describe('categoryByMonth', () => {
+  it('adds one category month by month, expenses only, with empty months as 0', () => {
+    const txns = [
+      { category: 'food', type: 'expense', amount: 2400, month: 1 },
+      { category: 'food', type: 'expense', amount: 300, month: 1 },
+      { category: 'food', type: 'expense', amount: 2700, month: 2 },
+      { category: 'food', type: 'income', amount: 999, month: 2 },
+      { category: 'travel', type: 'expense', amount: 500, month: 3 },
+    ];
+    const out = categoryByMonth(txns, 'food');
+    expect(out).toHaveLength(12);
+    expect(out.slice(0, 4).map((m) => m.total)).toEqual([2700, 2700, 0, 0]);
+    expect(out.reduce((s, m) => s + m.total, 0)).toBe(5400);
+  });
+});
+
+describe('categoryPeriod', () => {
+  const today = { month: 11, year: 2026 };
+
+  it('compares a month with the month before, across a year end', () => {
+    expect(categoryPeriod('month', { month: 11, year: 2026 }, today)).toEqual({
+      current: { startMonth: 11, startYear: 2026, endMonth: 11, endYear: 2026 },
+      previous: { startMonth: 10, startYear: 2026, endMonth: 10, endYear: 2026 },
+    });
+    expect(categoryPeriod('month', { month: 1, year: 2026 }, today).previous).toEqual({ startMonth: 12, startYear: 2025, endMonth: 12, endYear: 2025 });
+  });
+
+  it('compares the year so far with the same months last year', () => {
+    expect(categoryPeriod('year', { month: 1, year: 2026 }, today)).toEqual({
+      current: { startMonth: 1, startYear: 2026, endMonth: 11, endYear: 2026 },
+      previous: { startMonth: 1, startYear: 2025, endMonth: 11, endYear: 2025 },
+    });
+  });
+
+  it('compares a finished year with the whole year before', () => {
+    expect(categoryPeriod('year', { month: 1, year: 2025 }, today)).toEqual({
+      current: { startMonth: 1, startYear: 2025, endMonth: 12, endYear: 2025 },
+      previous: { startMonth: 1, startYear: 2024, endMonth: 12, endYear: 2024 },
+    });
   });
 });
