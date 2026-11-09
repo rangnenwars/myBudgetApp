@@ -549,6 +549,24 @@ flowchart LR
   classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
+### Your plan and Renew
+
+`/plan`, `/renew` · Signed in · `app/plan.tsx`, `app/renew.tsx`
+
+```mermaid
+flowchart LR
+  P(["Your plan"]):::entry --> S{"Access?"}
+  S -->|free or paid| OK["Shows end date and days left"]:::ok
+  S -->|ending or ended| R["Renew"] --> Q["QR + UPI ID + Open UPI app"] --> SS["Add screenshot + transaction ID"] --> H["I have paid"] --> W["Checking your payment"]:::warn
+  W -->|admin confirms| C["A year added, receipt email"]:::ok
+  W -->|rejected or resend| R
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+Access carries on for 3 days while a payment waits, once per access period. Details in [PAID_PLAN.md](PAID_PLAN.md).
+
 <a id="issue"></a>
 
 ### Report issue

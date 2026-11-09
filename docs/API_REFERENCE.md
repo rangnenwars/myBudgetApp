@@ -567,7 +567,7 @@ Requires `role: 'admin'` or `role: 'system_manager'` (`requireSystemManager`). E
   "finance": { "costPerUserPerYearInr": 100, "estimatedAnnualCostInr": 3900, "proUsers": 12, "estimatedAnnualRevenueInr": 0, "estimatedAnnualMarginInr": -3900, "revenueNote": "No real billing wired up yet — Pro is a test-mode toggle (docs/README.md)." }
 }
 ```
-`costPerUserPerYearInr` (₹100) is a planning assumption, not a billed rate. `estimatedAnnualRevenueInr` is always `0` today since there's no real payment processor (see README.md "Known deviations") — this route exists so that stays a visible number instead of a silent gap once real billing is added.
+`costPerUserPerYearInr` (₹100) is a planning assumption, not a billed rate. The real plan price (₹200 a year, set in Admin, Plan and pricing) and confirmed payments are in the paid plan routes below, not in this route yet, and this route still counts company accounts. `estimatedAnnualRevenueInr` is always `0` today since there's no real payment processor (see README.md "Known deviations") — this route exists so that stays a visible number instead of a silent gap once real billing is added.
 
 ---
 

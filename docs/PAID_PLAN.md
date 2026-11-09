@@ -70,3 +70,26 @@ Every change above is in the audit log with who did it and why.
 - **`PAYMENT_UPI_ID`** (an environment variable used before this) is no longer used; the UPI ID is set in the app.
 - **App stores:** if you later publish on the Play Store or App Store, those stores may require their own billing for in-app subscriptions. The web app is not affected.
 - **Invoices:** receipts are a simple email. A GST invoice is not produced.
+
+## What is in the `feature/paid-access` branch
+
+**Server** (migration `0025_paid_access`, commits f234048, 587dd25, f13ad61)
+- Tables and columns: `users.account_kind`, `user_features.denied`, `access_grants`, `payment_settings`, `payment_claims`, `access_notices`; setting `app_settings.plan`.
+- Rules and jobs: access rule, plan settings, payments, QR reading, image checks, emails (welcome, existing-user notice, reminders, receipt, rejection, payment details changed), nightly reminders and screenshot purge.
+- Routes: user `/plan/*`; admin plan, payment details, payments, per-user access, exceptions. Feature access now follows the plan once enforced.
+- About 148 new server tests in 4 files (access rules, plan access, payments, admin plan), plus fixes to older tests.
+
+**App**
+- User: Your plan (`app/plan.tsx`), Renew (`app/renew.tsx`), plan strip on Home, a plan line on Settings and More features, a plan note on Register, and locked-feature screens that point to Renew.
+- Admin: Plan and pricing, Payment details, Payments to confirm, Exceptions, and a Plan and access section on the user sheet (account type, exception with end date, record a payment).
+- Helpers: `utils/plan.ts`, `planState.ts`, `pickImage.ts`; new `expo-clipboard` dependency.
+
+**Also in the branch, not part of the plan:** new brand images and app icons (`assets/brand/`, `assets/icon.png` and others), and the planning documents `GOOGLE_ADS_PLAN.md`, `GOOGLE_ADS_IMAGES.md` and `OPERATOR_CONSOLE_DESIGN.md`.
+
+## Not built
+
+- System metrics still use the old planning estimate (₹100 a user, revenue 0). Leaving company accounts out and showing real revenue is waiting on a layout decision.
+- Matching payments against a bank or gateway record automatically.
+- Store billing for the Android and iPhone apps.
+- GST invoices.
+- The per-feature prices in `constants/features.ts` are unused and can be removed.

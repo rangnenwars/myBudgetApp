@@ -139,3 +139,17 @@ Full findings and their status: [SECURITY_REVIEW.md](SECURITY_REVIEW.md). What c
 | Email | Production sends through Resend (`RESEND_API_KEY` + `MAIL_FROM`); SMTP remains as a fallback. |
 | Tests | Client 142, server 456 in 35 suites, all passing. |
 | Docs | README, USER_MANUAL, USER_WORKFLOWS, SYSTEM_ARCHITECTURE_GUIDE, FAQ, USER_DISTRIBUTION (new marketing section), API_REFERENCE, DATABASE_DESIGN and ROADMAP brought up to date; new `INVESTOR_PITCH.md` and the pitch deck. |
+
+
+---
+
+## Change log: 2026-11-09 (paid plan)
+
+| Area | Change |
+|---|---|
+| Database | Migration `0025_paid_access`: `users.account_kind`, `user_features.denied`, `access_grants`, `payment_settings`, `payment_claims`, `access_notices`. Backfills a free period for existing customers and marks staff and demo accounts as Company. |
+| Plan | `app_settings.plan`: ₹200 a year, 6 months free, 30 notice days. **Not enforced by default (shadow mode).** Turning it on needs the existing-user notice first and an admin password. |
+| Environment | `PAYMENT_UPI_ID` removed; the UPI ID and QR are set in the app. Email must work for notices and reminders. Reverse proxy body cap stays 4 MB (screenshots limited to 2 MB). |
+| Jobs | Nightly: reminder emails (only when enforced) and payment screenshot purge after 30 days. |
+| Tests | Server 655 in 45 suites, client 191 in 11, all passing. Test pool capped with `PG_POOL_MAX=3`. |
+| Docs | New PAID_PLAN.md; updated README, ROADMAP, USER_MANUAL, USER_WORKFLOWS, FAQ, API_REFERENCE, DATABASE_DESIGN, SYSTEM_ARCHITECTURE_GUIDE, OPERATIONS_RUNBOOK, PRO_FEATURES_DESIGN, INVESTOR_PITCH. |

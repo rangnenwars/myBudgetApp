@@ -29,7 +29,7 @@ Say only what the product does. These are the lines to be careful with:
 
 - **Built:** Split a bill, lent or borrowed ledger, quick add, free-money day, one monthly budget, repeating entries with end dates, calendar on every date field, goals, loans, investments, reports, admin tools. It runs as a web app.
 - **Not built yet:** friend invites by link, remind-and-pay (UPI) link, weekly look-back, goal streaks, mobile number (OTP) login, store apps for Android and iPhone. The deck lists these as "next" or "later", not as done.
-- **Not proven:** the ₹100 per user per year paid plan is a planning estimate from the system-metrics screen, to be tested in the pilot. The deck says so.
+- **Built, not yet proven:** the paid plan (6 months free from sign-up, then ₹200 a year, paid by UPI QR and confirmed by an admin) is built and switched off in shadow mode. No one has paid yet, so there is no revenue to quote. Older slides that say ₹100 a year are a planning estimate and should be changed to ₹200 before presenting. See [PAID_PLAN.md](PAID_PLAN.md).
 - **No user or revenue numbers** are in the deck because there are none to report yet. Add them once the pilot gives real ones.
 
 ## Add before presenting
