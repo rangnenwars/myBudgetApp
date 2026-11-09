@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform, ScrollView } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { MiniBar } from '../../components/MiniBar';
@@ -33,6 +33,10 @@ const LOAN_TYPE_LABEL: Record<string, string> = { home: 'Home', car: 'Car', pers
 function LoansScreen() {
   const { user } = useAuth();
   const [items, setItems] = useState<Loan[]>([]);
+  // A tapped bill on Plan ahead or the free-money day arrives as `?open=<loan id>`: scroll to that loan and outline it.
+  const { open } = useLocalSearchParams<{ open?: string }>();
+  const openId = open ? Number(open) : null;
+  const listRef = useRef<FlatList<Loan>>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState('');
@@ -59,6 +63,12 @@ function LoansScreen() {
   const load = useCallback(async () => { if (user) setItems(await getLoans()); }, [user]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  useEffect(() => {
+    if (openId == null) return;
+    const index = items.findIndex((l) => l.id === openId);
+    if (index >= 0) listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.2 });
+  }, [openId, items]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -194,6 +204,8 @@ function LoansScreen() {
       </View>
 
       <FlatList
+        ref={listRef}
+        onScrollToIndexFailed={({ index }) => setTimeout(() => listRef.current?.scrollToOffset({ offset: index * 220, animated: true }), 100)}
         data={items}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
@@ -253,7 +265,7 @@ function LoansScreen() {
             .filter(Boolean)
             .join(' · ');
           return (
-            <Pressable style={styles.card} onPress={() => openEdit(item)}>
+            <Pressable style={[styles.card, item.id === openId && styles.cardOpened]} onPress={() => openEdit(item)}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleWrap}>
                   <Text style={styles.cardTitle}>{item.name}</Text>
@@ -500,6 +512,7 @@ const styles = StyleSheet.create({
   addBtn: { backgroundColor: COLORS.accent, width: 36, height: 36, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center' },
   listContent: { padding: SPACING.lg, paddingTop: SPACING.sm, gap: SPACING.sm },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', marginTop: SPACING.xl },
+  cardOpened: { borderColor: COLORS.accent, borderWidth: 2 },
   card: { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },

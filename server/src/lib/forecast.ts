@@ -23,6 +23,8 @@ const MAX_STEPS = 600;
 
 export interface ForecastItem {
   kind: 'income' | 'bill' | 'loan';
+  /** The repeating rule (income, bill) or loan this line comes from, so the app can open it; absent for the estimated average income. */
+  id?: number;
   label: string;
   amount: number;
   /** YYYY-MM-DD, or null for an estimated average income. */
@@ -57,6 +59,7 @@ export interface Forecast {
 }
 
 interface Rule {
+  id?: number;
   type: 'income' | 'expense';
   category: string;
   amount: number;
@@ -70,6 +73,7 @@ interface Rule {
 }
 
 interface LoanRow {
+  id?: number;
   name: string;
   outstanding: number;
   emi: number;
@@ -215,7 +219,7 @@ export const buildForecast = (input: ForecastInput): Forecast => {
     const label = rule.note?.trim() || rule.label;
     for (const date of ruleDatesBetween(rule, horizonFrom, horizonTo)) {
       const month = slot(date);
-      month.items.push({ kind: rule.type === 'income' ? 'income' : 'bill', label, amount: rule.amount, date, frequency: rule.frequency });
+      month.items.push({ kind: rule.type === 'income' ? 'income' : 'bill', id: rule.id, label, amount: rule.amount, date, frequency: rule.frequency });
     }
   }
 
@@ -233,7 +237,7 @@ export const buildForecast = (input: ForecastInput): Forecast => {
   for (const loan of input.loans) {
     if (!loansOn && !loan.counts_as_expense) continue;
     loanPayments(loan, months, current).forEach((amount, i) => {
-      if (amount > 0) result[i].items.push({ kind: 'loan', label: loansOn ? loan.name : 'Loan EMI', amount, date: monthStart(months[i].year, months[i].month) });
+      if (amount > 0) result[i].items.push({ kind: 'loan', id: loan.id, label: loansOn ? loan.name : 'Loan EMI', amount, date: monthStart(months[i].year, months[i].month) });
     });
   }
 
@@ -272,6 +276,7 @@ export const getForecast = async (userId: number, now: Date = new Date()): Promi
     .innerJoin(categories, eq(categories.key, recurringTransactions.category))
     .where(eq(recurringTransactions.userId, userId));
   const rules: Rule[] = ruleRows.map(({ rule, label }) => ({
+    id: rule.id,
     type: rule.type,
     category: rule.category,
     amount: rule.amount,
@@ -311,6 +316,7 @@ export const getForecast = async (userId: number, now: Date = new Date()): Promi
     // Expired rules stay in the list for matching past postings; they project nothing.
     rules,
     loans: loanRows.map((l) => ({
+      id: l.id,
       name: l.name,
       outstanding: l.outstanding,
       emi: l.emi,

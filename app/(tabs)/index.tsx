@@ -12,12 +12,14 @@ import { PlanAheadCard } from '../../components/PlanAheadCard';
 import { MoreFeaturesLink } from '../../components/MoreFeaturesLink';
 import { BudgetCard } from '../../components/BudgetCard';
 import { PeopleButton } from '../../components/PeopleButton';
+import { ThisMonthCard } from '../../components/ThisMonthCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCategories } from '../../context/CategoriesContext';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 import { getMonthSummary, getCategoryBreakdown, getBudgets, BudgetStatus, CategoryTotal } from '../../utils/database';
 import { computeCategoryDeltas, computeSavingsRate, bucketForGroup, CategoryDelta, CategoryBucket } from '../../utils/calculations';
 import { shiftMonth } from '../../utils/dates';
+import { monthFilter, txnLink } from '../../utils/txnLink';
 
 const BUCKET_LABEL: Record<CategoryBucket, string> = { expense: 'Expenses', loan: 'Loan payments', investment: 'Investments' };
 const BUCKET_COLOR: Record<CategoryBucket, string> = { expense: COLORS.red, loan: COLORS.blue, investment: COLORS.purple };
@@ -36,6 +38,7 @@ export default function DashboardScreen() {
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, netSavings: 0 });
   const [topCategories, setTopCategories] = useState<{ category: string; total: number }[]>([]);
   const [deltas, setDeltas] = useState<CategoryDelta[]>([]);
+  const [prevExpense, setPrevExpense] = useState(0);
   const [breakdown, setBreakdown] = useState<Record<CategoryBucket, number>>({ expense: 0, loan: 0, investment: 0 });
   // Budgets at 80% or more of their limit in the viewed month.
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
@@ -65,6 +68,7 @@ export default function DashboardScreen() {
         setBudgetAlerts(budgets.filter((b) => b.status !== 'ok'));
 
         setSummary(monthSummary);
+        setPrevExpense(prevCategories.reduce((sum, c) => sum + c.total, 0));
         setTopCategories(monthCategories.slice(0, 5));
 
         const buckets: Record<CategoryBucket, number> = { expense: 0, loan: 0, investment: 0 };
@@ -155,6 +159,8 @@ export default function DashboardScreen() {
         </Pressable>
       )}
 
+      <ThisMonthCard title={isCurrentMonth ? 'This month' : viewLabel} total={summary.totalExpense} previousTotal={prevExpense} />
+
       <BudgetCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} refreshKey={refreshKey} />
 
       {budgetAlerts.length > 0 && (
@@ -216,14 +222,14 @@ export default function DashboardScreen() {
 
       <Card>
         <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Income</Text>
+          <Pressable style={styles.summaryItem} onPress={() => router.push(txnLink({ type: 'income', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Income ${fmt(summary.totalIncome)}, see the entries`}>
+            <Text style={styles.summaryLabel}>Income ›</Text>
             <Text style={[styles.summaryValue, { color: COLORS.accent }]}>{fmt(summary.totalIncome)}</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Expense</Text>
+          </Pressable>
+          <Pressable style={styles.summaryItem} onPress={() => router.push(txnLink({ type: 'expense', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Expense ${fmt(summary.totalExpense)}, see the entries`}>
+            <Text style={styles.summaryLabel}>Expense ›</Text>
             <Text style={[styles.summaryValue, { color: COLORS.red }]}>{fmt(summary.totalExpense)}</Text>
-          </View>
+          </Pressable>
         </View>
         <View style={styles.divider} />
         <View style={styles.savingsRow}>
@@ -247,15 +253,21 @@ export default function DashboardScreen() {
           topCategories.map((c, idx) => {
             const cat = getCategory(c.category);
             return (
-              <View key={c.category} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
+              <Pressable
+                key={c.category}
+                style={[styles.catRow, idx !== 0 && styles.catRowBorder]}
+                onPress={() => router.push(txnLink({ type: 'expense', category: c.category, ...monthFilter(view.year, view.month) }))}
+                accessibilityRole="link"
+                accessibilityLabel={`${cat?.label ?? c.category} ${fmt(c.total)}, see the entries`}
+              >
                 <View style={styles.catHeader}>
                   <Text style={styles.catLabel}>
                     {cat?.icon ?? '💰'} {cat?.label ?? c.category}
                   </Text>
-                  <Text style={styles.catValue}>{fmt(c.total)}</Text>
+                  <Text style={styles.catValue}>{fmt(c.total)} ›</Text>
                 </View>
                 <MiniBar percent={(c.total / maxCategoryTotal) * 100} color={cat?.color} />
-              </View>
+              </Pressable>
             );
           })
         )}

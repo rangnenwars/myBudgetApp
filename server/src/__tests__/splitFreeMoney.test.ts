@@ -143,8 +143,8 @@ describe('GET /reports/free-money-day', () => {
     expect(res.body.day).toBe(Math.ceil(0.3 * DAYS_IN_MONTH));
     expect(res.body.daysFree).toBe(DAYS_IN_MONTH - res.body.day);
     expect(res.body.items).toEqual([
-      { kind: 'loan', label: 'Home loan', amount: 10000 },
-      { kind: 'repeating', label: 'Broadband', amount: 5000 },
+      { kind: 'loan', id: expect.any(Number), label: 'Home loan', amount: 10000 },
+      { kind: 'repeating', id: expect.any(Number), label: 'Broadband', amount: 5000 },
     ]);
     expect(res.body.freeDate).toBe(`${today.year}-${String(today.month).padStart(2, '0')}-${String(res.body.day).padStart(2, '0')}`);
     expect(res.body.loans).toEqual([{ id: expect.any(Number), name: 'Home loan', emi: 10000, outstanding: 900000, interest_rate: null }]);
@@ -251,7 +251,7 @@ describe('GET /reports/free-money-day', () => {
     await db.update(userFeatures).set({ status: 'off' }).where(and(eq(userFeatures.userId, user.id), eq(userFeatures.featureKey, 'loans')));
     const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
     expect(res.body).toMatchObject({ committed: 20000, share: 0.4, loans: [] });
-    expect(res.body.items).toEqual([{ kind: 'loan', label: 'Loan EMI', amount: 20000 }]);
+    expect(res.body.items).toEqual([{ kind: 'loan', id: expect.any(Number), label: 'Loan EMI', amount: 20000 }]);
   });
 
   it('counts every active loan while Loans is on, even one whose EMI is not posted', async () => {
@@ -259,7 +259,7 @@ describe('GET /reports/free-money-day', () => {
     await addRule(accessToken, { amount: 50000, type: 'income', category_key: 'salary_1' });
     await request(app).post('/api/v1/loans').set(auth(accessToken)).send({ name: 'Not posted', principal: 100000, outstanding: 90000, emi: 4000, counts_as_expense: false });
     const res = await request(app).get('/api/v1/reports/free-money-day').set(auth(accessToken));
-    expect(res.body.items).toEqual([{ kind: 'loan', label: 'Not posted', amount: 4000 }]);
+    expect(res.body.items).toEqual([{ kind: 'loan', id: expect.any(Number), label: 'Not posted', amount: 4000 }]);
   });
 
   it('spreads a quarterly repeating bill over three months', async () => {

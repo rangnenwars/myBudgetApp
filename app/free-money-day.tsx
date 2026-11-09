@@ -7,6 +7,7 @@ import { MiniBar } from '../components/MiniBar';
 import { ScreenHeader, SectionTitle, Notice, fmtInr } from '../components/ScreenKit';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { useOpenBill } from '../components/useOpenBill';
 import { getFreeMoneyDay, FreeMoneyDayInfo, computeFreeMoneyDay, computePartPayment } from '../utils/database';
 
 export default function FreeMoneyDayScreen() {
@@ -15,6 +16,8 @@ export default function FreeMoneyDayScreen() {
   const [failed, setFailed] = useState(false);
   const [loanId, setLoanId] = useState<number | null>(null);
   const [prepay, setPrepay] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const bills = useOpenBill(() => setReloadKey((k) => k + 1));
 
   useFocusEffect(
     useCallback(() => {
@@ -31,7 +34,7 @@ export default function FreeMoneyDayScreen() {
       return () => {
         active = false;
       };
-    }, [user?.id])
+    }, [user?.id, reloadKey])
   );
 
   // What the free-money day would be if the chosen loan got a part payment (same maths as the Loans screen).
@@ -107,18 +110,31 @@ export default function FreeMoneyDayScreen() {
               {info.items.length === 0 ? (
                 <Text style={styles.muted}>No loans or repeating bills yet.</Text>
               ) : (
-                info.items.map((it, i) => (
-                  <View key={`${it.kind}-${it.label}-${i}`} style={[styles.item, i !== 0 && styles.itemBorder]}>
-                    <View style={styles.rowBetween}>
-                      <Text style={styles.itemLabel} numberOfLines={1}>
-                        {it.label}
-                      </Text>
-                      <Text style={styles.itemAmount}>{fmtInr(it.amount)}</Text>
-                    </View>
-                    <Text style={styles.small}>{it.kind === 'loan' ? 'Loan EMI' : 'Repeating'}</Text>
-                    <MiniBar percent={Math.min(100, (it.amount / info.income) * 100)} color={it.kind === 'loan' ? COLORS.blue : COLORS.purple} />
-                  </View>
-                ))
+                info.items.map((it, i) => {
+                  const tappable = bills.canOpen(it.kind, it.id);
+                  return (
+                    <Pressable
+                      key={`${it.kind}-${it.id}-${i}`}
+                      style={[styles.item, i !== 0 && styles.itemBorder]}
+                      disabled={!tappable}
+                      onPress={() => bills.open(it.kind, it.id)}
+                      accessibilityRole={tappable ? 'button' : undefined}
+                      accessibilityLabel={tappable ? `${it.label}, ${fmtInr(it.amount)}, open` : undefined}
+                    >
+                      <View style={styles.rowBetween}>
+                        <Text style={styles.itemLabel} numberOfLines={1}>
+                          {it.label}
+                        </Text>
+                        <Text style={styles.itemAmount}>
+                          {fmtInr(it.amount)}
+                          {tappable ? ' ›' : ''}
+                        </Text>
+                      </View>
+                      <Text style={styles.small}>{it.kind === 'loan' ? 'Loan EMI' : 'Repeating'}</Text>
+                      <MiniBar percent={Math.min(100, (it.amount / info.income) * 100)} color={it.kind === 'loan' ? COLORS.blue : COLORS.purple} />
+                    </Pressable>
+                  );
+                })
               )}
               <View style={[styles.rowBetween, styles.itemBorder, { paddingTop: SPACING.sm }]}>
                 <Text style={styles.itemLabel}>Committed of {fmtInr(info.income)} income</Text>
@@ -185,6 +201,7 @@ export default function FreeMoneyDayScreen() {
           </>
         )}
       </ScrollView>
+      {bills.sheet}
     </View>
   );
 }

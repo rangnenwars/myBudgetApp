@@ -1,6 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { MonthlyExpensesView } from '../../components/MonthlyExpensesView';
+import { Segmented } from '../../components/ScreenKit';
+import { monthFilter, rangeBounds, txnLink } from '../../utils/txnLink';
 import { LineChart, PieChart } from 'react-native-chart-kit';
 import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
@@ -73,9 +76,21 @@ const chartConfig = {
   propsForBackgroundLines: { stroke: COLORS.cardBorder },
 };
 
+type ReportsView = 'monthly' | 'overview';
+const VIEW_OPTIONS: { key: ReportsView; label: string }[] = [
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'overview', label: 'Overview' },
+];
+
 export default function ReportsScreen() {
   const { user, hasFeature } = useAuth();
   const { getCategory } = useCategories();
+  // Monthly is the main view; Overview is the original Reports screen. Home's "This month" card opens ?view=monthly.
+  const [view, setView] = useState<ReportsView>('monthly');
+  const { view: viewParam, n: viewNonce } = useLocalSearchParams<{ view?: string; n?: string }>();
+  useEffect(() => {
+    if (viewParam === 'monthly' || viewParam === 'overview') setView(viewParam);
+  }, [viewParam, viewNonce]);
   const [range, setRange] = useState<RangePreset>('6m');
   const [metric, setMetric] = useState<TrendMetric>('net');
   const [series, setSeries] = useState<MonthPoint[]>([]);
@@ -169,6 +184,18 @@ export default function ReportsScreen() {
     };
   });
 
+  if (view === 'monthly') {
+    return (
+      <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Reports</Text>
+        </View>
+        <Segmented<ReportsView> options={VIEW_OPTIONS} value={view} onChange={setView} />
+        <MonthlyExpensesView />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <View style={styles.header}>
@@ -177,6 +204,8 @@ export default function ReportsScreen() {
           <Text style={styles.exportBtnText}>Export CSV</Text>
         </Pressable>
       </View>
+
+      <Segmented<ReportsView> options={VIEW_OPTIONS} value={view} onChange={setView} />
 
       <View style={styles.chipRow}>
         {RANGE_OPTIONS.map((opt) => (
@@ -257,11 +286,16 @@ export default function ReportsScreen() {
                 bezier
                 style={styles.chart}
                 fromZero
+                onDataPointClick={({ index }) => {
+                  const p = series[index];
+                  if (p) router.push(txnLink({ ...(metric === 'net' ? {} : { type: metric }), ...monthFilter(p.year, p.month) }));
+                }}
               />
             ) : (
               <Text style={styles.emptyText}>No data in this range yet.</Text>
             )}
           </View>
+          {series.length > 0 && <Text style={styles.projectionMuted}>Tap a point to see that month's entries.</Text>}
         </Card>
 
         {netWorthTrend.length > 1 && (
@@ -291,14 +325,21 @@ export default function ReportsScreen() {
               />
               {categories.slice(0, 6).map((c, idx) => {
                 const cat = getCategory(c.category);
+                const b = getRangeBounds(range, new Date());
                 return (
-                  <View key={c.category} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
+                  <Pressable
+                    key={c.category}
+                    style={[styles.catRow, idx !== 0 && styles.catRowBorder]}
+                    onPress={() => router.push(txnLink({ type: 'expense', category: c.category, ...rangeBounds(b.startMonth, b.startYear, b.endMonth, b.endYear) }))}
+                    accessibilityRole="link"
+                    accessibilityLabel={`${cat?.label ?? c.category} ${fmt(c.total)}, see the entries`}
+                  >
                     <View style={styles.catHeader}>
                       <Text style={styles.catLabel}>{cat?.icon ?? '💰'} {cat?.label ?? c.category}</Text>
-                      <Text style={styles.catValue}>{fmt(c.total)}</Text>
+                      <Text style={styles.catValue}>{fmt(c.total)} ›</Text>
                     </View>
                     <MiniBar percent={(c.total / maxCategoryTotal) * 100} color={cat?.color} />
-                  </View>
+                  </Pressable>
                 );
               })}
             </>
