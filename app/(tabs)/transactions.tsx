@@ -13,7 +13,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
 import { CategoryPicker } from '../../components/CategoryPicker';
@@ -29,6 +29,7 @@ import {
   updateTransaction,
   deleteTransaction,
   getTransactionsPage,
+  TransactionPageSummary,
   getRecurring,
   repeatTransactionMonthly,
   Transaction,
@@ -40,6 +41,7 @@ import { monthlyEquivalent, EntryPeriod } from '../../utils/calculations';
 import { todayLocalIso, entryDateError, monthYearOf } from '../../utils/dates';
 import { useCategories } from '../../context/CategoriesContext';
 import { parseAmount } from '../../utils/amount';
+import { filterFromParams } from '../../utils/txnLink';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -81,6 +83,12 @@ export default function TransactionsScreen() {
   const [listLoading, setListLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  // Set when a figure on Home or Reports was tapped: that category / date range, shown as chips.
+  const [link, setLink] = useState<{ category?: string; from?: string; to?: string; label?: string } | null>(null);
+  const [summary, setSummary] = useState<TransactionPageSummary | null>(null);
+  const params = useLocalSearchParams();
+  const fromLink = filterFromParams(params);
+  const linkId = fromLink?.n;
   // Bumped per reload so a slow response for an older search can't overwrite a newer one.
   const requestId = useRef(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -108,22 +116,23 @@ export default function TransactionsScreen() {
     setListLoading(true);
     try {
       // Transactions first: the server posts any due repeating entries while serving this request.
-      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, limit: PAGE_SIZE });
+      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: link?.from, to: link?.to, limit: PAGE_SIZE });
       if (id !== requestId.current) return;
       setItems(page.items);
       setNextCursor(page.nextCursor);
+      setSummary(page.summary ?? null);
       setRules(await getRecurring());
     } finally {
       if (id === requestId.current) setListLoading(false);
     }
-  }, [user, search, typeFilter]);
+  }, [user, search, typeFilter, link]);
 
   const loadMore = async () => {
     if (!nextCursor || listLoading) return;
     const id = requestId.current;
     setListLoading(true);
     try {
-      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, limit: PAGE_SIZE, cursor: nextCursor });
+      const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: link?.from, to: link?.to, limit: PAGE_SIZE, cursor: nextCursor });
       if (id !== requestId.current) return;
       setItems((prev) => [...prev, ...page.items]);
       setNextCursor(page.nextCursor);
@@ -142,7 +151,22 @@ export default function TransactionsScreen() {
       loadRef.current().catch(() => {});
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, typeFilter]);
+  }, [search, typeFilter, link]);
+
+  // A tapped figure arrives as route params: apply its filters (a new `n` re-applies even the same ones).
+  useEffect(() => {
+    if (!fromLink) return;
+    setLink({ category: fromLink.category, from: fromLink.from, to: fromLink.to, label: fromLink.label });
+    setTypeFilter(fromLink.type ?? 'all');
+    setSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkId]);
+
+  const clearLink = () => {
+    setLink(null);
+    setTypeFilter('all');
+    router.setParams({ n: undefined, type: undefined, category: undefined, from: undefined, to: undefined, label: undefined });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -301,6 +325,35 @@ export default function TransactionsScreen() {
           </Pressable>
         )}
       </View>
+
+      {link && (
+        <View style={styles.linkBar}>
+          <Pressable style={styles.linkBack} onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={18} color={COLORS.accent} />
+            <Text style={styles.linkBackText}>Back</Text>
+          </Pressable>
+          {link.category && (
+            <Pressable style={styles.linkChip} onPress={() => setLink((l) => (l ? { ...l, category: undefined } : l))} accessibilityLabel={`Remove ${getCategory(link.category)?.label ?? link.category} filter`}>
+              <Text style={styles.linkChipText}>{getCategory(link.category)?.label ?? link.category} ✕</Text>
+            </Pressable>
+          )}
+          {link.label && (
+            <Pressable style={styles.linkChip} onPress={() => setLink((l) => (l ? { ...l, from: undefined, to: undefined, label: undefined } : l))} accessibilityLabel={`Remove ${link.label} filter`}>
+              <Text style={styles.linkChipText}>{link.label} ✕</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={clearLink} hitSlop={8} accessibilityRole="button">
+            <Text style={styles.linkClear}>Clear all</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {summary && (link || query || typeFilter !== 'all') && (
+        <Text style={styles.summaryText}>
+          {summary.count} {summary.count === 1 ? 'entry' : 'entries'}
+          {typeFilter === 'expense' ? ` · ${fmt(summary.expense)}` : typeFilter === 'income' ? ` · ${fmt(summary.income)}` : ''}
+        </Text>
+      )}
 
       <View style={styles.filterRow}>
         {TYPE_FILTERS.map((f) => (
@@ -503,6 +556,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: COLORS.text, fontSize: 22, fontWeight: '700' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  linkBar: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: SPACING.xs, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xs },
+  linkBack: { flexDirection: 'row', alignItems: 'center', marginRight: SPACING.xs },
+  linkBackText: { color: COLORS.accent, fontSize: 13, fontWeight: '600' },
+  linkChip: { backgroundColor: COLORS.accent + '22', borderColor: COLORS.accent, borderWidth: 1, borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 4 },
+  linkChipText: { color: COLORS.accent, fontSize: 12, fontWeight: '600' },
+  linkClear: { color: COLORS.textMuted, fontSize: 12, textDecorationLine: 'underline' },
+  summaryText: { color: COLORS.textMuted, fontSize: 13, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xs },
   repeatChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 6 },
   repeatChipText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
   repeatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md, marginTop: SPACING.xs },

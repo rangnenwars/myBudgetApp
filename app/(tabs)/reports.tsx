@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { monthFilter, rangeBounds, txnLink } from '../../utils/txnLink';
 import { LineChart, PieChart } from 'react-native-chart-kit';
 import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
@@ -257,11 +258,16 @@ export default function ReportsScreen() {
                 bezier
                 style={styles.chart}
                 fromZero
+                onDataPointClick={({ index }) => {
+                  const p = series[index];
+                  if (p) router.push(txnLink({ ...(metric === 'net' ? {} : { type: metric }), ...monthFilter(p.year, p.month) }));
+                }}
               />
             ) : (
               <Text style={styles.emptyText}>No data in this range yet.</Text>
             )}
           </View>
+          {series.length > 0 && <Text style={styles.projectionMuted}>Tap a point to see that month's entries.</Text>}
         </Card>
 
         {netWorthTrend.length > 1 && (
@@ -291,14 +297,21 @@ export default function ReportsScreen() {
               />
               {categories.slice(0, 6).map((c, idx) => {
                 const cat = getCategory(c.category);
+                const b = getRangeBounds(range, new Date());
                 return (
-                  <View key={c.category} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
+                  <Pressable
+                    key={c.category}
+                    style={[styles.catRow, idx !== 0 && styles.catRowBorder]}
+                    onPress={() => router.push(txnLink({ type: 'expense', category: c.category, ...rangeBounds(b.startMonth, b.startYear, b.endMonth, b.endYear) }))}
+                    accessibilityRole="link"
+                    accessibilityLabel={`${cat?.label ?? c.category} ${fmt(c.total)}, see the entries`}
+                  >
                     <View style={styles.catHeader}>
                       <Text style={styles.catLabel}>{cat?.icon ?? '💰'} {cat?.label ?? c.category}</Text>
-                      <Text style={styles.catValue}>{fmt(c.total)}</Text>
+                      <Text style={styles.catValue}>{fmt(c.total)} ›</Text>
                     </View>
                     <MiniBar percent={(c.total / maxCategoryTotal) * 100} color={cat?.color} />
-                  </View>
+                  </Pressable>
                 );
               })}
             </>

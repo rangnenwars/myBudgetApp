@@ -141,7 +141,7 @@ describe('GET /transactions/page', () => {
     const { accessToken } = await registerUser();
     const other = await registerUser();
     await seed(other.accessToken);
-    expect((await request(app).get('/api/v1/transactions/page').set(auth(accessToken))).body).toEqual({ items: [], nextCursor: null });
+    expect((await request(app).get('/api/v1/transactions/page').set(auth(accessToken))).body).toEqual({ items: [], nextCursor: null, summary: { count: 0, income: 0, expense: 0 } });
     expect((await request(app).get('/api/v1/transactions/page').query({ cursor: 'x' }).set(auth(accessToken))).status).toBe(400);
     expect((await request(app).get('/api/v1/transactions/page').query({ limit: 1000 }).set(auth(accessToken))).status).toBe(400);
   });

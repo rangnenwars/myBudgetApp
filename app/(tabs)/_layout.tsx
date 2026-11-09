@@ -12,6 +12,8 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      // Back after a tap-through (Home or Reports to a filtered list) returns to the tab you came from.
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.accent,

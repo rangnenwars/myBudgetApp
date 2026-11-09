@@ -152,7 +152,7 @@ Query (both optional): `month` (1–12), `year` (2000–2100) — omit both for 
 ### `GET /transactions/page` 🔒
 What the Transactions screen uses: one newest-first page with search and filters done in the database (keyset pagination on `(date, id)`, served by `idx_transactions_user_date`), so the app never loads a user's whole history.
 Query (all optional): `limit` (1–200, default 50) · `cursor` (the `nextCursor` from the previous page) · `q` (≤100 chars; case-insensitive match on note, subcategory or category name — `%`/`_` are literal — or an exact amount when numeric) · `type` (`income`|`expense`) · `category` (key) · `from` / `to` (YYYY-MM-DD, inclusive)
-→ **200** `{ items: Transaction[], nextCursor: string | null }` — `null` means there are no more rows
+→ **200** `{ items: Transaction[], nextCursor: string | null, summary?: { count, income, expense } }` — `nextCursor: null` means there are no more rows. `summary` is what all the filters match (not just this page) and is sent **only on the first page** (no `cursor`); the app shows it as "12 entries · ₹8,420" when a figure on Home or Reports was tapped through to this list.
 Errors: 400 bad cursor, limit or date
 
 ### `GET /transactions/range?startMonth=&startYear=&endMonth=&endYear=` 🔒
@@ -398,11 +398,12 @@ No query. The day of the month by which this month's income has paid for everyth
 → **200**
 ```json
 { "year": 2026, "month": 10, "daysInMonth": 31, "income": 60000, "incomeSource": "repeating", "committed": 15000,
-  "items": [ { "kind": "loan", "label": "Home loan", "amount": 15000 } ],
+  "items": [ { "kind": "loan", "id": 3, "label": "Home loan", "amount": 15000 } ],
   "share": 0.25, "day": 8, "daysFree": 23, "status": "ok", "freeDate": "2026-10-08",
   "previous": { "weekStart": "2026-09-28", "day": 10 }, "daysEarlier": 2,
   "loans": [ { "id": 3, "name": "Home loan", "emi": 15000, "outstanding": 900000, "interest_rate": null } ] }
 ```
+Each `items[].id` is the loan's or repeating rule's id, so the app can open it when the line is tapped. `GET /forecast` month lines carry the same `id` (absent on the estimated average income).
 `status` is `ok`, `over` (commitments ≥ income, `daysFree` 0, no `freeDate`) or `no_income` (`day` null). `day` is 0 when nothing is committed. `previous` / `daysEarlier` compare with the first reading stored for the previous week (table `free_money_snapshots`, one row per user per Monday-start week, written the first time the endpoint is called in a week and never updated); both are null on a user's first week. `daysEarlier` is positive when the day moved earlier. `loans` feeds the "what if I prepay" preview, which the client works out with `computePartPayment`.
 
 ---

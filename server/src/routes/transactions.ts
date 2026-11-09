@@ -145,7 +145,23 @@ router.get(
 
     const items = rows.slice(0, q.limit).map((r) => r.txn);
     const last = items[items.length - 1];
-    res.json({ items, nextCursor: rows.length > q.limit && last ? `${last.date}_${last.id}` : null });
+
+    // What the filters add up to, for the "12 entries, ₹8,420" line. Only the first
+    // page carries it: later pages add a cursor condition, which would skew the sum.
+    let summary: { count: number; income: number; expense: number } | undefined;
+    if (!q.cursor) {
+      const [agg] = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+          income: sql<number>`coalesce(sum(${transactions.amount}) filter (where ${transactions.type} = 'income'), 0)::float8`,
+          expense: sql<number>`coalesce(sum(${transactions.amount}) filter (where ${transactions.type} = 'expense'), 0)::float8`,
+        })
+        .from(transactions)
+        .innerJoin(categories, eq(categories.key, transactions.category))
+        .where(and(...conditions));
+      summary = { count: agg.count, income: Math.round(agg.income * 100) / 100, expense: Math.round(agg.expense * 100) / 100 };
+    }
+    res.json({ items, nextCursor: rows.length > q.limit && last ? `${last.date}_${last.id}` : null, ...(summary ? { summary } : {}) });
   })
 );
 

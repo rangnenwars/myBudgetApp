@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
 import { withFeature } from '../../components/FeatureGate';
@@ -8,6 +8,7 @@ import { ScreenHeader, SectionTitle, fmtInr } from '../../components/ScreenKit';
 import { COLORS, SPACING } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { getForecast, Forecast, ForecastItem } from '../../utils/database';
+import { useOpenBill } from '../../components/useOpenBill';
 
 /** "15 Mar" for a YYYY-MM-DD date. */
 const dayText = (iso: string): string => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
@@ -23,6 +24,8 @@ function PlanAheadMonthScreen() {
   const { ym, view } = useLocalSearchParams<{ ym: string; view?: string }>();
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const openBill = useOpenBill(() => setReloadKey((k) => k + 1));
   const [year, month] = String(ym ?? '').split('-').map(Number);
 
   useFocusEffect(
@@ -35,7 +38,7 @@ function PlanAheadMonthScreen() {
       return () => {
         active = false;
       };
-    }, [user?.id])
+    }, [user?.id, reloadKey])
   );
 
   const m = forecast?.months.find((x) => x.year === year && x.month === month);
@@ -61,12 +64,12 @@ function PlanAheadMonthScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <SectionTitle>Money in</SectionTitle>
         <Card>
-          {income.length === 0 ? <Text style={styles.muted}>No repeating income in this month.</Text> : income.map((it, i) => <Line key={i} text={itemText(it)} amount={fmtInr(it.amount)} first={i === 0} />)}
+          {income.length === 0 ? <Text style={styles.muted}>No repeating income in this month.</Text> : income.map((it, i) => <Line key={i} text={itemText(it)} amount={fmtInr(it.amount)} first={i === 0} onOpen={openBill.canOpen(it.kind, it.id) ? () => openBill.open(it.kind, it.id!) : undefined} />)}
         </Card>
 
         <SectionTitle>Fixed bills</SectionTitle>
         <Card>
-          {bills.length === 0 ? <Text style={styles.muted}>No repeating bills or EMIs in this month.</Text> : bills.map((it, i) => <Line key={i} text={itemText(it)} amount={fmtInr(it.amount)} first={i === 0} hot={it.frequency != null && it.frequency !== 'monthly' && left < 0} />)}
+          {bills.length === 0 ? <Text style={styles.muted}>No repeating bills or EMIs in this month.</Text> : bills.map((it, i) => <Line key={i} text={itemText(it)} amount={fmtInr(it.amount)} first={i === 0} hot={it.frequency != null && it.frequency !== 'monthly' && left < 0} onOpen={openBill.canOpen(it.kind, it.id) ? () => openBill.open(it.kind, it.id!) : undefined} />)}
         </Card>
 
         {likely && (
@@ -87,17 +90,21 @@ function PlanAheadMonthScreen() {
           <Text style={[styles.totalValue, { color: left < 0 ? COLORS.red : COLORS.positive }]}>{signedInr(left)}</Text>
         </Card>
       </ScrollView>
+      {openBill.sheet}
     </View>
   );
 }
 
-const Line: React.FC<{ text: string; amount: string; first: boolean; hot?: boolean }> = ({ text, amount, first, hot }) => (
-  <View style={[styles.line, !first && styles.lineBorder]}>
+const Line: React.FC<{ text: string; amount: string; first: boolean; hot?: boolean; onOpen?: () => void }> = ({ text, amount, first, hot, onOpen }) => (
+  <Pressable style={[styles.line, !first && styles.lineBorder]} disabled={!onOpen} onPress={onOpen} accessibilityRole={onOpen ? 'button' : undefined} accessibilityLabel={onOpen ? `${text}, ${amount}, open` : undefined}>
     <Text style={[styles.lineText, hot && { color: COLORS.red }]} numberOfLines={2}>
       {text}
     </Text>
-    <Text style={[styles.lineAmount, hot && { color: COLORS.red }]}>{amount}</Text>
-  </View>
+    <Text style={[styles.lineAmount, hot && { color: COLORS.red }]}>
+      {amount}
+      {onOpen ? ' ›' : ''}
+    </Text>
+  </Pressable>
 );
 
 export default withFeature('forecast', PlanAheadMonthScreen);

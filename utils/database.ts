@@ -143,7 +143,16 @@ export interface TransactionPageQuery {
 }
 
 /** One newest-first page with server-side search/filters; pass the returned nextCursor to get the next page (null = no more). */
-export const getTransactionsPage = async (query: TransactionPageQuery): Promise<{ items: Transaction[]; nextCursor: string | null }> => {
+/** What the filters add up to; only sent with the first page. */
+export interface TransactionPageSummary {
+  count: number;
+  income: number;
+  expense: number;
+}
+
+export const getTransactionsPage = async (
+  query: TransactionPageQuery
+): Promise<{ items: Transaction[]; nextCursor: string | null; summary?: TransactionPageSummary }> => {
   const params = Object.fromEntries(Object.entries(query).filter(([, v]) => v !== undefined && v !== null && v !== ''));
   const { data } = await api.get('/transactions/page', { params });
   return data;

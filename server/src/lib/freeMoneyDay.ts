@@ -9,6 +9,8 @@ import { computeFreeMoneyDay, monthlyEquivalent } from '../calculations';
 
 export interface Commitment {
   kind: 'loan' | 'repeating';
+  /** The loan or repeating rule this line comes from, so the app can open it. */
+  id: number;
   label: string;
   /** Monthly amount. */
   amount: number;
@@ -99,10 +101,10 @@ export const getFreeMoneyDay = async (userId: number) => {
   const income = await monthlyIncome(userId, repeatingIncome, today);
 
   const items: Commitment[] = [
-    ...countedLoans.map((l) => ({ kind: 'loan' as const, label: loansOn ? l.name : 'Loan EMI', amount: Math.min(l.emi, l.outstanding) })),
+    ...countedLoans.map((l) => ({ kind: 'loan' as const, id: l.id, label: loansOn ? l.name : 'Loan EMI', amount: Math.min(l.emi, l.outstanding) })),
     ...rules
       .filter((r) => r.rule.type === 'expense')
-      .map((r) => ({ kind: 'repeating' as const, label: r.rule.note?.trim() || r.label, amount: monthlyEquivalent(r.rule.amount, r.rule.frequency) })),
+      .map((r) => ({ kind: 'repeating' as const, id: r.rule.id, label: r.rule.note?.trim() || r.label, amount: monthlyEquivalent(r.rule.amount, r.rule.frequency) })),
   ].sort((a, b) => b.amount - a.amount);
   const committed = items.reduce((s, i) => s + i.amount, 0);
 

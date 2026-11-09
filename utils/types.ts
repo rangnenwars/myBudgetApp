@@ -167,7 +167,7 @@ export interface FreeMoneyDayInfo {
   income: number;
   incomeSource: 'repeating' | 'average' | 'this_month';
   committed: number;
-  items: { kind: 'loan' | 'repeating'; label: string; amount: number }[];
+  items: { kind: 'loan' | 'repeating'; id: number; label: string; amount: number }[];
   share: number;
   day: number | null;
   daysFree: number;
@@ -213,6 +213,8 @@ export interface LedgerEntry {
 /** One line of a Plan ahead month; computed by GET /forecast. */
 export interface ForecastItem {
   kind: 'income' | 'bill' | 'loan';
+  /** The repeating rule (income, bill) or loan this line comes from; absent for the estimated average income. */
+  id?: number;
   label: string;
   amount: number;
   /** YYYY-MM-DD, or null for an estimated average income. */

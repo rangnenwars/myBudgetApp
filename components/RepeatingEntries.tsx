@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
@@ -25,12 +25,14 @@ const fmtDue = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('
 interface Props {
   visible: boolean;
   rules: RecurringTransaction[];
+  /** Open straight into this rule's edit view (from a tapped bill on Plan ahead or the free-money day). */
+  openId?: number | null;
   onClose: () => void;
   /** Called after a rule was edited or stopped, so the caller can reload. */
   onChanged: () => void;
 }
 
-export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onChanged }) => {
+export const RepeatingEntries: React.FC<Props> = ({ visible, rules, openId, onClose, onChanged }) => {
   const { getCategory } = useCategories();
   const [editing, setEditing] = useState<RecurringTransaction | null>(null);
   const [amount, setAmount] = useState('');
@@ -56,6 +58,13 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
     setEndTried(false);
     setError(null);
   };
+
+  useEffect(() => {
+    if (!visible || openId == null) return;
+    const rule = rules.find((r) => r.id === openId);
+    if (rule) startEdit(rule);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, openId]);
 
   const onSave = async () => {
     if (!editing) return;
@@ -89,6 +98,7 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
       await updateRecurring(editing.id, patch);
       setEditing(null);
       onChanged();
+      if (openId != null) onClose();
     } catch (err) {
       setError(apiErrorMessage(err, 'Could not update this repeating entry.'));
     } finally {
@@ -105,6 +115,7 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
         await deleteRecurring(rule.id);
         setEditing(null);
         onChanged();
+        if (openId != null) onClose();
       } catch (err) {
         setError(apiErrorMessage(err, 'Could not stop this repeating entry.'));
       } finally {
@@ -180,8 +191,8 @@ export const RepeatingEntries: React.FC<Props> = ({ visible, rules, onClose, onC
               <Pressable style={styles.stopBtn} onPress={onStop} disabled={busy}>
                 <Text style={styles.stopBtnText}>Stop repeating</Text>
               </Pressable>
-              <Pressable style={styles.backLink} onPress={() => setEditing(null)}>
-                <Text style={styles.backLinkText}>Back to list</Text>
+              <Pressable style={styles.backLink} onPress={() => (openId != null ? close() : setEditing(null))}>
+                <Text style={styles.backLinkText}>{openId != null ? 'Close' : 'Back to list'}</Text>
               </Pressable>
             </>
           ) : rules.length === 0 ? (
