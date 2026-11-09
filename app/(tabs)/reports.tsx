@@ -79,16 +79,16 @@ const chartConfig = {
 
 type ReportsView = 'monthly' | 'categories' | 'overview';
 const VIEW_OPTIONS: { key: ReportsView; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
   { key: 'monthly', label: 'Monthly' },
   { key: 'categories', label: 'Categories' },
-  { key: 'overview', label: 'Overview' },
 ];
 
 export default function ReportsScreen() {
   const { user, hasFeature } = useAuth();
   const { getCategory } = useCategories();
-  // Monthly is the main view; Overview is the original Reports screen. Home's "This month" card opens ?view=monthly.
-  const [view, setView] = useState<ReportsView>('monthly');
+  // Reports opens on Overview, the first tab. Home's "This month" card opens ?view=monthly.
+  const [view, setView] = useState<ReportsView>('overview');
   const { view: viewParam, n: viewNonce } = useLocalSearchParams<{ view?: string; n?: string }>();
   useEffect(() => {
     if (viewParam === 'monthly' || viewParam === 'categories' || viewParam === 'overview') setView(viewParam);
