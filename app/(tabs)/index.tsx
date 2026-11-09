@@ -8,21 +8,19 @@ import { BudgetClassBadge } from '../../components/BudgetClassBadge';
 import { ProGate } from '../../components/ProGate';
 import { QuickAddSheet } from '../../components/QuickAddSheet';
 import { FreeMoneyCard } from '../../components/FreeMoneyCard';
-import { PlanAheadCard } from '../../components/PlanAheadCard';
 import { MoreFeaturesLink } from '../../components/MoreFeaturesLink';
-import { BudgetCard } from '../../components/BudgetCard';
+import { HomeHeroCard } from '../../components/HomeHeroCard';
+import { RecentTransactions } from '../../components/RecentTransactions';
 import { PeopleButton } from '../../components/PeopleButton';
-import { ThisMonthCard } from '../../components/ThisMonthCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCategories } from '../../context/CategoriesContext';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 import { getMonthSummary, getCategoryBreakdown, getBudgets, BudgetStatus, CategoryTotal } from '../../utils/database';
-import { computeCategoryDeltas, computeSavingsRate, bucketForGroup, CategoryDelta, CategoryBucket } from '../../utils/calculations';
+import { computeCategoryDeltas, computeSavingsRate, CategoryDelta } from '../../utils/calculations';
 import { shiftMonth } from '../../utils/dates';
 import { monthFilter, txnLink } from '../../utils/txnLink';
 
-const BUCKET_LABEL: Record<CategoryBucket, string> = { expense: 'Expenses', loan: 'Loan payments', investment: 'Investments' };
-const BUCKET_COLOR: Record<CategoryBucket, string> = { expense: COLORS.red, loan: COLORS.blue, investment: COLORS.purple };
+
 
 const fmt = (n: number) =>
   '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -39,7 +37,6 @@ export default function DashboardScreen() {
   const [topCategories, setTopCategories] = useState<{ category: string; total: number }[]>([]);
   const [deltas, setDeltas] = useState<CategoryDelta[]>([]);
   const [prevExpense, setPrevExpense] = useState(0);
-  const [breakdown, setBreakdown] = useState<Record<CategoryBucket, number>>({ expense: 0, loan: 0, investment: 0 });
   // Budgets at 80% or more of their limit in the viewed month.
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -71,13 +68,6 @@ export default function DashboardScreen() {
         setPrevExpense(prevCategories.reduce((sum, c) => sum + c.total, 0));
         setTopCategories(monthCategories.slice(0, 5));
 
-        const buckets: Record<CategoryBucket, number> = { expense: 0, loan: 0, investment: 0 };
-        for (const c of monthCategories) {
-          const bucket = bucketForGroup(getCategory(c.category)?.group ?? '');
-          buckets[bucket] += c.total;
-        }
-        setBreakdown(buckets);
-
         const asTotals = (rows: CategoryTotal[], m: number, y: number) => rows.map((c) => ({ type: 'expense' as const, amount: c.total, category: c.category, month: m, year: y }));
         setDeltas(
           computeCategoryDeltas(asTotals(monthCategories, month, year), asTotals(prevCategories, prev.month, prev.year), 'expense')
@@ -99,6 +89,12 @@ export default function DashboardScreen() {
   );
 
   const maxCategoryTotal = topCategories[0]?.total ?? 1;
+  // One line for the top strip: the worst budgets first, e.g. "Food over by ₹300 · Travel 85% used".
+  const alertText = (() => {
+    const sorted = [...budgetAlerts].sort((a, b) => b.ratio - a.ratio);
+    const shown = sorted.slice(0, 2).map((b) => `${getCategory(b.category)?.label ?? b.category} ${b.status === 'over' ? `over by ${fmt(b.spent - b.monthly_limit)}` : `${Math.round(b.ratio * 100)}% used`}`);
+    return shown.join(' · ') + (sorted.length > 2 ? ` · +${sorted.length - 2} more` : '');
+  })();
   const savingsRate = computeSavingsRate(summary);
 
   return (
@@ -159,40 +155,19 @@ export default function DashboardScreen() {
         </Pressable>
       )}
 
-      <ThisMonthCard title={isCurrentMonth ? 'This month' : viewLabel} total={summary.totalExpense} previousTotal={prevExpense} />
-
-      <BudgetCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} refreshKey={refreshKey} />
-
       {budgetAlerts.length > 0 && (
-        <Pressable onPress={() => router.push('/budgets')}>
-          <Card style={styles.alertCard}>
-            <Text style={styles.alertTitle}>Budget alerts</Text>
-            {budgetAlerts.map((b) => {
-              const cat = getCategory(b.category);
-              const over = b.status === 'over';
-              return (
-                <View key={b.category} style={styles.catRow}>
-                  <View style={styles.catHeader}>
-                    <Text style={styles.catLabel}>
-                      {cat?.icon ?? '💰'} {cat?.label ?? b.category}
-                    </Text>
-                    <Text style={[styles.catValue, { color: over ? COLORS.red : COLORS.yellow }]}>
-                      {over ? `${fmt(b.spent - b.monthly_limit)} over` : `${Math.round(b.ratio * 100)}% used`}
-                    </Text>
-                  </View>
-                  <MiniBar percent={b.ratio * 100} color={over ? COLORS.red : COLORS.yellow} />
-                </View>
-              );
-            })}
-          </Card>
+        <Pressable style={styles.alertStrip} onPress={() => router.push('/budgets')} accessibilityRole="button" accessibilityLabel={`Budget alert: ${alertText}`}>
+          <Ionicons name="alert-circle-outline" size={18} color={COLORS.yellow} />
+          <Text style={styles.alertText} numberOfLines={2}>
+            {alertText}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
         </Pressable>
       )}
 
+      <HomeHeroCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} spent={summary.totalExpense} previousSpent={prevExpense} refreshKey={refreshKey} />
+
       {isCurrentMonth && <FreeMoneyCard refreshKey={refreshKey} />}
-
-      {isCurrentMonth && <PlanAheadCard refreshKey={refreshKey} />}
-
-      <MoreFeaturesLink />
 
       <PeopleButton
         refreshKey={refreshKey}
@@ -204,22 +179,6 @@ export default function DashboardScreen() {
         }
       />
 
-      <Text style={styles.sectionTitle}>{isCurrentMonth ? "This month's" : viewLabel} breakdown</Text>
-      <Card>
-        {breakdown.expense + breakdown.loan + breakdown.investment === 0 ? (
-          <Text style={styles.emptyText}>{isCurrentMonth ? 'Nothing logged yet — try adding a transaction.' : 'Nothing logged this month.'}</Text>
-        ) : (
-          (['expense', 'loan', 'investment'] as CategoryBucket[]).map((bucket, idx) => (
-            <View key={bucket} style={[styles.catRow, idx !== 0 && styles.catRowBorder]}>
-              <View style={styles.catHeader}>
-                <Text style={styles.catLabel}>{BUCKET_LABEL[bucket]}</Text>
-                <Text style={[styles.catValue, { color: BUCKET_COLOR[bucket] }]}>{fmt(breakdown[bucket])}</Text>
-              </View>
-            </View>
-          ))
-        )}
-      </Card>
-
       <Card>
         <View style={styles.summaryRow}>
           <Pressable style={styles.summaryItem} onPress={() => router.push(txnLink({ type: 'income', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Income ${fmt(summary.totalIncome)}, see the entries`}>
@@ -230,18 +189,10 @@ export default function DashboardScreen() {
             <Text style={styles.summaryLabel}>Expense ›</Text>
             <Text style={[styles.summaryValue, { color: COLORS.red }]}>{fmt(summary.totalExpense)}</Text>
           </Pressable>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.savingsRow}>
-          <Text style={styles.summaryLabel}>Net savings</Text>
-          <Text
-            style={[
-              styles.savingsValue,
-              { color: summary.netSavings >= 0 ? COLORS.accent : COLORS.red },
-            ]}
-          >
-            {fmt(summary.netSavings)}
-          </Text>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Net savings</Text>
+            <Text style={[styles.summaryValue, { color: summary.netSavings >= 0 ? COLORS.accent : COLORS.red }]}>{fmt(summary.netSavings)}</Text>
+          </View>
         </View>
       </Card>
 
@@ -271,7 +222,19 @@ export default function DashboardScreen() {
             );
           })
         )}
+        {topCategories.length > 0 && (
+          <Pressable
+            style={styles.allCats}
+            onPress={() => router.push({ pathname: '/(tabs)/reports', params: { view: 'categories', n: String(Date.now()) } })}
+            accessibilityRole="link"
+            accessibilityLabel="All categories, open Reports"
+          >
+            <Text style={styles.allCatsText}>All categories ›</Text>
+          </Pressable>
+        )}
       </Card>
+
+      <RecentTransactions refreshKey={refreshKey} />
 
       <Text style={styles.sectionTitle}>Pro insights</Text>
       <ProGate
@@ -305,6 +268,8 @@ export default function DashboardScreen() {
           )}
         </Card>
       </ProGate>
+
+      <MoreFeaturesLink />
     </ScrollView>
 
     <Pressable style={styles.fab} onPress={() => setQuickOpen(true)} accessibilityRole="button" accessibilityLabel="Add an entry">
@@ -369,8 +334,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   accountsBtnText: { color: COLORS.accent, fontSize: 16, fontWeight: '700' },
-  alertCard: { borderColor: `${COLORS.yellow}66` },
-  alertTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', marginBottom: SPACING.xs },
+  alertStrip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderWidth: 1, borderColor: `${COLORS.yellow}66`, borderRadius: RADIUS.md, padding: SPACING.sm, backgroundColor: COLORS.card },
+  alertText: { flex: 1, color: COLORS.text, fontSize: 12.5 },
+  allCats: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder, paddingTop: SPACING.sm, alignItems: 'flex-end' },
+  allCatsText: { color: COLORS.accent, fontSize: 13, fontWeight: '600' },
   summaryCard: { marginTop: SPACING.sm },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryItem: { flex: 1 },

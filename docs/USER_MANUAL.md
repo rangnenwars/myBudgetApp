@@ -41,17 +41,21 @@ Icons at the top of the Dashboard: **bug** = report a problem · **gear** = sett
 
 ## 2. The dashboard
 
+From the top, the Dashboard shows only what matters, in this order:
+
 * **Month switcher** — the ‹ › arrows step back and forward through months.
-* **Income / Expense / Net savings** for the month shown.
-* **Monthly budget** card: what's left this month and about how much per day. With no budget yet, it offers **Set monthly budget**.
-* **Budgets** and **Accounts** shortcuts.
-* **Budget alerts** — categories at 80 % of their limit turn yellow, over 100 % turn red. Tap to open Budgets.
-* **Top expense categories** — your five biggest spending areas.
-* **Budget class badge** — a label (low, middle, high…) the app works out from your recent spending. It updates by itself.
-* **Free-money day** — the date by which your income has paid for every EMI and repeating bill; every day after it is yours to spend. Tap it for the breakdown and a "what if I prepay a loan" preview (section 2a).
-* **Orange plus button** — add an income or expense in a few taps (section 2b).
-* **Input expenses** button — fast monthly entry (section 4).
+* **Alert strip** — one line, shown only when needed: a reminder to confirm your email, and a budget alert when a category is near or over its limit (for example "Food over by ₹300 · Travel 85% used"). Tap the budget alert to open Budgets.
+* **Left this month** — what's left of your monthly budget and about how much per day, with "Spent ₹X · +N% vs last month" underneath (tap that line to open Monthly expenses in Reports). With no budget yet it shows what you've spent and offers **Set a monthly budget**.
+* **Money left after fixed bills** — how much of your income is yours to spend after EMIs and repeating bills. Tap it for the breakdown and the free-money day (section 2a). If Plan ahead is switched on for you, a **Plan ahead** link at the bottom opens the next 12 months.
+* **People** and **Accounts** buttons.
+* **Income / Expense / Net savings** for the month shown. Tap Income or Expense to see the entries behind it.
+* **Top expense categories** — your five biggest spending areas. Tap one to see its entries, or **All categories** to open Reports.
+* **Recent transactions** — your last three entries, with **See all**.
 * **Pro insights** — month-over-month changes and your savings rate (Pro).
+* **Explore more features** — shown until every optional feature is on for you.
+* **Budget class badge** (under the greeting) and the **orange plus button** (add an income or expense in a few taps, section 2b).
+
+The monthly breakdown into expenses, loan payments and investments moved to **Reports**.
 
 ### 2a. Free-money day
 
