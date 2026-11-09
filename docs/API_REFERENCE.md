@@ -518,6 +518,26 @@ Errors: 400 bad key or body, 404 unknown user
 
 ---
 
+## Paid plan — `/api/v1/plan` 🔒 and `/api/v1/admin/...` 🔒
+
+Full rules, rollout and safety are in [PAID_PLAN.md](PAID_PLAN.md). Access is decided on the server (`lib/access.ts`); the profile returned by `/auth/me`, `/auth/login` and `/auth/register` carries `accountKind`, `features` and `plan` (state, until, days left, price).
+
+**User** (`routes/plan.ts`)
+- `GET /plan` → the caller's access (`state`: company, exception, paid, trial, grace, none), end date, days left, price, whether they can renew.
+- `GET /plan/payment-details` → `{ upi_id, qr (data URL) }` shown on Renew.
+- `GET /plan/claims`, `POST /plan/claims` `{ txn_id, screenshot (base64 ≤ 2 MB), note? }`, `POST /plan/claims/:id/cancel`. Errors: 409 duplicate transaction ID or screenshot, 429 more than 3 a day, 409 one already waiting.
+
+**Admin** (`routes/adminPlan.ts`; reads allow support, writes need admin, password actions re-check the password)
+- Plan: `GET/PUT /admin/plan` (price, free months, notice days, included features), `GET /admin/plan/dry-run`, `POST /admin/plan/notify-existing`, `PUT /admin/plan/enforcement` (409 until the notice is sent; password), `GET /admin/plan/expiring`.
+- Payment details: `GET/PUT /admin/payment-details` (reads the QR with jsqr and matches it to the UPI ID; 422 `QR_UNREADABLE` needs a manual-check flag; password; emails every admin).
+- Payments: `GET /admin/payments?status=`, `GET /admin/payments/:id/screenshot` (admin only), `POST /admin/payments/:id/confirm` `{ amount_inr }`, `POST /admin/payments/:id/reject` `{ reason, resend? }`.
+- Per user: `POST /admin/users/:id/payments` (record a payment by hand), `GET /admin/users/:id/access`, `PUT /admin/users/:id/account-kind` `{ kind: 'customer'|'company' }`, `PUT /admin/users/:id/exception` `{ on, reason?, until? }` (`until` is a date; end of that day in India; empty means no end).
+- `GET /admin/exceptions?filter=all|ending_soon|no_end`.
+
+All changes are audit-logged.
+
+---
+
 ## Admin audit log — `/api/v1/admin/audit-log` 🔒🛡️
 
 Admin-only (`requireAdmin` — not `support`, since this is a record of what staff did, not an account-management action itself).

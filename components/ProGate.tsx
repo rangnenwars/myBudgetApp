@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { router } from 'expo-router';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,16 +12,18 @@ interface Props {
 }
 
 export const ProGate: React.FC<Props> = ({ title, description, children }) => {
-  const { isPro, setTier } = useAuth();
+  const { isPro, setTier, user } = useAuth();
   if (isPro) return <>{children}</>;
+  // Once the plan is on, the way in is paying for it; the test-mode button is for before that.
+  const enforced = !!user?.plan?.enforced && user.plan.state !== 'company';
 
   return (
     <View style={styles.wrap}>
       <Ionicons name="lock-closed" size={28} color={COLORS.proGold} />
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.desc}>{description}</Text>
-      <Pressable style={styles.cta} onPress={() => setTier('pro')}>
-        <Text style={styles.ctaText}>Try Pro (test mode)</Text>
+      <Pressable style={styles.cta} onPress={() => (enforced ? router.push('/plan') : setTier('pro'))}>
+        <Text style={styles.ctaText}>{enforced ? 'See your plan' : 'Try Pro (test mode)'}</Text>
       </Pressable>
     </View>
   );

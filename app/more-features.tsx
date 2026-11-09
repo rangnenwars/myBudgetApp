@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../components/Card';
 import { FeatureRequestSheet } from '../components/FeatureRequestSheet';
 import { Notice, ScreenHeader } from '../components/ScreenKit';
+import { PlanRow } from '../components/PlanRow';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { FeatureKey, priceLabel } from '../constants/features';
 import { useAuth } from '../context/AuthContext';
@@ -56,6 +57,7 @@ export default function MoreFeaturesScreen() {
           <View style={styles.center}>{failed ? <Text style={styles.muted}>Could not load this. Go back and try again.</Text> : <ActivityIndicator color={COLORS.accent} />}</View>
         ) : (
           <>
+            <PlanRow />
             {features.map((f) => (
               <Card key={f.key} style={styles.card}>
                 <View style={styles.rowBetween}>
@@ -74,7 +76,12 @@ export default function MoreFeaturesScreen() {
                 ) : (
                   <View style={styles.rowBetween}>
                     <Text style={styles.price}>{f.ended ? 'Access ended' : priceLabel(f.price, f.period)}</Text>
-                    {f.requested ? (
+                    {user?.plan?.enforced ? (
+                      // Once the plan is on, the way to get a feature back is renewing, not asking.
+                      <Pressable style={styles.btn} onPress={() => router.push('/renew')} accessibilityRole="button" accessibilityLabel={`Renew to turn on ${f.label}`}>
+                        <Text style={styles.btnText}>Renew</Text>
+                      </Pressable>
+                    ) : f.requested ? (
                       <Text style={styles.waiting}>Requested, waiting for your admin</Text>
                     ) : (
                       <Pressable style={styles.btn} onPress={() => setAsking(f)} accessibilityRole="button" accessibilityLabel={`Request access to ${f.label}`}>
@@ -86,7 +93,7 @@ export default function MoreFeaturesScreen() {
                 {!f.on && f.ended && <Text style={styles.muted}>Your {f.label} is switched off. Everything you saved is kept.</Text>}
               </Card>
             ))}
-            <Notice>Your admin switches features on after you ask. Anything you've saved stays safe if a feature is off.</Notice>
+            <Notice>{user?.plan?.enforced ? "One plan covers every feature here. Anything you've saved stays safe if a feature is off." : "Your admin switches features on after you ask. Anything you've saved stays safe if a feature is off."}</Notice>
           </>
         )}
       </ScrollView>

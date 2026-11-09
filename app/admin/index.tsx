@@ -15,6 +15,7 @@ import {
   UserFeatureAccess,
 } from '../../utils/database';
 import { FeatureKey } from '../../constants/features';
+import { UserAccessSection } from '../../components/admin/UserAccessSection';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 
@@ -162,6 +163,9 @@ export default function AdminUsersScreen() {
               <Ionicons name="stats-chart-outline" size={20} color={COLORS.textMuted} />
             </Pressable>
           )}
+          <Pressable onPress={() => router.push('/admin/plan')} hitSlop={6} accessibilityLabel="Plan and pricing">
+            <Ionicons name="card-outline" size={21} color={COLORS.textMuted} />
+          </Pressable>
           <Pressable onPress={() => router.push('/admin/features')} hitSlop={6} accessibilityLabel="Feature access">
             <Ionicons name="toggle-outline" size={22} color={COLORS.textMuted} />
           </Pressable>
@@ -260,7 +264,7 @@ export default function AdminUsersScreen() {
               ))}
             </View>
 
-            <Text style={styles.controlLabel}>Tier</Text>
+            <Text style={styles.controlLabel}>Tier (Pro insights and trends)</Text>
             <View style={styles.optionRow}>
               {(['standard', 'pro'] as const).map((t) => (
                 <Pressable
@@ -277,6 +281,8 @@ export default function AdminUsersScreen() {
             </>
             )}
 
+            {selected && <UserAccessSection userId={selected.id} isAdmin={isAdmin} isSelf={isSelf} />}
+
             <Text style={styles.controlLabel}>Feature access</Text>
             <Text style={styles.selfNote}>Home, Transactions, Reports, Budgets, Accounts, Input expenses and People are always on.</Text>
             {!access ? (
@@ -288,10 +294,14 @@ export default function AdminUsersScreen() {
                     <Text style={styles.featureName}>{f.label}</Text>
                     <Text style={styles.selfNote}>
                       {f.on
-                        ? `On · ${f.source === 'admin' ? `by ${f.changedByEmail ?? 'staff'}` : f.source === 'existing_data' ? 'had data before this change' : 'at sign-up'}`
-                        : f.requestedAt
-                          ? `Off · asked for it ${fmtDate(f.requestedAt)}`
-                          : 'Off'}
+                        ? f.viaPlan
+                          ? 'On · included in their plan'
+                          : `On · ${f.source === 'admin' ? `by ${f.changedByEmail ?? 'staff'}` : f.source === 'existing_data' ? 'had data before this change' : 'at sign-up'}`
+                        : f.denied
+                          ? 'Off · switched off by staff, even if their plan includes it'
+                          : f.requestedAt
+                            ? `Off · asked for it ${fmtDate(f.requestedAt)}`
+                            : 'Off'}
                     </Text>
                   </View>
                   <Switch

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api, apiErrorMessage, registerSessionExpiredHandler } from '../utils/api';
 import type { FeatureKey } from '../constants/features';
+import type { PlanInfo } from '../utils/planState';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens, hasSessionHint, REFRESH_VIA_COOKIE } from '../utils/tokenStorage';
 
 export type Tier = 'standard' | 'pro';
@@ -19,6 +20,10 @@ interface SessionUser {
   emailVerified: boolean;
   /** Optional features staff have switched on for this account (goals, loans, investments). */
   features: FeatureKey[];
+  /** 'company' accounts are staff and testers: full access, never charged. */
+  accountKind?: 'customer' | 'company';
+  /** Where the user stands on the paid plan; the server decides, the app only shows it. */
+  plan?: PlanInfo;
 }
 
 interface AuthContextValue {

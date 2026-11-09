@@ -413,6 +413,20 @@ CREATE INDEX idx_user_features_key_status ON user_features(feature_key, status);
 CREATE INDEX idx_user_features_requested ON user_features(requested_at) WHERE requested_at IS NOT NULL;
 
 -- ============================================================
+-- Paid plan (migration 0025). See PAID_PLAN.md.
+-- users.account_kind: 'customer' | 'company' (company: never charged).
+-- user_features.denied: staff switched this feature off for this user.
+-- access_grants: kind 'trial' | 'paid' | 'exception'; starts_at, ends_at (null = no end),
+--   revoked_at, reason, amount_inr, price kept at purchase, created_by.
+-- payment_settings: single row (id = 1): upi_id, qr_image (bytea, up to 1 MB), qr_verified.
+-- payment_claims: user_id, txn_id (partial unique for pending/confirmed), screenshot,
+--   screenshot_hash, status pending|confirmed|rejected|cancelled, amount_inr, grace_until,
+--   decided_by, decided_at, source user|admin. Screenshots purged 30 days after decision.
+-- access_notices: one row per user, notice stage and access_end, so each email is sent once.
+-- app_settings key 'plan' = price, trial months, notice days, features, enforced flags.
+-- ============================================================
+
+-- ============================================================
 -- app_settings — app-wide settings staff change without a redeploy.
 -- 'signup_features' = { "goals": bool, "loans": bool, "investments": bool }.
 -- ============================================================

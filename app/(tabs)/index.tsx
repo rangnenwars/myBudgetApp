@@ -10,6 +10,7 @@ import { QuickAddSheet } from '../../components/QuickAddSheet';
 import { FreeMoneyCard } from '../../components/FreeMoneyCard';
 import { MoreFeaturesLink } from '../../components/MoreFeaturesLink';
 import { HomeHeroCard } from '../../components/HomeHeroCard';
+import { PlanStrip } from '../../components/PlanStrip';
 import { RecentTransactions } from '../../components/RecentTransactions';
 import { PeopleButton } from '../../components/PeopleButton';
 import { useAuth } from '../../context/AuthContext';
@@ -154,6 +155,8 @@ export default function DashboardScreen() {
           <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
         </Pressable>
       )}
+
+      <PlanStrip />
 
       {budgetAlerts.length > 0 && (
         <Pressable style={styles.alertStrip} onPress={() => router.push('/budgets')} accessibilityRole="button" accessibilityLabel={`Budget alert: ${alertText}`}>

@@ -35,6 +35,11 @@ export const users = pgTable('users', {
   phone: text('phone'),
   passwordHash: text('password_hash').notNull(),
   tier: text('tier').notNull().default('pro'),
+  // 'customer' pays after the free period; 'company' is staff, testers and
+  // operations accounts: never expire, never charged, left out of customer
+  // counts and reminders (lib/access.ts). Only an admin changes it. This is
+  // who the account is; `role` is what it may do.
+  accountKind: text('account_kind', { enum: ['customer', 'company'] }).notNull().default('customer'),
   budgetClass: text('budget_class'),
   // 'admin' can manage every account via /api/v1/admin/users; 'support' can
   // only activate/deactivate one (routes/admin.ts enforces the split, not
@@ -65,6 +70,7 @@ export const users = pgTable('users', {
   uniqueIndex('idx_users_phone').on(table.phone).where(sql`${table.phone} IS NOT NULL`),
   check('users_phone_check', sql`${table.phone} ~ '^[+][1-9][0-9]{7,14}$'`),
   check('users_tier_check', sql`${table.tier} IN ('standard', 'pro')`),
+  check('users_account_kind_check', sql`${table.accountKind} IN ('customer', 'company')`),
   check('users_role_check', sql`${table.role} IN ('user', 'admin', 'support', 'system_manager')`),
   check('users_budget_class_check', sql`${table.budgetClass} IN ('low', 'middle', 'high', 'ultra_high', 'rich')`),
 ]);
@@ -555,6 +561,9 @@ export const userFeatures = pgTable('user_features', {
   // Checked at read time (lib/features.ts activeFeature): an ended row stays 'on' but counts as off,
   // so nothing has to run to switch it off and the user's data is never touched.
   expiresAt: timestamp('expires_at', { withTimezone: true }),
+  // Staff switched this feature off for this user on purpose: it stays off even
+  // while the user's plan (trial or paid) would otherwise include it.
+  denied: boolean('denied').notNull().default(false),
   // The user said they paid when they asked (staff still confirm before switching on).
   requestPaid: boolean('request_paid').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -579,3 +588,114 @@ export const appSettings = pgTable('app_settings', {
   updatedBy: bigint('updated_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ============================================================
+// access_grants — who has the plan (all optional features and Pro insights)
+// and until when. 'trial' is the free period from sign-up, 'paid' a year
+// confirmed by an admin, 'exception' staff giving one user access on purpose
+// (reason required; ends_on may be empty, which the admin list flags).
+// Checked when read (lib/access.ts), so an ended grant needs no job and
+// nothing the user saved is touched.
+// ============================================================
+export const accessGrants = pgTable('access_grants', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['trial', 'paid', 'exception'] }).notNull(),
+  startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+  // Null only for an exception with no end date.
+  endsAt: timestamp('ends_at', { withTimezone: true }),
+  reason: text('reason'),
+  // Paid grants: what was received, the plan price at the time, and the payment's transaction id.
+  amountInr: numeric('amount_inr', { precision: 10, scale: 2, mode: 'number' }),
+  priceInr: numeric('price_inr', { precision: 10, scale: 2, mode: 'number' }),
+  txnId: text('txn_id'),
+  grantedBy: bigint('granted_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedBy: bigint('revoked_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_access_grants_user').on(table.userId, table.endsAt),
+  index('idx_access_grants_kind_end').on(table.kind, table.endsAt),
+  check('access_grants_kind_check', sql`${table.kind} IN ('trial', 'paid', 'exception')`),
+  check('access_grants_end_check', sql`${table.kind} = 'exception' OR ${table.endsAt} IS NOT NULL`),
+  check('access_grants_reason_check', sql`${table.kind} <> 'exception' OR (${table.reason} IS NOT NULL AND length(btrim(${table.reason})) > 0)`),
+  check('access_grants_order_check', sql`${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}`),
+]);
+
+// ============================================================
+// payment_settings — the one row of payment details shown to every user: the
+// UPI id, the name, and the uploaded QR image (bytea, capped at 1 MB).
+// Changed only by an admin, with their password, and every admin is emailed.
+// ============================================================
+export const paymentSettings = pgTable('payment_settings', {
+  id: smallint('id').primaryKey().default(1),
+  upiId: text('upi_id').notNull(),
+  payeeName: text('payee_name').notNull(),
+  qrImage: bytea('qr_image').notNull(),
+  qrMimeType: text('qr_mime_type').notNull(),
+  qrSize: integer('qr_size').notNull(),
+  // The QR was read and its UPI id matched; false when an admin confirmed an unreadable QR by hand.
+  qrVerified: boolean('qr_verified').notNull().default(true),
+  updatedBy: bigint('updated_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check('payment_settings_single_row', sql`${table.id} = 1`),
+  check('payment_settings_qr_size_check', sql`${table.qrSize} <= 1048576`),
+]);
+
+// ============================================================
+// payment_claims — "I have paid": the user's transaction id and screenshot,
+// waiting for an admin to confirm the money arrived. A transaction id can
+// back one pending or confirmed claim only (partial unique index), so it
+// can't pay for two renewals. grace_until is a short extension of access
+// while the claim is checked, given once per access period.
+// ============================================================
+export const paymentClaims = pgTable('payment_claims', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status', { enum: ['pending', 'confirmed', 'rejected', 'cancelled'] }).notNull().default('pending'),
+  source: text('source', { enum: ['user', 'admin'] }).notNull().default('user'),
+  // Normalised: upper case letters and digits only.
+  txnId: text('txn_id').notNull(),
+  amountInr: numeric('amount_inr', { precision: 10, scale: 2, mode: 'number' }),
+  userNote: text('user_note'),
+  screenshot: bytea('screenshot'),
+  screenshotMimeType: text('screenshot_mime_type'),
+  screenshotSize: integer('screenshot_size'),
+  screenshotHash: text('screenshot_hash'),
+  graceUntil: timestamp('grace_until', { withTimezone: true }),
+  // The user's access end when they sent this, so grace is given once per access period.
+  forAccessEnd: timestamp('for_access_end', { withTimezone: true }),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  decidedBy: bigint('decided_by', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
+  decisionReason: text('decision_reason'),
+  // Rejected with "please send it again" rather than a flat no.
+  askedToResend: boolean('asked_to_resend').notNull().default(false),
+  grantId: bigint('grant_id', { mode: 'number' }).references(() => accessGrants.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex('idx_payment_claims_txn_live').on(table.txnId).where(sql`${table.status} IN ('pending', 'confirmed')`),
+  index('idx_payment_claims_status').on(table.status, table.createdAt),
+  index('idx_payment_claims_user').on(table.userId, table.createdAt),
+  check('payment_claims_status_check', sql`${table.status} IN ('pending', 'confirmed', 'rejected', 'cancelled')`),
+  check('payment_claims_source_check', sql`${table.source} IN ('user', 'admin')`),
+  check('payment_claims_txn_check', sql`${table.txnId} ~ '^[A-Z0-9]{8,35}$'`),
+  check('payment_claims_screenshot_check', sql`(${table.screenshot} IS NULL) = (${table.screenshotMimeType} IS NULL)`),
+  check('payment_claims_screenshot_size_check', sql`${table.screenshotSize} IS NULL OR ${table.screenshotSize} <= 3145728`),
+]);
+
+// ============================================================
+// access_notices — which reminder emails each user has had for each access
+// end date, so a repeated run can never send one twice.
+// ============================================================
+export const accessNotices = pgTable('access_notices', {
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['welcome', 'existing', 'd30', 'd7', 'd1', 'ended'] }).notNull(),
+  accessEnd: timestamp('access_end', { withTimezone: true }).notNull(),
+  sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  // True when the email was skipped on purpose (a more urgent one went instead).
+  suppressed: boolean('suppressed').notNull().default(false),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.kind, table.accessEnd] }),
+  check('access_notices_kind_check', sql`${table.kind} IN ('welcome', 'existing', 'd30', 'd7', 'd1', 'ended')`),
+]);

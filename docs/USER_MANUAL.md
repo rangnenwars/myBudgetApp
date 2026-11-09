@@ -158,6 +158,14 @@ Your friends don't need Prapanji, and nothing is sent to them. Your bank balance
 
 ---
 
+### Your plan
+
+**Settings, then Your plan** shows where you stand. New accounts get **free full access for 6 months**, counted from the day you signed up, to Goals, Loans, Investments, Plan ahead and Pro insights. After that, keeping them is **₹200 a year**. Home, Transactions, Budgets, Accounts, People and the Monthly and Categories reports are always free.
+
+You'll see a line on Home in the last 30 days, and emails at 30 days, 7 days and 1 day before, and when access ends. When it ends, those screens pause and **nothing you saved is deleted**; renewing turns them back on.
+
+**To renew:** Your plan, then **Renew**. Pay ₹200 by scanning the QR or using the UPI ID (or tap Open my UPI app), then add a screenshot of the payment and the transaction ID from your UPI app, and tap **I have paid**. We check that the money arrived, usually within a few hours and at most one working day; everything keeps working meanwhile, and you get an email receipt. Renewing early adds a year after your current end date, so no time is lost. Wrong ID? Cancel and send it again.
+
 ## 10. Reports and Pro features
 
 **Reports views.** Reports opens on **Overview** (the first tab of the top switch, next to **Monthly** and **Categories**). **Monthly expenses** lists your last 12 months of expenses, newest first, each with a bar and the change from the month before (hidden when the month before had no expenses). Months with no expenses show ₹0. The ‹ › arrows move to the 12 months before. Tap a month to see its biggest categories (the top three, then Others) and a **See all transactions** button that opens Transactions filtered to that month. Home has a small **This month** card with the same total and the change from last month; tap it to open Monthly. Overview is the Reports screen with the trend chart, category breakdown, loans and goals.

@@ -644,6 +644,10 @@ export interface UserFeatureAccess {
   requestedAt: string | null;
   /** When a paid period ends (ISO); null for access with no end. */
   expiresAt?: string | null;
+  /** Staff switched this off for this user on purpose, so it stays off even while their plan includes it. */
+  denied?: boolean;
+  /** On only because their plan (trial, paid, exception or company) includes it. */
+  viaPlan?: boolean;
 }
 
 export type SignupFeatureDefaults = Record<FeatureKey, boolean>;

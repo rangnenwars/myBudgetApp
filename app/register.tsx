@@ -86,6 +86,11 @@ export default function RegisterScreen() {
         returnKeyType="go"
       />
 
+      <View style={styles.freeNote}>
+        <Text style={styles.freeNoteTitle}>Free full access for 6 months</Text>
+        <Text style={styles.freeNoteText}>Then ₹200 a year to keep Goals, Loans, Investments, Plan ahead and Pro insights. The basics stay free.</Text>
+      </View>
+
       {error && <Text style={authStyles.error}>{error}</Text>}
 
       <PrimaryButton label="Create account" onPress={onSubmit} loading={submitting} style={styles.submit} submit />
@@ -95,4 +100,7 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   submit: { marginTop: 4 },
+  freeNote: { borderRadius: 12, borderWidth: 1, borderColor: '#1B7F4E55', backgroundColor: '#1B7F4E14', padding: 12, gap: 2 },
+  freeNoteTitle: { color: '#14251F', fontSize: 14, fontWeight: '700' },
+  freeNoteText: { color: '#44544E', fontSize: 12.5 },
 });
