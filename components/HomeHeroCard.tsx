@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
+import { AmountText } from './AmountText';
 import { MiniBar } from './MiniBar';
 import { changeColor } from './MonthlyExpensesView';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
@@ -73,7 +74,7 @@ export const HomeHeroCard: React.FC<Props> = ({ month, year, isCurrentMonth, spe
     return (
       <Card style={styles.gap}>
         <Text style={styles.title}>{isCurrentMonth ? 'This month' : monthName}</Text>
-        <Text style={styles.headline}>{fmt(spent)} spent</Text>
+        <AmountText style={styles.headline}>{`${fmt(spent)} spent`}</AmountText>
         {change != null && <Text style={{ color: changeColor(change), fontSize: 13, fontWeight: '600' }}>{changeText(change)} vs last month</Text>}
         {isCurrentMonth && (
           <Pressable style={styles.cta} onPress={() => router.push('/budgets')} accessibilityRole="button">
@@ -96,7 +97,7 @@ export const HomeHeroCard: React.FC<Props> = ({ month, year, isCurrentMonth, spe
             <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
           </View>
         </View>
-        <Text style={[styles.headline, left < 0 && { color: COLORS.red }]}>{left >= 0 ? fmt(left) : `${fmt(-left)} over`}</Text>
+        <AmountText style={[styles.headline, left < 0 && { color: COLORS.red }]}>{left >= 0 ? fmt(left) : `${fmt(-left)} over`}</AmountText>
         <MiniBar percent={(budget?.ratio ?? 0) * 100} color={color} />
         {(budget?.per_day ?? 0) > 0 && (
           <Text style={styles.detail}>

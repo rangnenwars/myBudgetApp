@@ -17,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import { addInvestment, updateInvestment, deleteInvestment, getInvestments, Investment } from '../../utils/database';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
+import { AmountText } from '../../components/AmountText';
 import { withFeature } from '../../components/FeatureGate';
 import { parseAmount } from '../../utils/amount';
 
@@ -115,15 +116,15 @@ function InvestmentsScreen() {
 
       {items.length > 0 && (
         <View style={styles.summaryCard}>
-          <View>
+          <View style={styles.summaryCol}>
             <Text style={styles.cardMuted}>Invested</Text>
-            <Text style={styles.summaryValue}>{fmt(totalInvested)}</Text>
+            <AmountText value={totalInvested} style={styles.summaryValue}>{fmt(totalInvested)}</AmountText>
           </View>
-          <View>
+          <View style={styles.summaryCol}>
             <Text style={styles.cardMuted}>Current value</Text>
-            <Text style={styles.summaryValue}>{fmt(totalCurrent)}</Text>
+            <AmountText value={totalCurrent} style={styles.summaryValue}>{fmt(totalCurrent)}</AmountText>
           </View>
-          <View>
+          <View style={styles.summaryCol}>
             <Text style={styles.cardMuted}>Gain</Text>
             <Text style={[styles.summaryValue, { color: overallGainPct >= 0 ? COLORS.accent : COLORS.red }]}>
               {overallGainPct >= 0 ? '+' : ''}{overallGainPct.toFixed(1)}%
@@ -218,6 +219,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: SPACING.sm,
     backgroundColor: COLORS.card,
     borderColor: COLORS.cardBorder,
     borderWidth: 1,
@@ -225,15 +227,16 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginHorizontal: SPACING.lg,
   },
+  summaryCol: { flex: 1, minWidth: 0 },
   summaryValue: { color: COLORS.text, fontSize: 16, fontWeight: '700', marginTop: 2 },
   listContent: { padding: SPACING.lg, gap: SPACING.sm },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', marginTop: SPACING.xl },
   card: { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.sm },
   cardHeaderRight: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
   cardDeleteBtn: { padding: 2 },
-  cardTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700' },
-  cardMuted: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  cardTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  cardMuted: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, flexShrink: 1 },
   gainText: { fontSize: 12, fontWeight: '700', marginTop: 2 },
   modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },

@@ -137,5 +137,5 @@ const styles = StyleSheet.create({
   rowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   rowTight: { backgroundColor: COLORS.red + '1A' },
   monthText: { color: COLORS.text, fontSize: 14 },
-  amount: { fontSize: 14, fontWeight: '700' },
+  amount: { fontSize: 14, fontWeight: '700', flexShrink: 0 },
 });

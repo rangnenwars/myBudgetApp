@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { AmountText } from '../../components/AmountText';
 import { Card } from '../../components/Card';
 import { IouSheet } from '../../components/IouSheet';
 import { Button, ScreenHeader, kit } from '../../components/ScreenKit';
@@ -61,13 +62,13 @@ export default function PeopleScreen() {
           <>
             <Card>
               <View style={styles.totals}>
-                <View>
+                <View style={styles.totalCol}>
                   <Text style={kit.dim}>You get</Text>
-                  <Text style={[styles.total, { color: COLORS.positive }]}>{fmtAmount(data.youGet)}</Text>
+                  <AmountText value={data.youGet} style={[styles.total, { color: COLORS.positive }]}>{fmtAmount(data.youGet)}</AmountText>
                 </View>
-                <View style={styles.right}>
+                <View style={[styles.right, styles.totalCol]}>
                   <Text style={kit.dim}>You owe</Text>
-                  <Text style={[styles.total, { color: COLORS.red }]}>{fmtAmount(data.youOwe)}</Text>
+                  <AmountText value={data.youOwe} style={[styles.total, styles.totalRight, { color: COLORS.red }]}>{fmtAmount(data.youOwe)}</AmountText>
                 </View>
               </View>
             </Card>
@@ -145,8 +146,10 @@ export default function PeopleScreen() {
 }
 
 const styles = StyleSheet.create({
-  totals: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  totals: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.md },
   total: { fontSize: 26, fontWeight: '700' },
+  totalCol: { flex: 1, minWidth: 0 },
+  totalRight: { textAlign: 'right' },
   actions: { flexDirection: 'row', gap: SPACING.sm },
   action: { flex: 1 },
   right: { alignItems: 'flex-end', gap: 4 },
@@ -162,7 +165,7 @@ const styles = StyleSheet.create({
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.cardBorder, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: COLORS.accentDim, fontWeight: '700' },
   name: { color: COLORS.text, fontSize: 15, fontWeight: '600' },
-  amount: { fontSize: 14, fontWeight: '700' },
+  amount: { fontSize: 14, fontWeight: '700', flexShrink: 0 },
   overdue: { backgroundColor: '#FAEEDA', borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 2 },
   overdueText: { color: '#633806', fontSize: 11, fontWeight: '600' },
 });
