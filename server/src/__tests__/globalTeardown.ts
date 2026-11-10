@@ -8,6 +8,8 @@
 import 'dotenv/config';
 
 export default async function globalTeardown() {
+  // The Docker build's quality stage has no database (server/scripts/docker-quality.sh sets this).
+  if (process.env.SKIP_DB_TEARDOWN === '1') return;
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   await pool.query(`DELETE FROM users WHERE email LIKE '%@test.local'`);
