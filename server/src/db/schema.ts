@@ -290,6 +290,10 @@ export const loanPayments = pgTable('loan_payments', {
   amount: numeric('amount', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   date: date('date').notNull(),
   balanceAfter: numeric('balance_after', { precision: 12, scale: 2, mode: 'number' }),
+  // The expense entry a part payment logged (null when the loan logs none, and for payments made before this link existed).
+  transactionId: bigint('transaction_id', { mode: 'number' }).references(() => transactions.id, { onDelete: 'set null' }),
+  // The loan's EMI just before a part payment scaled it down, so deleting the payment can put it back exactly.
+  emiBefore: numeric('emi_before', { precision: 12, scale: 2, mode: 'number' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_loan_payments_loan_date').on(table.loanId, table.date),

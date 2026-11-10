@@ -1,11 +1,14 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../components/Card';
 import { ScreenHeader, kit } from '../components/ScreenKit';
 import { COLORS, SPACING } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { getLoanPayments, LoanPayment } from '../utils/database';
+import { confirmAction } from '../utils/alert';
+import { apiErrorMessage } from '../utils/api';
+import { deleteLoanPayment, getLoanPayments, LoanPayment } from '../utils/database';
 import { fmtAmount, shortDate } from '../utils/people';
 
 const KIND_LABEL: Record<LoanPayment['kind'], string> = { part_payment: 'Part payment', emi: 'EMI' };
@@ -19,6 +22,21 @@ export default function LoanPaymentsScreen() {
   const id = Number(idParam);
   const [rows, setRows] = useState<LoanPayment[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(() => getLoanPayments(id).then((r) => setRows(r)), [id]);
+
+  // Permanent: the balance, the EMI and the expense entry it logged all go back.
+  const remove = (p: LoanPayment) =>
+    confirmAction('Delete part payment', `Delete the ${fmtAmount(p.amount)} part payment of ${shortDate(p.date)}? The balance, the EMI and its expense entry go back. This cannot be undone.`, 'Delete', async () => {
+      setError(null);
+      try {
+        await deleteLoanPayment(id, p.id);
+        await reload();
+      } catch (err) {
+        setError(apiErrorMessage(err, 'Could not delete this payment.'));
+      }
+    });
 
   useFocusEffect(
     useCallback(() => {
@@ -44,6 +62,7 @@ export default function LoanPaymentsScreen() {
       <ScreenHeader title={name ? `${name} · payments` : 'Payments'} />
       <ScrollView contentContainerStyle={kit.content}>
         <Text style={kit.dim}>Part payments and EMIs, newest first.</Text>
+        {error && <Text style={styles.error}>{error}</Text>}
         {failed ? (
           <Text style={kit.muted}>Could not load the payments. Pull back and try again.</Text>
         ) : rows == null ? (
@@ -62,6 +81,11 @@ export default function LoanPaymentsScreen() {
                   </Text>
                 </View>
                 <Text style={styles.amount}>{fmtAmount(p.amount)}</Text>
+                {p.kind === 'part_payment' && (
+                  <Pressable onPress={() => remove(p)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Delete part payment of ${fmtAmount(p.amount)}`}>
+                    <Ionicons name="trash-outline" size={18} color={COLORS.red} />
+                  </Pressable>
+                )}
               </View>
             ))}
           </Card>
@@ -78,4 +102,5 @@ const styles = StyleSheet.create({
   kind: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   meta: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
   amount: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
+  error: { color: COLORS.red, fontSize: 13 },
 });

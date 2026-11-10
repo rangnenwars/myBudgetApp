@@ -22,8 +22,7 @@ import {
   countsTowardBudget,
   computeOverallBudget,
   averageMonthlySavings,
-  MonthPoint,
-} from '../calculations';
+  MonthPoint, undoPartPayment } from '../calculations';
 import { Transaction, Loan, Investment, SavingsGoal } from '../types';
 
 // ---------- test fixtures ----------
@@ -605,5 +604,49 @@ describe('averageMonthlySavings', () => {
   it('falls back to the current month so far when no full month has activity', () => {
     expect(averageMonthlySavings([pt(4, 0, 0), pt(5, 0, 0), pt(6, 100, 30)], current)).toBe(70);
     expect(averageMonthlySavings([], current)).toBe(0);
+  });
+});
+
+
+describe('undoPartPayment', () => {
+  const after = (outstanding: number, emi: number, amount: number) => computePartPayment({ outstanding, emi }, amount);
+
+  it('puts the balance back and, for the newest payment, the exact saved EMI', () => {
+    const paid = after(100000, 3333.33, 12345.67);
+    const undone = undoPartPayment({ outstanding: paid.outstanding, emi: paid.emi }, 12345.67, { emiBefore: 3333.33, isLatest: true });
+    expect(undone).toEqual({ outstanding: 100000, emi: 3333.33 });
+  });
+
+  it('scales the EMI back by the same ratio when the saved EMI is missing (old payments)', () => {
+    expect(undoPartPayment({ outstanding: 80000, emi: 8000 }, 20000, { emiBefore: null, isLatest: true })).toEqual({ outstanding: 100000, emi: 10000 });
+  });
+
+  it('scales the EMI by the ratio when a later payment exists, even if an EMI was saved', () => {
+    expect(undoPartPayment({ outstanding: 40000, emi: 4000 }, 20000, { emiBefore: 10000, isLatest: false })).toEqual({ outstanding: 60000, emi: 6000 });
+  });
+
+  it('a loan at zero keeps its EMI, or takes the saved one', () => {
+    expect(undoPartPayment({ outstanding: 0, emi: 10000 }, 100000, { emiBefore: null, isLatest: true })).toEqual({ outstanding: 100000, emi: 10000 });
+    expect(undoPartPayment({ outstanding: 0, emi: 5000 }, 100000, { emiBefore: 10000, isLatest: false })).toEqual({ outstanding: 100000, emi: 10000 });
+  });
+
+  it('ignores a saved EMI of zero or less', () => {
+    expect(undoPartPayment({ outstanding: 80000, emi: 8000 }, 20000, { emiBefore: 0, isLatest: true }).emi).toBe(10000);
+  });
+
+  it('adds money without float drift', () => {
+    expect(undoPartPayment({ outstanding: 0.1, emi: 1 }, 0.2, { emiBefore: 1, isLatest: true }).outstanding).toBe(0.3);
+  });
+
+  it('undoes any run of part payments, newest first, back to the start', () => {
+    let loan = { outstanding: 90000, emi: 4500 };
+    const steps: { amount: number; emiBefore: number }[] = [];
+    for (const amount of [10000, 15000.5, 0.01]) {
+      steps.push({ amount, emiBefore: loan.emi });
+      const next = computePartPayment(loan, amount);
+      loan = { outstanding: next.outstanding, emi: next.emi };
+    }
+    for (const step of steps.reverse()) loan = undoPartPayment(loan, step.amount, { emiBefore: step.emiBefore, isLatest: true });
+    expect(loan).toEqual({ outstanding: 90000, emi: 4500 });
   });
 });

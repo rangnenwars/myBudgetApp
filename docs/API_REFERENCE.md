@@ -251,6 +251,15 @@ Records a part payment (prepayment). `outstanding` drops by `amount` and `emi` i
 → **201** `{ loan: Loan, transaction: Transaction | null }`
 Errors: 400 amount ≤ 0 / not a number, amount greater than `outstanding`, malformed date, or loan already fully paid · 404 not found / not yours
 
+### `DELETE /loans/:id/payments/:paymentId` 🔒 🧩 `loans`
+Permanently deletes one **part payment** and undoes it, all or nothing (`lib/loanPaymentDelete.ts`, one database transaction with the loan row locked):
+- the loan's `outstanding` goes back up by the amount. The EMI goes back too: exactly the saved EMI if this was the newest part payment, otherwise scaled by the same ratio the payments used (`undoPartPayment` in `utils/calculations.ts`); a loan that was paid off is reopened and keeps its EMI;
+- the expense entry the payment logged is removed (new payments carry a link, `loan_payments.transaction_id`; older ones are matched by category, amount, date and the note `Part payment - <loan name>`, and only when exactly one entry fits);
+- `balance_after` on the later rows of the list moves by the same amount; budgets, reports and the budget class follow on their own.
+
+→ **200** `{ loan, expenseRemoved: boolean }`. `expenseRemoved` is `false` for a loan that logs no expense, an old payment with no matching entry, or an entry the user had already deleted.
+Errors: 400 bad id, or the row is an **EMI** (EMIs are posted automatically and cannot be deleted); 404 loan or payment not found, not the caller's, or the payment belongs to a different loan. A second delete of the same payment is a 404 and restores nothing twice.
+
 ### `GET /loans/:id/payments` 🔒
 → **200** `{ id, kind: 'part_payment'|'emi', amount, date, balance_after: number|null }[]`, newest first (by date, then id). Every part payment and every "Mark EMI paid" is recorded here, for loans that count as an expense and for those that don't; so is each EMI the server posts automatically each month. `balance_after` is the outstanding balance once the payment was applied, and is `null` for part payments recovered from old transactions (migration 0023 backfilled those, matching the transaction note `Part payment - <loan name>` to the user's one loan of that name; payments whose loan was renamed, deleted or shares its name with another loan were not recovered, and loans that don't count as an expense never logged a transaction). Deleting the loan deletes its history.
 Errors: 404 not found / not yours

@@ -104,6 +104,7 @@ Loans tab → **+**. Enter name, principal, outstanding balance and EMI; optiona
 * **Add monthly EMI to expenses** (on by default) — each month the EMI is added to your expenses as *Loan EMI*, and the loan's balance is reduced by that month's principal (interest is worked out from the rate). Nothing to tap.
 * For loans you don't want counted as spending (a family loan, say) switch it off and use **Mark EMI paid** yourself.
 * **Part payment** — paid extra? Enter the amount; the balance drops and the EMI scales down so your remaining tenure stays the same. A before/after preview is shown first.
+* **Delete a part payment** — in a loan's **Payments** list, tap the bin icon on a part payment, then **Delete**. It is permanent: the balance and the EMI go back, the expense entry it added is removed from Transactions, and reports and budgets follow. EMIs have no bin because they are posted automatically.
 * Each card shows the next EMI's interest/principal split and months left at the current rate. Tap a card to edit; trash icon to delete. Outstanding loans count against your net worth.
 * **Debt payoff planner** (Pro) — compare *snowball* and *avalanche* strategies and see "what if I add ₹X a month".
 
