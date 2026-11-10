@@ -25,6 +25,8 @@ export DATABASE_URL="postgres://nobody@127.0.0.1:1/none"
 export JWT_ACCESS_SECRET="build-time-test-secret-access"
 export JWT_REFRESH_SECRET="build-time-test-secret-refresh"
 export NODE_ENV=test
+# No database in the build: skip the jest teardown that cleans test accounts out of one.
+export SKIP_DB_TEARDOWN=1
 npm run test:unit
 
 echo "==> Server quality checks passed"

@@ -31,7 +31,8 @@ describe('issue constants stay in sync with the database', () => {
     expect(new Set(keys).size).toBe(keys.length);
     const repoRoot = join(__dirname, '../../..');
     for (const s of ISSUE_SCREENS) {
-      if (s.file) expect(existsSync(join(repoRoot, s.file))).toBe(true);
+      // The Docker build's quality stage copies only utils, constants and server, so there is no app/ folder to check there.
+      if (s.file && existsSync(join(repoRoot, 'app'))) expect(existsSync(join(repoRoot, s.file))).toBe(true);
     }
   });
 });
