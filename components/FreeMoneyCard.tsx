@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
+import { AmountText } from './AmountText';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { getFreeMoneyDay, FreeMoneyDayInfo } from '../utils/database';
 import { useAuth } from '../context/AuthContext';
@@ -69,7 +70,7 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
           <Text style={styles.detail}>Add your income as a transaction, or set it to repeat, and this shows how much is yours to spend.</Text>
         ) : info.status === 'over' ? (
           <>
-            <Text style={[styles.headline, { color: COLORS.red }]}>{fmtInr(short)} short</Text>
+            <AmountText style={[styles.headline, { color: COLORS.red }]}>{`${fmtInr(short)} short`}</AmountText>
             <View style={styles.bar}>
               <View style={{ flex: 1, backgroundColor: COLORS.red }} />
             </View>
@@ -79,7 +80,7 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
           </>
         ) : (
           <>
-            <Text style={styles.headline}>{fmtInr(free)}</Text>
+            <AmountText style={styles.headline}>{fmtInr(free)}</AmountText>
             <Text style={styles.detail}>
               yours to spend this month, about {fmtInr(perDay)} a day
             </Text>

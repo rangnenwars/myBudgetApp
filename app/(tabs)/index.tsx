@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card } from '../../components/Card';
+import { useSharedAmounts } from '../../components/AmountText';
 import { MiniBar } from '../../components/MiniBar';
 import { BudgetClassBadge } from '../../components/BudgetClassBadge';
 import { ProGate } from '../../components/ProGate';
@@ -97,6 +98,12 @@ export default function DashboardScreen() {
     return shown.join(' · ') + (sorted.length > 2 ? ` · +${sorted.length - 2} more` : '');
   })();
   const savingsRate = computeSavingsRate(summary);
+  // One size for Income / Expense / Net savings so the row looks even, and no figure wraps.
+  const shared = useSharedAmounts(20, [
+    { text: fmt(summary.totalIncome), value: summary.totalIncome },
+    { text: fmt(summary.totalExpense), value: summary.totalExpense },
+    { text: fmt(summary.netSavings), value: summary.netSavings },
+  ]);
 
   return (
     <View style={styles.flex}>
@@ -184,17 +191,17 @@ export default function DashboardScreen() {
 
       <Card>
         <View style={styles.summaryRow}>
-          <Pressable style={styles.summaryItem} onPress={() => router.push(txnLink({ type: 'income', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Income ${fmt(summary.totalIncome)}, see the entries`}>
+          <Pressable style={styles.summaryItem} onLayout={shared.onLayout} onPress={() => router.push(txnLink({ type: 'income', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Income ${fmt(summary.totalIncome)}, see the entries`}>
             <Text style={styles.summaryLabel}>Income ›</Text>
-            <Text style={[styles.summaryValue, { color: COLORS.accent }]}>{fmt(summary.totalIncome)}</Text>
+            <Text numberOfLines={1} style={[styles.summaryValue, { color: COLORS.accent, fontSize: shared.fontSize }]}>{shared.texts[0]}</Text>
           </Pressable>
           <Pressable style={styles.summaryItem} onPress={() => router.push(txnLink({ type: 'expense', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Expense ${fmt(summary.totalExpense)}, see the entries`}>
             <Text style={styles.summaryLabel}>Expense ›</Text>
-            <Text style={[styles.summaryValue, { color: COLORS.red }]}>{fmt(summary.totalExpense)}</Text>
+            <Text numberOfLines={1} style={[styles.summaryValue, { color: COLORS.red, fontSize: shared.fontSize }]}>{shared.texts[1]}</Text>
           </Pressable>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Net savings</Text>
-            <Text style={[styles.summaryValue, { color: summary.netSavings >= 0 ? COLORS.accent : COLORS.red }]}>{fmt(summary.netSavings)}</Text>
+            <Text numberOfLines={1} style={[styles.summaryValue, { color: summary.netSavings >= 0 ? COLORS.accent : COLORS.red, fontSize: shared.fontSize }]}>{shared.texts[2]}</Text>
           </View>
         </View>
       </Card>
@@ -342,8 +349,8 @@ const styles = StyleSheet.create({
   allCats: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder, paddingTop: SPACING.sm, alignItems: 'flex-end' },
   allCatsText: { color: COLORS.accent, fontSize: 13, fontWeight: '600' },
   summaryCard: { marginTop: SPACING.sm },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  summaryItem: { flex: 1 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.sm },
+  summaryItem: { flex: 1, minWidth: 0 },
   summaryLabel: { color: COLORS.textMuted, fontSize: 12 },
   summaryValue: { fontSize: 20, fontWeight: '700', marginTop: 4 },
   divider: { height: 1, backgroundColor: COLORS.cardBorder, marginVertical: SPACING.sm },
@@ -353,7 +360,7 @@ const styles = StyleSheet.create({
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', paddingVertical: SPACING.md },
   catRow: { paddingVertical: SPACING.sm },
   catRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
-  catHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  catLabel: { color: COLORS.text, fontSize: 13 },
-  catValue: { color: COLORS.textMuted, fontSize: 13 },
+  catHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.sm, marginBottom: 6 },
+  catLabel: { color: COLORS.text, fontSize: 13, flexShrink: 1 },
+  catValue: { color: COLORS.textMuted, fontSize: 13, flexShrink: 0 },
 });
