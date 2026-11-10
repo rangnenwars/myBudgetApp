@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { Redirect, useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { AmountText } from '../components/AmountText';
 import { Card } from '../components/Card';
 import { ScreenHeader, Field, Button, ErrorText, Segmented, fmtInr, kit } from '../components/ScreenKit';
 import { useAuth } from '../context/AuthContext';
@@ -127,11 +128,11 @@ export default function AccountsScreen() {
         <Card style={styles.totals}>
           <View style={styles.totalCol}>
             <Text style={kit.muted}>Money held</Text>
-            <Text style={[styles.totalValue, { color: COLORS.accent }]}>{fmtInr(held)}</Text>
+            <AmountText value={held} style={[styles.totalValue, { color: COLORS.accent }]}>{fmtInr(held)}</AmountText>
           </View>
           <View style={styles.totalCol}>
             <Text style={kit.muted}>Card dues</Text>
-            <Text style={[styles.totalValue, { color: owed > 0 ? COLORS.red : COLORS.textMuted }]}>{fmtInr(owed)}</Text>
+            <AmountText value={owed} style={[styles.totalValue, { color: owed > 0 ? COLORS.red : COLORS.textMuted }]}>{fmtInr(owed)}</AmountText>
           </View>
         </Card>
         <Text style={kit.dim}>Update balances whenever you check your bank app — they count toward your net worth in Reports.</Text>
@@ -186,8 +187,8 @@ export default function AccountsScreen() {
 
 const styles = StyleSheet.create({
   addBtn: { backgroundColor: COLORS.accent, width: 34, height: 34, borderRadius: RADIUS.full, alignItems: 'center', justifyContent: 'center' },
-  totals: { flexDirection: 'row' },
-  totalCol: { flex: 1, gap: 4 },
+  totals: { flexDirection: 'row', gap: SPACING.md },
+  totalCol: { flex: 1, gap: 4, minWidth: 0 },
   totalValue: { fontSize: 20, fontWeight: '700' },
   row: {
     flexDirection: 'row',
@@ -200,8 +201,8 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
   },
   rowMid: { flex: 1 },
-  rowLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
-  rowAmount: { fontSize: 15, fontWeight: '700' },
+  rowLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
+  rowAmount: { fontSize: 15, fontWeight: '700', flexShrink: 0 },
   backdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
   sheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

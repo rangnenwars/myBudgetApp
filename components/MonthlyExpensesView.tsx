@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
+import { AmountText } from './AmountText';
 import { MiniBar } from './MiniBar';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
@@ -69,11 +70,11 @@ export const MonthlyExpensesView: React.FC = () => {
           <View style={styles.tiles}>
             <View style={styles.tile}>
               <Text style={styles.muted}>Avg / month</Text>
-              <Text style={styles.tileValue}>{fmt(data.average)}</Text>
+              <AmountText value={data.average} style={styles.tileValue}>{fmt(data.average)}</AmountText>
             </View>
             <View style={styles.tile}>
               <Text style={styles.muted}>Highest</Text>
-              <Text style={styles.tileValue}>{data.highest ? `${new Date(data.highest.year, data.highest.month - 1, 1).toLocaleDateString('en-IN', { month: 'short' })} ${fmt(data.highest.total)}` : '₹0'}</Text>
+              <AmountText style={styles.tileValue}>{data.highest ? `${new Date(data.highest.year, data.highest.month - 1, 1).toLocaleDateString('en-IN', { month: 'short' })} ${fmt(data.highest.total)}` : '₹0'}</AmountText>
             </View>
           </View>
 
@@ -112,14 +113,14 @@ const styles = StyleSheet.create({
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pagerText: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   tiles: { flexDirection: 'row', gap: SPACING.sm },
-  tile: { flex: 1, backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md, gap: 2 },
+  tile: { flex: 1, minWidth: 0, backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md, gap: 2 },
   tileValue: { color: COLORS.text, fontSize: 18, fontWeight: '700' },
   list: { padding: 0, overflow: 'hidden' },
   row: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.xs },
   rowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  month: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
-  amount: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flexShrink: 0 },
+  month: { color: COLORS.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
+  amount: { color: COLORS.text, fontSize: 14, fontWeight: '700', flexShrink: 0 },
   change: { fontSize: 12, fontWeight: '600', minWidth: 40, textAlign: 'right' },
 });

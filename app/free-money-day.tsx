@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   item: { gap: 2, paddingVertical: SPACING.xs },
   itemBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   itemLabel: { color: COLORS.text, fontSize: 14, flexShrink: 1 },
-  itemAmount: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  itemAmount: { color: COLORS.text, fontSize: 14, fontWeight: '700', flexShrink: 0 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
   chip: { borderColor: COLORS.cardBorder, borderWidth: 1, borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 6 },
   chipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },

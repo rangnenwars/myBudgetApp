@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   summaryValue: { color: COLORS.text, fontSize: 20, fontWeight: '700' },
   row: { gap: SPACING.xs },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
+  rowLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
   rowStatus: { fontSize: 14, fontWeight: '700' },
   otherRow: { paddingHorizontal: SPACING.xs },
   suggestion: { color: COLORS.textMuted, fontSize: 12.5 },

@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   list: { padding: 0, overflow: 'hidden', borderRadius: RADIUS.md },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.md, paddingVertical: 12 },
   rowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
-  rowLabel: { color: COLORS.text, fontSize: 14 },
-  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rowLabel: { color: COLORS.text, fontSize: 14, flexShrink: 1 },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
   rowState: { fontSize: 12, fontWeight: '600' },
 });
