@@ -297,6 +297,9 @@ CREATE TABLE loan_payments (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_loan_payments_loan_date ON loan_payments(loan_id, date);
+-- Migration 0026 adds two nullable columns so a part payment can be deleted and undone:
+--   transaction_id BIGINT REFERENCES transactions(id) ON DELETE SET NULL  -- the expense entry it logged (null for loans that log none, and for payments made before 0026)
+--   emi_before     NUMERIC(12,2)                                          -- the EMI just before the payment scaled it down
 
 -- ============================================================
 -- investments

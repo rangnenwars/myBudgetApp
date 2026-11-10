@@ -10,6 +10,7 @@ import { requireFeature } from '../middleware/requireFeature';
 import { badRequest, notFound } from '../lib/errors';
 import { recomputeBudgetClass } from '../lib/budgetClass';
 import { computePartPayment } from '../calculations';
+import { deletePartPayment } from '../lib/loanPaymentDelete';
 import { loanEmiMiddleware, monthStart } from '../lib/loanEmiExpenses';
 import { localToday } from '../lib/clock';
 
@@ -164,6 +165,16 @@ router.get(
   })
 );
 
+// Permanently deletes one part payment and undoes it: balance and EMI go back, its expense entry is
+// removed, later rows in the list move by the same amount (lib/loanPaymentDelete.ts). EMI rows: 400.
+router.delete(
+  '/:id/payments/:paymentId',
+  asyncHandler(async (req, res) => {
+    const result = await deletePartPayment(req.userId!, idParam(req), idParam(req, 'paymentId'));
+    res.json(result);
+  })
+);
+
 // Marks one EMI as paid on a loan that does NOT count as an expense (e.g.
 // money borrowed from family): lowers the outstanding balance by min(emi,
 // outstanding) so the final instalment can't overshoot, and logs no expense.
@@ -234,9 +245,11 @@ router.post(
         .where(eq(loans.id, id))
         .returning();
 
-      await tx.insert(loanPayments).values({ userId: req.userId!, loanId: id, kind: 'part_payment', amount: body.amount, date: body.date, balanceAfter: next.outstanding });
-
-      if (!loan.counts_as_expense) return { loan: updatedLoan, transaction: null };
+      const payment = { userId: req.userId!, loanId: id, kind: 'part_payment' as const, amount: body.amount, date: body.date, balanceAfter: next.outstanding, emiBefore: loan.emi };
+      if (!loan.counts_as_expense) {
+        await tx.insert(loanPayments).values(payment);
+        return { loan: updatedLoan, transaction: null };
+      }
 
       const [transaction] = await tx
         .insert(transactions)
@@ -252,6 +265,7 @@ router.post(
           year: y,
         })
         .returning();
+      await tx.insert(loanPayments).values({ ...payment, transactionId: transaction.id });
 
       return { loan: updatedLoan, transaction };
     });

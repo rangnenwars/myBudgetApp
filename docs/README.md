@@ -28,6 +28,7 @@ Prapanji (formerly "My Budget") is a personal money app for everyone — student
 | [CONFIGURATION_STATE.md](CONFIGURATION_STATE.md) | Dated change log (2026-10-03), configuration matrix of what is in the repo vs what must be confirmed in external accounts, known gaps |
 | [USER_MANUAL.md](USER_MANUAL.md) | End-user guide to every screen, plus a section for staff accounts |
 | [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (25 total, Mermaid) — almost no prose; renders on GitHub |
+| [MIGRATION_STEPS.md](MIGRATION_STEPS.md) | Migrations 0025 (paid plan) and 0026 (delete a part payment): how they apply by themselves, how to check, apply by hand, verify and roll back |
 | [PAID_PLAN.md](PAID_PLAN.md) | The paid plan: six months free then ₹200 a year, who has access, how people pay by QR or UPI ID, admin controls, and how to switch it on safely |
 | [INVESTOR_PITCH.md](INVESTOR_PITCH.md) · [deck](Prapanji_Investor_Pitch.pptx) | The 12-slide investor deck, the talking line for each slide, and what is built versus not yet built |
 | [USER_DISTRIBUTION.md](USER_DISTRIBUTION.md) | How to get the app and manual to end users, plus the marketing plan (WhatsApp groups, leaflets, YouTube ads) — web first, Android APK / Play / TestFlight later — with onboarding message and rollout plan |
