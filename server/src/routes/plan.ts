@@ -100,22 +100,6 @@ router.post(
     const shot = decodeImageUpload(body.screenshot.data, { maxBytes: MAX_SCREENSHOT_BYTES, allowed: ['image/png', 'image/jpeg', 'image/webp'], what: 'Screenshot' });
 
     const now = new Date();
-    const [{ recent }] = await db
-      .select({ recent: sql<number>`count(*)::int` })
-      .from(paymentClaims)
-      .where(and(eq(paymentClaims.userId, userId), gt(paymentClaims.createdAt, new Date(now.getTime() - DAY_MS))));
-    if (recent >= CLAIMS_PER_DAY) throw new AppError(429, `You can send up to ${CLAIMS_PER_DAY} payment details a day. Please try again tomorrow, or contact support.`);
-
-    const [pending] = await db.select({ id: paymentClaims.id }).from(paymentClaims).where(and(eq(paymentClaims.userId, userId), eq(paymentClaims.status, 'pending')));
-    if (pending) throw conflict('You already have a payment being checked. Cancel it first if the details were wrong.');
-
-    // The same screenshot can't back a second payment.
-    const [sameImage] = await db
-      .select({ id: paymentClaims.id })
-      .from(paymentClaims)
-      .where(and(eq(paymentClaims.screenshotHash, shot.sha256), sql`${paymentClaims.status} in ('pending','confirmed')`));
-    if (sameImage) throw duplicateTxnError();
-
     const [access, previous] = await Promise.all([
       getAccess(userId, now),
       db.select({ graceUntil: paymentClaims.graceUntil, forAccessEnd: paymentClaims.forAccessEnd }).from(paymentClaims).where(eq(paymentClaims.userId, userId)),
@@ -123,20 +107,43 @@ router.post(
     const grace = graceAllowed(previous, access.planEnd);
 
     try {
-      const [claim] = await db
-        .insert(paymentClaims)
-        .values({
-          userId,
-          txnId,
-          userNote: body.note || null,
-          screenshot: shot.buf,
-          screenshotMimeType: shot.mimeType,
-          screenshotSize: shot.buf.length,
-          screenshotHash: shot.sha256,
-          graceUntil: grace ? new Date(now.getTime() + GRACE_DAYS * DAY_MS) : null,
-          forAccessEnd: access.planEnd,
-        })
-        .returning();
+      // One transaction under a lock on the user's row: two requests sent at the same moment
+      // can't both pass the "nothing pending" check and leave two claims waiting for an admin.
+      const claim = await db.transaction(async (tx) => {
+        await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
+
+        const [{ recent }] = await tx
+          .select({ recent: sql<number>`count(*)::int` })
+          .from(paymentClaims)
+          .where(and(eq(paymentClaims.userId, userId), gt(paymentClaims.createdAt, new Date(now.getTime() - DAY_MS))));
+        if (recent >= CLAIMS_PER_DAY) throw new AppError(429, `You can send up to ${CLAIMS_PER_DAY} payment details a day. Please try again tomorrow, or contact support.`);
+
+        const [pending] = await tx.select({ id: paymentClaims.id }).from(paymentClaims).where(and(eq(paymentClaims.userId, userId), eq(paymentClaims.status, 'pending')));
+        if (pending) throw conflict('You already have a payment being checked. Cancel it first if the details were wrong.');
+
+        // The same screenshot can't back a second payment.
+        const [sameImage] = await tx
+          .select({ id: paymentClaims.id })
+          .from(paymentClaims)
+          .where(and(eq(paymentClaims.screenshotHash, shot.sha256), sql`${paymentClaims.status} in ('pending','confirmed')`));
+        if (sameImage) throw duplicateTxnError();
+
+        const [created] = await tx
+          .insert(paymentClaims)
+          .values({
+            userId,
+            txnId,
+            userNote: body.note || null,
+            screenshot: shot.buf,
+            screenshotMimeType: shot.mimeType,
+            screenshotSize: shot.buf.length,
+            screenshotHash: shot.sha256,
+            graceUntil: grace ? new Date(now.getTime() + GRACE_DAYS * DAY_MS) : null,
+            forAccessEnd: access.planEnd,
+          })
+          .returning();
+        return created;
+      });
       res.status(201).json(claimView(claim));
     } catch (err) {
       if (isDuplicateTxn(err)) throw duplicateTxnError();

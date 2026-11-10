@@ -20,7 +20,7 @@ import { decodeImageUpload, toDataUrl } from '../lib/imageUpload';
 import { UPI_ID_RE, checkQr, loadPaymentDetails, normalizeUpiId } from '../lib/paymentDetails';
 import { addPaidPeriod, duplicateTxnError, isDuplicateTxn, normalizeTxnId } from '../lib/payments';
 import { getPlan, planEditSchema, savePlan } from '../lib/plan';
-import { idParam } from '../lib/validation';
+import { idParam, num } from '../lib/validation';
 
 // The admin side of the paid plan: pricing, whether it is enforced, the
 // payment details users see, confirming payments, company accounts and
@@ -30,7 +30,7 @@ import { idParam } from '../lib/validation';
 const router = Router();
 
 const DAY_MS = 86_400_000;
-const listQuery = z.object({ limit: z.coerce.number().int().min(1).max(200).default(100) });
+const listQuery = z.object({ limit: num((n) => n.int().min(1).max(200)).default(100) });
 
 const actorEmail = async (id: number) => (await db.select({ email: users.email }).from(users).where(eq(users.id, id)))[0]?.email ?? 'unknown';
 
@@ -219,7 +219,7 @@ router.put(
 
 // ---------------------------------------------------------------- payments to confirm
 
-const statusQuery = z.object({ status: z.enum(['pending', 'confirmed', 'rejected', 'cancelled', 'all']).default('pending'), limit: z.coerce.number().int().min(1).max(200).default(100) });
+const statusQuery = z.object({ status: z.enum(['pending', 'confirmed', 'rejected', 'cancelled', 'all']).default('pending'), limit: num((n) => n.int().min(1).max(200)).default(100) });
 
 router.get(
   '/payments',

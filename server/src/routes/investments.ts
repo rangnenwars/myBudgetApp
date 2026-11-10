@@ -4,7 +4,7 @@ import { and, eq, desc } from 'drizzle-orm';
 import { db } from '../db/client';
 import { investments } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { idParam, money, MAX_AMOUNT } from '../lib/validation';
+import { idParam, money, MAX_AMOUNT, num } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { requireFeature } from '../middleware/requireFeature';
 import { notFound } from '../lib/errors';
@@ -18,7 +18,7 @@ const createSchema = z.object({
   type: z.string().trim().min(1).max(40),
   amount: money(),
   // Can't be negative — an investment's worst case is worth nothing.
-  current_value: z.coerce.number().min(0).max(MAX_AMOUNT, 'Amount is too large.').nullish(),
+  current_value: num((n) => n.min(0).max(MAX_AMOUNT, 'Amount is too large.')).nullish(),
 });
 
 const updateSchema = createSchema

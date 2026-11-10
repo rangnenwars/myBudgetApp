@@ -7,7 +7,7 @@ import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
 import { autoPostMiddleware } from '../lib/autoPost';
 import { badRequest, notFound } from '../lib/errors';
-import { money } from '../lib/validation';
+import { money, num } from '../lib/validation';
 import { addMonths, localToday, monthsDateRange } from '../lib/clock';
 import { getTotalsInRange } from '../lib/queries';
 import { computeOverallBudget, countsTowardBudget } from '../calculations';
@@ -22,8 +22,8 @@ router.use(requireAuth, autoPostMiddleware);
 export const WARNING_RATIO = 0.8;
 
 const monthQuery = z.object({
-  month: z.coerce.number().int().min(1).max(12).optional(),
-  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  month: num((n) => n.int().min(1).max(12)).optional(),
+  year: num((n) => n.int().min(2000).max(2100)).optional(),
 });
 
 const putSchema = z.object({ monthly_limit: money() });

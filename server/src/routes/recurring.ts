@@ -4,7 +4,7 @@ import { and, eq, desc } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recurringTransactions, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { idParam, isoDate, money, optionalText } from '../lib/validation';
+import { idParam, isoDate, money, optionalText, num } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { badRequest, conflict, notFound } from '../lib/errors';
 import { activeRuleFilter, endFields, nextDueAfter, NO_REPEAT_CATEGORIES, NO_REPEAT_MESSAGE, ruleScheduleFor, RepeatFrequency } from '../lib/recurringTransactions';
@@ -18,7 +18,7 @@ router.use(requireAuth);
 const frequencySchema = z.enum(['monthly', 'quarterly', 'yearly']);
 
 const createSchema = z.object({
-  transaction_id: z.coerce.number().int().positive(),
+  transaction_id: num((n) => n.int().positive()),
   frequency: frequencySchema.default('monthly'),
   ends_on: isoDate('ends_on').optional(),
   no_end: z.boolean().optional(),
@@ -29,7 +29,7 @@ const updateSchema = z
     amount: money().optional(),
     note: optionalText(500).optional(),
     frequency: frequencySchema.optional(),
-    day_of_month: z.coerce.number().int().min(1).max(31).optional(),
+    day_of_month: num((n) => n.int().min(1).max(31)).optional(),
     ends_on: isoDate('ends_on').optional(),
     no_end: z.boolean().optional(),
   })

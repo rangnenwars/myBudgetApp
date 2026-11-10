@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { num } from '../lib/validation';
 import { desc, lt } from 'drizzle-orm';
 import { db } from '../db/client';
 import { adminAuditLog } from '../db/schema';
@@ -15,9 +16,9 @@ router.use(requireAuth, requireAdmin);
 // email, which field changed), never anything from transactions/loans/
 // investments/goals.
 const pageQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(100),
+  limit: num((n) => n.int().min(1).max(200)).default(100),
   // id of the last entry already shown; the next page is older than it.
-  before: z.coerce.number().int().positive().optional(),
+  before: num((n) => n.int().positive()).optional(),
 });
 
 // Newest first, a page at a time (keyset on id, which grows with createdAt).

@@ -4,7 +4,7 @@ import { and, eq, desc, count } from 'drizzle-orm';
 import { db } from '../db/client';
 import { savingsGoals, goalContributions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { isoDate, idParam, money, MAX_AMOUNT } from '../lib/validation';
+import { isoDate, idParam, money, MAX_AMOUNT, num } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { requireFeature } from '../middleware/requireFeature';
 import { notFound, badRequest } from '../lib/errors';
@@ -26,7 +26,7 @@ const updateSchema = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
     target_amount: money().optional(),
-    saved_amount: z.coerce.number().min(0).max(MAX_AMOUNT, 'Amount is too large.').optional(),
+    saved_amount: num((n) => n.min(0).max(MAX_AMOUNT, 'Amount is too large.')).optional(),
     deadline: deadlineSchema,
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update.' });

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { num } from '../lib/validation';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { loans, savingsGoals } from '../db/schema';
@@ -26,16 +27,16 @@ const router = Router();
 router.use(requireAuth, autoPostMiddleware);
 
 const rangeQuery = z.object({
-  startMonth: z.coerce.number().int().min(1).max(12),
-  startYear: z.coerce.number().int().min(2000).max(2100),
-  endMonth: z.coerce.number().int().min(1).max(12),
-  endYear: z.coerce.number().int().min(2000).max(2100),
+  startMonth: num((n) => n.int().min(1).max(12)),
+  startYear: num((n) => n.int().min(2000).max(2100)),
+  endMonth: num((n) => n.int().min(1).max(12)),
+  endYear: num((n) => n.int().min(2000).max(2100)),
 });
 
 const breakdownQuery = rangeQuery.extend({ type: z.enum(['income', 'expense']) });
 const debtQuery = z.object({
   strategy: z.enum(['snowball', 'avalanche']).default('snowball'),
-  extraPerMonth: z.coerce.number().min(0).default(0),
+  extraPerMonth: num((n) => n.min(0)).default(0),
 });
 
 router.get(

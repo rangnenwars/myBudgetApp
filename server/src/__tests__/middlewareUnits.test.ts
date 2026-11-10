@@ -28,7 +28,7 @@ describe('errorHandler', () => {
 
   it('maps AppError, ZodError and body-parser errors to their status', () => {
     expect(handle(new AppError(409, 'taken'))).toMatchObject({ statusCode: 409, body: { error: 'taken' } });
-    const zod = z.object({ a: z.string({ required_error: 'a is required' }) }).safeParse({});
+    const zod = z.object({ a: z.string({ error: 'a is required' }) }).safeParse({});
     expect(handle((zod as { error: unknown }).error)).toMatchObject({ statusCode: 400, body: { error: 'a is required' } });
     expect(handle({ type: 'entity.too.large', status: 413 })).toMatchObject({ statusCode: 413 });
     expect(handle({ type: 'entity.parse.failed', status: 400 })).toMatchObject({ statusCode: 400, body: { error: 'Malformed JSON body.' } });

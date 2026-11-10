@@ -22,7 +22,7 @@ describe('Category totals for a month or a year', () => {
     const { accessToken } = await registerUser({ features: [] });
     await add(accessToken, { amount: 2400, date: '2026-01-10', category_key: 'fuel_petrol' });
     await add(accessToken, { amount: 2700, date: '2026-02-10', category_key: 'fuel_petrol' });
-    await add(accessToken, { amount: 1600, date: '2026-12-31' });
+    await add(accessToken, { amount: 1600, date: '2026-03-31' });
     await add(accessToken, { amount: 999, date: '2025-12-31' }); // the year before: must not count
 
     const rows = await breakdown(accessToken, 1, 2026, 12, 2026);

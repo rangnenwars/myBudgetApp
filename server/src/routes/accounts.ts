@@ -4,7 +4,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { accounts } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { idParam } from '../lib/validation';
+import { idParam, num } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { notFound } from '../lib/errors';
 
@@ -16,13 +16,18 @@ router.use(requireAuth);
 
 const MAX_BALANCE = 999_999_999_999.99; // numeric(14,2)
 
+const balanceField = num((n) => n.min(-MAX_BALANCE).max(MAX_BALANCE));
+
 const createSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(60),
   type: z.enum(['bank', 'cash', 'wallet', 'credit_card']),
-  balance: z.coerce.number().min(-MAX_BALANCE).max(MAX_BALANCE).default(0),
+  balance: balanceField.default(0),
 });
 
+// Built from the plain field, not createSchema.partial(): a default (balance → 0) would be
+// filled in on every edit, so renaming an account would silently zero its balance.
 const updateSchema = createSchema
+  .extend({ balance: balanceField })
   .partial()
   .refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Provide at least one field to update.' });
 
