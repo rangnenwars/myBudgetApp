@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput, Activi
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
+import { AmountText } from '../../components/AmountText';
 import { DueDateField, dueDateError } from '../../components/DueDateField';
 import { IouSheet } from '../../components/IouSheet';
 import { Button, ErrorText, ScreenHeader, SectionTitle, kit } from '../../components/ScreenKit';
@@ -130,7 +131,7 @@ export default function PersonScreen() {
       <ScrollView contentContainerStyle={kit.content}>
         <Card style={styles.hero}>
           <Text style={kit.dim}>{headline}</Text>
-          <Text style={[styles.balance, { color: owed ? COLORS.positive : owing ? COLORS.red : COLORS.text }]}>{owed || owing ? fmtAmount(person.balance) : '₹0'}</Text>
+          <AmountText style={[styles.balance, { color: owed ? COLORS.positive : owing ? COLORS.red : COLORS.text }]}>{owed || owing ? fmtAmount(person.balance) : '₹0'}</AmountText>
           {person.dueDate && (owed || owing) && (
             <View style={styles.dueRow}>
               <Text style={kit.dim}>Pay back by {shortDate(person.dueDate)}</Text>
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sheetTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700', flexShrink: 1 },
-  label: { color: COLORS.textMuted, fontSize: 13 },
+  label: { color: COLORS.textMuted, fontSize: 13, flexShrink: 1 },
   input: {
     backgroundColor: COLORS.input,
     borderColor: COLORS.cardBorder,

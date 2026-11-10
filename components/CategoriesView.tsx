@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
+import { AmountText } from './AmountText';
 import { MiniBar } from './MiniBar';
 import { changeColor } from './MonthlyExpensesView';
 import { Segmented } from './ScreenKit';
@@ -91,7 +92,7 @@ export const CategoriesView: React.FC = () => {
         <>
           <Card>
             <Text style={styles.muted}>Total spent</Text>
-            <Text style={styles.total}>{fmt(result.total)}</Text>
+            <AmountText style={styles.total}>{fmt(result.total)}</AmountText>
             {insight && <Text style={styles.insight}>{insight}</Text>}
           </Card>
 
@@ -160,9 +161,9 @@ const styles = StyleSheet.create({
   row: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.xs },
   rowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: SPACING.sm },
-  rowRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flexShrink: 0 },
   label: { color: COLORS.text, fontSize: 14, flexShrink: 1 },
-  amount: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  amount: { color: COLORS.text, fontSize: 14, fontWeight: '700', flexShrink: 0 },
   share: { color: COLORS.textDim, fontSize: 12, minWidth: 32, textAlign: 'right' },
   change: { fontSize: 12, fontWeight: '600', minWidth: 40, textAlign: 'right' },
 });

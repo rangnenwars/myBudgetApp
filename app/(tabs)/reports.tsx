@@ -8,6 +8,7 @@ import { monthFilter, rangeBounds, txnLink } from '../../utils/txnLink';
 import { LineChart, PieChart } from 'react-native-chart-kit';
 import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
+import { AmountText } from '../../components/AmountText';
 import { ProGate } from '../../components/ProGate';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, RADIUS, SPACING, withAlpha } from '../../constants/theme';
@@ -224,11 +225,11 @@ export default function ReportsScreen() {
         <View style={styles.summaryGrid}>
           <Card style={styles.summaryCell}>
             <Text style={styles.cardMuted}>Income</Text>
-            <Text style={[styles.summaryValue, { color: COLORS.accent }]}>{fmt(summary.totalIncome)}</Text>
+            <AmountText value={summary.totalIncome} style={[styles.summaryValue, { color: COLORS.accent }]}>{fmt(summary.totalIncome)}</AmountText>
           </Card>
           <Card style={styles.summaryCell}>
             <Text style={styles.cardMuted}>Expense</Text>
-            <Text style={[styles.summaryValue, { color: COLORS.red }]}>{fmt(summary.totalExpense)}</Text>
+            <AmountText value={summary.totalExpense} style={[styles.summaryValue, { color: COLORS.red }]}>{fmt(summary.totalExpense)}</AmountText>
           </Card>
           <Card style={styles.summaryCell}>
             <Text style={styles.cardMuted}>Savings rate</Text>
@@ -236,7 +237,7 @@ export default function ReportsScreen() {
           </Card>
           <Card style={styles.summaryCell}>
             <Text style={styles.cardMuted}>Net worth</Text>
-            <Text style={[styles.summaryValue, { color: netWorth >= 0 ? COLORS.accent : COLORS.red }]}>{fmt(netWorth)}</Text>
+            <AmountText value={netWorth} style={[styles.summaryValue, { color: netWorth >= 0 ? COLORS.accent : COLORS.red }]}>{fmt(netWorth)}</AmountText>
           </Card>
         </View>
 
@@ -475,7 +476,7 @@ const styles = StyleSheet.create({
   chipText: { color: COLORS.textMuted, fontSize: 12 },
   chipTextActive: { color: COLORS.onAccent, fontWeight: '600' },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  summaryCell: { flexBasis: '47%', flexGrow: 1 },
+  summaryCell: { flexBasis: '47%', flexGrow: 1, minWidth: 0 },
   summaryValue: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginTop: 4 },
   sectionTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700', marginTop: SPACING.sm },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', paddingVertical: SPACING.md },
@@ -483,7 +484,8 @@ const styles = StyleSheet.create({
   cardMuted: { color: COLORS.textMuted, fontSize: 12 },
   catRow: { paddingVertical: SPACING.sm },
   catRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
-  catHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  catLabel: { color: COLORS.text, fontSize: 13 },
-  catValue: { color: COLORS.textMuted, fontSize: 13 },
+  // The label gives way (wraps) so the amount always stays whole on one line.
+  catHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.sm, marginBottom: 6 },
+  catLabel: { color: COLORS.text, fontSize: 13, flexShrink: 1 },
+  catValue: { color: COLORS.textMuted, fontSize: 13, flexShrink: 0 },
 });

@@ -77,5 +77,5 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   kind: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
   meta: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
-  amount: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
+  amount: { color: COLORS.text, fontSize: 14, fontWeight: '600', flexShrink: 0 },
 });

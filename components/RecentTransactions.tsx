@@ -78,9 +78,9 @@ const styles = StyleSheet.create({
   rowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   icon: { fontSize: 18 },
   mid: { flex: 1 },
-  label: { color: COLORS.text, fontSize: 14 },
+  label: { color: COLORS.text, fontSize: 14, flexShrink: 1 },
   sub: { color: COLORS.textDim, fontSize: 12 },
-  amount: { fontSize: 14, fontWeight: '700' },
+  amount: { fontSize: 14, fontWeight: '700', flexShrink: 0 },
   seeAll: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder, paddingTop: SPACING.sm, alignItems: 'flex-end' },
   seeAllText: { color: COLORS.accent, fontSize: 13, fontWeight: '600' },
 });
