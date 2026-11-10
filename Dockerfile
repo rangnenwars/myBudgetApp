@@ -21,6 +21,12 @@ ARG EXPO_PUBLIC_API_URL=/api/v1
 ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 
 ENV CI=1
+
+# Quality gate: type check, then the app tests with their coverage floors. A failure
+# stops the build. Emergency skip: RUN_QUALITY=0 docker compose build
+ARG RUN_QUALITY=1
+RUN if [ "$RUN_QUALITY" != "0" ]; then npm run quality; else echo "Quality checks SKIPPED (RUN_QUALITY=0)"; fi
+
 RUN npx expo export --platform web
 
 # ---------- runtime ----------

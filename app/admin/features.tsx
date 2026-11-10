@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, View, Text, StyleSheet, RefreshControl, Switch, Pressable } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { ScreenHeader, SectionTitle, Notice, Button, ErrorText, kit } from '../../components/ScreenKit';
 import { useAuth } from '../../context/AuthContext';
@@ -112,6 +112,9 @@ export default function AdminFeaturesScreen() {
     <View style={kit.screen}>
       <ScreenHeader title="Feature access" />
       <ScrollView contentContainerStyle={kit.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+        <Pressable onPress={() => router.push('/admin/plan')} accessibilityRole="link" accessibilityLabel="Open Plan and pricing">
+          <Notice>Which features the paid plan includes, and its price, are set in Plan and pricing. This screen is for new sign-up defaults and for switching a feature on or off for one user. Open Plan and pricing ›</Notice>
+        </Pressable>
         {!canManage && <Notice>You can see feature access but only an admin or system manager can change it.</Notice>}
         <ErrorText message={error} />
         {data && (

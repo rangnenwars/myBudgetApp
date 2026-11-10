@@ -288,7 +288,7 @@ npm test               # 456 tests in 35 files — one per resource (auth, accou
                         # admin, issues …), security, DB-integrity, mail and
                         # middleware units, and one full e2e lifecycle test
 npm run test:coverage  # same, plus a coverage report + enforced floor (see below)
-npm run quality        # typecheck && test
+npm run quality        # typecheck && tests with the coverage floors
 ```
 
 The server suite runs against a **real Postgres instance** via Supertest (no mocking) — `docker compose up -d postgres` (or the existing native/Docker Postgres on `DATABASE_URL`) must be reachable first, and migrations/seed data applied (`npm run db:migrate && npm run db:seed`). Every resource file checks cross-user data isolation (a second account can never read/modify/delete the first account's rows) and unauthenticated access (401 without a token); `e2e.test.ts` walks a full lifecycle (register → add data across all resource types → verify server-computed budget class → verify reports/debt-payoff/net-worth/CSV export → tier toggle → logout invalidates the refresh token but not the still-live access token).
@@ -306,13 +306,25 @@ A git pre-commit hook (Husky — `.husky/pre-commit`, wired up via the root `pac
 
 A commit is blocked if either gate fails. The same gates run again in GitHub Actions (`.github/workflows/ci.yml`) on every push and pull request — there the server job first applies every migration to an empty database — and `deploy.yml` handles production deploys (see [DEPLOYMENT_DIGITALOCEAN.md](DEPLOYMENT_DIGITALOCEAN.md)).
 
+### Checks on every Docker build
+
+`docker compose build` (and `docker compose up --build`) runs the quality gate **inside the build, and a failure stops the build** so a broken change never becomes an image:
+
+- **Web image** (`Dockerfile`): type check, then the app tests with their coverage floors, before the web export.
+- **Server image** (`server/Dockerfile`, stage `quality`, script `server/scripts/docker-quality.sh`): type check, then the server tests that need no database (`npm run test:unit`: access rules, clock, mail, issue analysis). A build has no database, and starting a Postgres inside the build ran Docker out of memory and crashed its build engine, so the database tests are **not** run in the build.
+- **The whole server suite** (database tests included) runs in `npm run check`, in the commit hook for any `server/` change, and in CI. `npm run check:docker` runs that first and then the build, so a full pass plus a build is one command.
+
+The checks add about a minute to a build. Docker's cache skips them when the code has not changed. In an emergency only: `RUN_QUALITY=0 docker compose build` skips them (it prints "Quality checks SKIPPED"). `.env` can hold `RUN_QUALITY=0` but should not.
+
 ### `scripts/` — terse wrappers for the noisy commands
 
 Running the client and server quality gates separately, or rebuilding the Docker stack, prints a lot of output (coverage tables, npm/Metro build logs) that's only useful when something actually fails. These wrap the same commands and only surface the noise on failure:
 
 | Script | Does |
 |---|---|
-| `npm run verify` (`scripts/verify.sh`) | Client + server typecheck and tests. Prints `Client: OK` / `Server: OK` / `ALL CHECKS PASSED`, or the last 40 log lines if either side fails. |
+| `npm run check` (`scripts/check.sh`) | **The one command.** App type check and tests, server type check and tests with coverage floors. Starts Postgres from docker-compose if it is not running. Prints one line per step (`ok (12s)   Tests: 655 passed`) and the failing lines only if something breaks. `npm run verify` is the same thing. |
+| `npm run check:fast` | App type check and tests only. No database needed, about 30 seconds. Use while working. |
+| `npm run check:docker` | Everything in `check`, then `docker compose build`, which runs the checks again inside the build. |
 | `npm run verify:docker` (`scripts/docker-verify.sh`) | `docker compose up --build -d`, polls `/health` until the server's actually up (migrations + seeding can take a few seconds on a cold start), then prints container status. Fails loudly with recent server logs if it never comes up. |
 | `scripts/get-token.sh [email] [password]` | Prints a fresh access token for the given account (defaults to the seeded demo user) — for one-off `curl` testing without retyping the login/parse boilerplate each time, e.g. `TOKEN=$(scripts/get-token.sh); curl -H "Authorization: Bearer $TOKEN" ...`. |
 

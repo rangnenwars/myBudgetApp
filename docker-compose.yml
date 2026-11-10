@@ -1,6 +1,10 @@
 services:
   mybudget-web:
-    build: .
+    build:
+      context: .
+      args:
+        # 1 = type check and tests run on every build and stop it on failure. 0 = skip (emergency only).
+        RUN_QUALITY: ${RUN_QUALITY:-1}
     ports:
       - "8080:80"
     restart: unless-stopped
@@ -30,6 +34,8 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
+      args:
+        RUN_QUALITY: ${RUN_QUALITY:-1}
     depends_on:
       postgres:
         condition: service_healthy

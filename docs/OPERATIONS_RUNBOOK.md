@@ -134,7 +134,7 @@ $ scp deploy/docker-compose.prod.yml deploy/Caddyfile deploy/remote-deploy.sh de
 ```bash
 $ git checkout main && git pull
 $ git log -1 --format=%H            # the full 40-char SHA = the release tag
-$ npm run verify                    # client + server typecheck & tests (needs local Postgres: docker compose up -d postgres)
+$ npm run check                     # client + server typecheck & tests (starts local Postgres itself if it is not running) (was: docker compose up -d postgres)
 ```
 
 Taking a database backup first is cheap insurance, **mandatory** if the release adds a migration (look at `server/drizzle/` for new `.sql` files since the last release). Skip it on the very first deploy — there is no database yet, and `release.env` doesn't exist:
@@ -272,6 +272,12 @@ deploy@droplet$ cat release.env
 ```
 
 **Rollback to a specific older release:** pick the SHA from `deploy-history.log`, check the images still exist (`docker image ls | grep mybudget` — images are kept 7 days; otherwise they are re-pulled from GHCR), then `echo "IMAGE_TAG=<sha>" > release.env` and run the same `up -d` line. (With CI available you can instead run Actions → *deploy* → *Run workflow* → `image_tag`.)
+
+---
+
+## 6A. Switching on the paid plan (one-off)
+
+Release `0025_paid_access` first; it applies itself on start and changes nothing for users (shadow mode). Then in the app, as an admin: Admin, Plan and pricing. Set the price, upload the payment QR and UPI ID, check the dry run, send the notice to existing users, then turn enforcement on (password). Turn it off again to roll back instantly. Email must be working (Resend or SMTP) for notices and reminders. Full steps: [PAID_PLAN.md](PAID_PLAN.md).
 
 ---
 

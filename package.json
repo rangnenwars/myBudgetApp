@@ -55,7 +55,10 @@
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
     "quality": "npm run typecheck && npm run test:coverage",
-    "verify": "bash scripts/verify.sh",
+    "check": "sh scripts/check.sh",
+    "check:fast": "sh scripts/check.sh fast",
+    "check:docker": "sh scripts/check.sh docker",
+    "verify": "sh scripts/check.sh",
     "verify:docker": "bash scripts/docker-verify.sh",
     "prepare": "husky",
     "lint": "expo lint"

@@ -87,6 +87,7 @@ Tier (`standard` / `pro`) gates the Reports tab, debt-payoff planner, goal ETA, 
 
 * **Recurring entries and loan EMIs** are posted lazily — a "due" check runs before transactions/reports requests (`server/src/lib/autoPost.ts`, `recurringTransactions.ts`, `loanEmiExpenses.ts`), not by a cron. Which calendar day counts as "today" follows `APP_TIMEZONE` (default `Asia/Kolkata`).
 * **Nightly issue digest** — `server/src/jobs/scheduler.ts` (in-process timer) runs `jobs/issueDigest.ts` when `ISSUE_DIGEST_ENABLED=true`: analyse the `issue_reports`, suggest fixes, e-mail admins. A Postgres advisory lock prevents double sends.
+* **Nightly access job** - the same scheduler runs `lib/accessNotices.ts` (reminder emails at 30, 7 and 1 day and when access ends, each once, only when the plan is enforced) and `purgeClaimScreenshots` (payment screenshots 30 days after a decision).
 * **Server start** (`server/docker-entrypoint.sh`): migrate → seed categories → (demo accounts, local only) → start API.
 
 ---
@@ -156,6 +157,8 @@ scripts/              verify.sh, docker-verify.sh, get-token.sh
 | What each role may do | `server/src/middleware/require*.ts` and the role checks in `server/src/routes/admin.ts`, `system.ts` |
 | Add a new role | CHECK constraint in `schema.ts` (`users_role_check`) + a migration, middleware, `AuthContext`, admin screen picker, docs |
 | Hide/show admin UI | `app/admin/*.tsx`, dashboard icons in `app/(tabs)/index.tsx`, `context/AuthContext.tsx` (`isAdmin`, etc.) |
+| Who has access (trial, paid, exception, company) | `server/src/lib/access.ts` (`computeAccess`), `plan.ts` (price and switches), `features.ts` (`featuresFor`); the app only displays `user.plan` ([PAID_PLAN.md](PAID_PLAN.md)) |
+| Payments, QR, confirm or reject | `server/src/lib/payments.ts`, `paymentDetails.ts`, `routes/plan.ts`, `routes/adminPlan.ts`; screens `app/renew.tsx`, `app/admin/payments.tsx` |
 | Make someone admin / grant Pro / deactivate | **no code change** — Admin screen, `create-admin.ts`, or SQL ([DB_ADMIN_QUERIES.md](DB_ADMIN_QUERIES.md)) |
 
 ### Deployment and infrastructure

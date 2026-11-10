@@ -132,6 +132,8 @@ New aggregate query functions (both `database.ts` and `database.web.ts`), all "o
 5. ✅ CSV export (B1.6)
 6. ⬜ Account & Data settings screen (C2) + App lock (B1.7) — still open
 
+> **Update 2026-11-09:** Pro is no longer a test-mode toggle. Access to Pro and the optional features follows the paid plan (6 months free, then ₹200 a year); see [PAID_PLAN.md](PAID_PLAN.md). The Try Pro toggle below is superseded once the plan is switched on.
+
 ## F. Also built (outside this doc's original scope)
 
 - **Input Expenses page** (`app/input-expenses.tsx`) — bulk category+amount entry mirroring the source Excel, with a Monthly/Quarterly/Yearly period selector (quarterly/yearly amounts are divided to a monthly-equivalent before being logged) and automatic Expense/Loan/Investment bucketing by category group (`bucketForGroup`). Added mid-build per direct request; not in the original A–E plan.

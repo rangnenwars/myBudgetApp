@@ -123,6 +123,12 @@ It stops by itself. Nothing more is added, it disappears from the Repeating list
 
 ---
 
+### 9c. Is there a paid plan? What happens when the free six months end?
+
+New accounts get full access for 6 months from their own sign-up, then ₹200 a year for Goals, Loans, Investments, Plan ahead and Pro insights. Everything else stays free. When access ends nothing is deleted; the paid screens pause until renewal. Staff and testers are marked Company accounts and are never charged; an admin can also give any user an exception with an optional end date. Users pay by UPI QR or UPI ID and an admin confirms receipt. It ships switched off; an admin turns it on after notifying existing users. Full rules: [PAID_PLAN.md](PAID_PLAN.md).
+
+---
+
 ### 10. Test accounts — 1 user, 1 admin
 
 Seeded automatically by `server/src/db/seed-accounts.ts` on every `docker compose up` (also re-runnable manually via `cd server && npm run db:seed:accounts`). Local dev credentials only — see the hardening note in question 8 before any real deployment.
