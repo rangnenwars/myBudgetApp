@@ -301,6 +301,12 @@ export const getLoans = async (): Promise<Loan[]> => {
   return data;
 };
 
+/** Permanently deletes a part payment and undoes it: balance, EMI and its expense entry. EMIs cannot be deleted. */
+export const deleteLoanPayment = async (loanId: number, paymentId: number): Promise<{ loan: Loan; expenseRemoved: boolean }> => {
+  const { data } = await api.delete(`/loans/${loanId}/payments/${paymentId}`);
+  return data;
+};
+
 /** A loan's part payments and EMIs, newest first. */
 export const getLoanPayments = async (id: number): Promise<LoanPayment[]> => {
   const { data } = await api.get(`/loans/${id}/payments`);

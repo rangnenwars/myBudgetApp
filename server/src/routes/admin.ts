@@ -4,7 +4,7 @@ import { count, desc, eq, ilike, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import { users } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { idParam, likeContains } from '../lib/validation';
+import { idParam, likeContains, num } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { requireStaff } from '../middleware/requireStaff';
@@ -46,8 +46,8 @@ const getActorEmail = async (actorId: number) => {
 
 const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(100),
-  offset: z.coerce.number().int().min(0).default(0),
+  limit: num((n) => n.int().min(1).max(200)).default(100),
+  offset: num((n) => n.int().min(0)).default(0),
 });
 
 // Newest accounts first, one page at a time, optionally filtered by a name or

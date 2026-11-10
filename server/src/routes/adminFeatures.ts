@@ -5,7 +5,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../db/client';
 import { appSettings, issueReports, userFeatures, users } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { idParam } from '../lib/validation';
+import { idParam, num } from '../lib/validation';
 import { notFound } from '../lib/errors';
 import { recordAdminAction } from '../lib/auditLog';
 import { activeFeature, getSignupDefaults, getUserFeatures, signupDefaultsSchema, SIGNUP_FEATURES_KEY } from '../lib/features';
@@ -32,8 +32,8 @@ const expiryFor = (period: 'month' | 'year' | 'none', now: Date): Date | null =>
   return end;
 };
 const listQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(100),
-  offset: z.coerce.number().int().min(0).default(0),
+  limit: num((n) => n.int().min(1).max(200)).default(100),
+  offset: num((n) => n.int().min(0)).default(0),
 });
 
 const getActorEmail = async (actorId: number) => {

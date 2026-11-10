@@ -6,7 +6,7 @@ import { people, peopleLedger } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { localToday } from '../lib/clock';
 import { badRequest, conflict, notFound } from '../lib/errors';
-import { idParam, isoDate, money, optionalText } from '../lib/validation';
+import { idParam, isoDate, money, optionalText, entryDate } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
@@ -27,7 +27,7 @@ const patchSchema = z
 const entrySchema = z.object({
   kind: z.enum(['lent', 'borrowed', 'received', 'repaid', 'written_off']),
   amount: money().optional(),
-  date: isoDate().optional(),
+  date: entryDate().optional(),
   note: optionalText(500),
   due_date: isoDate('due_date').nullish(),
 });

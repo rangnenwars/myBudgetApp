@@ -201,7 +201,7 @@ describe('GET /api/v1/transactions/range', () => {
   it('only returns transactions inside the requested month range', async () => {
     const { accessToken } = await registerUser();
     const now = new Date();
-    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-15`;
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`; // the 1st: never in the future
 
     // A transaction dated 6 months ago, likely outside the default "last 3 months" range used below.
     const old = new Date(now.getFullYear(), now.getMonth() - 6, 15);

@@ -275,6 +275,8 @@ deploy@droplet$ cat release.env
 
 ---
 
+> Migrations 0025 and 0026: checks, manual steps and rollback are in [MIGRATION_STEPS.md](MIGRATION_STEPS.md).
+
 ## 6A. Switching on the paid plan (one-off)
 
 Release `0025_paid_access` first; it applies itself on start and changes nothing for users (shadow mode). Then in the app, as an admin: Admin, Plan and pricing. Set the price, upload the payment QR and UPI ID, check the dry run, send the notice to existing users, then turn enforcement on (password). Turn it off again to roll back instantly. Email must be working (Resend or SMTP) for notices and reminders. Full steps: [PAID_PLAN.md](PAID_PLAN.md).

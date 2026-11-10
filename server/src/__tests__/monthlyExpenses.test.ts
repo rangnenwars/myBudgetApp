@@ -20,7 +20,7 @@ describe('Monthly expenses match the Transactions month filter', () => {
     await add(accessToken, { amount: 1900, date: '2026-09-01', category_key: 'fuel_petrol' });
     await add(accessToken, { amount: 70.25, date: '2026-09-30' });
     // October is left empty on purpose.
-    await add(accessToken, { amount: 7400, date: '2026-11-15' });
+    await add(accessToken, { amount: 7400, date: '2026-11-05' });
     await add(accessToken, { amount: 50000, date: '2026-11-01', type: 'income', category_key: 'salary_1' });
 
     const series = (
@@ -47,7 +47,7 @@ describe('Monthly expenses match the Transactions month filter', () => {
     const { accessToken } = await registerUser({ features: [] });
     await add(accessToken, { amount: 2900, date: '2026-11-03', category_key: 'fuel_petrol' });
     await add(accessToken, { amount: 1600, date: '2026-11-09' });
-    await add(accessToken, { amount: 800, date: '2026-11-20', category_key: 'fuel_petrol' });
+    await add(accessToken, { amount: 800, date: '2026-11-08', category_key: 'fuel_petrol' });
 
     const q = { startMonth: 11, startYear: 2026, endMonth: 11, endYear: 2026 };
     const breakdown = (await request(app).get('/api/v1/reports/category-breakdown').query({ ...q, type: 'expense' }).set(auth(accessToken))).body as { category: string; total: number }[];

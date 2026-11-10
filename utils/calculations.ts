@@ -229,6 +229,24 @@ export const computePartPayment = (loan: Pick<Loan, 'outstanding' | 'emi'>, amou
   return { outstanding, emi, monthsLeft: Math.ceil(outstanding / emi) };
 };
 
+/**
+ * Undoes a part payment: the balance goes back up by the amount and the EMI goes back too.
+ * `emiBefore` is the EMI saved when the payment was made. It is exact when no part payment
+ * came after this one (`isLatest`). Otherwise, or for an old payment with no saved EMI, the EMI
+ * is scaled by the same ratio computePartPayment used. A loan now at zero keeps its EMI.
+ */
+export const undoPartPayment = (
+  loan: Pick<Loan, 'outstanding' | 'emi'>,
+  amount: number,
+  opts: { emiBefore?: number | null; isLatest: boolean }
+): { outstanding: number; emi: number } => {
+  const outstanding = round2(loan.outstanding + amount);
+  const saved = opts.emiBefore != null && opts.emiBefore > 0 ? opts.emiBefore : null;
+  if (opts.isLatest && saved != null) return { outstanding, emi: saved };
+  if (loan.outstanding <= 0) return { outstanding, emi: saved ?? loan.emi };
+  return { outstanding, emi: Math.max(0.01, round2(loan.emi * (outstanding / loan.outstanding))) };
+};
+
 // ---------- EMI principal / interest split ----------
 
 export interface EmiSplit {

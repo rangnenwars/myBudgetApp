@@ -4,12 +4,13 @@ import { and, eq, desc, sql, SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { loanPayments, loans, transactions } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
-import { isoDate, money, idParam } from '../lib/validation';
+import { isoDate, money, idParam, num, entryDate } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { requireFeature } from '../middleware/requireFeature';
 import { badRequest, notFound } from '../lib/errors';
 import { recomputeBudgetClass } from '../lib/budgetClass';
 import { computePartPayment } from '../calculations';
+import { deletePartPayment } from '../lib/loanPaymentDelete';
 import { loanEmiMiddleware, monthStart } from '../lib/loanEmiExpenses';
 import { localToday } from '../lib/clock';
 
@@ -17,7 +18,7 @@ const router = Router();
 router.use(requireAuth, requireFeature('loans'), loanEmiMiddleware);
 
 const payEmiSchema = z.object({
-  date: isoDate(),
+  date: entryDate(),
 });
 
 const partPaymentSchema = payEmiSchema.extend({
@@ -29,11 +30,11 @@ const optionalText = (max: number) => z.string().trim().max(max).nullish().trans
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
   principal: money(),
-  outstanding: z.coerce.number().min(0).max(9_999_999_999.99, 'Amount is too large.'),
+  outstanding: num((n) => n.min(0).max(9_999_999_999.99, 'Amount is too large.')),
   emi: money(),
   // Annual %, numeric(5,2).
-  interest_rate: z.coerce.number().min(0).max(99.99, 'Interest rate must be under 100%.').nullish(),
-  tenure_months: z.coerce.number().int().min(1).max(600).nullish(),
+  interest_rate: num((n) => n.min(0).max(99.99, 'Interest rate must be under 100%.')).nullish(),
+  tenure_months: num((n) => n.int().min(1).max(600)).nullish(),
   start_date: isoDate('start_date').nullish(),
   loan_type: optionalText(40),
   lender: optionalText(80),
@@ -164,6 +165,16 @@ router.get(
   })
 );
 
+// Permanently deletes one part payment and undoes it: balance and EMI go back, its expense entry is
+// removed, later rows in the list move by the same amount (lib/loanPaymentDelete.ts). EMI rows: 400.
+router.delete(
+  '/:id/payments/:paymentId',
+  asyncHandler(async (req, res) => {
+    const result = await deletePartPayment(req.userId!, idParam(req), idParam(req, 'paymentId'));
+    res.json(result);
+  })
+);
+
 // Marks one EMI as paid on a loan that does NOT count as an expense (e.g.
 // money borrowed from family): lowers the outstanding balance by min(emi,
 // outstanding) so the final instalment can't overshoot, and logs no expense.
@@ -176,25 +187,26 @@ router.post(
     const id = idParam(req);
     const { date } = payEmiSchema.parse(req.body);
 
-    const [loan] = await db
-      .select()
-      .from(loans)
-      .where(and(eq(loans.id, id), eq(loans.userId, req.userId!), eq(loans.is_active, true)));
-    if (!loan) throw notFound('Loan not found.');
-    if (loan.counts_as_expense) {
-      throw badRequest("This loan's EMI is recorded and its balance reduced automatically every month.");
-    }
-    if (loan.outstanding <= 0) throw badRequest('This loan is already fully paid.');
+    // One transaction with the loan row locked: the balance and its payment history change together,
+    // and two taps at once can't both pay the same instalment.
+    const updatedLoan = await db.transaction(async (tx) => {
+      const [loan] = await tx
+        .select()
+        .from(loans)
+        .where(and(eq(loans.id, id), eq(loans.userId, req.userId!), eq(loans.is_active, true)))
+        .for('update');
+      if (!loan) throw notFound('Loan not found.');
+      if (loan.counts_as_expense) {
+        throw badRequest("This loan's EMI is recorded and its balance reduced automatically every month.");
+      }
+      if (loan.outstanding <= 0) throw badRequest('This loan is already fully paid.');
 
-    const payment = Math.min(loan.emi, loan.outstanding);
-    const nextOutstanding = Math.round((loan.outstanding - payment) * 100) / 100;
-    const [updatedLoan] = await db
-      .update(loans)
-      .set({ outstanding: nextOutstanding, updated_at: new Date() })
-      .where(and(eq(loans.id, id), eq(loans.outstanding, loan.outstanding)))
-      .returning();
-    if (!updatedLoan) throw badRequest('This loan changed while paying — please try again.');
-    await db.insert(loanPayments).values({ userId: req.userId!, loanId: id, kind: 'emi', amount: payment, date, balanceAfter: nextOutstanding });
+      const payment = Math.min(loan.emi, loan.outstanding);
+      const nextOutstanding = Math.round((loan.outstanding - payment) * 100) / 100;
+      const [updated] = await tx.update(loans).set({ outstanding: nextOutstanding, updated_at: new Date() }).where(eq(loans.id, id)).returning();
+      await tx.insert(loanPayments).values({ userId: req.userId!, loanId: id, kind: 'emi', amount: payment, date, balanceAfter: nextOutstanding });
+      return updated;
+    });
 
     res.status(201).json({ loan: updatedLoan });
   })
@@ -233,9 +245,11 @@ router.post(
         .where(eq(loans.id, id))
         .returning();
 
-      await tx.insert(loanPayments).values({ userId: req.userId!, loanId: id, kind: 'part_payment', amount: body.amount, date: body.date, balanceAfter: next.outstanding });
-
-      if (!loan.counts_as_expense) return { loan: updatedLoan, transaction: null };
+      const payment = { userId: req.userId!, loanId: id, kind: 'part_payment' as const, amount: body.amount, date: body.date, balanceAfter: next.outstanding, emiBefore: loan.emi };
+      if (!loan.counts_as_expense) {
+        await tx.insert(loanPayments).values(payment);
+        return { loan: updatedLoan, transaction: null };
+      }
 
       const [transaction] = await tx
         .insert(transactions)
@@ -251,6 +265,7 @@ router.post(
           year: y,
         })
         .returning();
+      await tx.insert(loanPayments).values({ ...payment, transactionId: transaction.id });
 
       return { loan: updatedLoan, transaction };
     });

@@ -6,7 +6,7 @@ import { db } from '../db/client';
 import { transactions, categories, recurringTransactions, people, peopleLedger } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { monthsDateRange } from '../lib/clock';
-import { isoDate, idParam, money, optionalText, likeContains } from '../lib/validation';
+import { isoDate, idParam, money, optionalText, likeContains, num, entryDate } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
 import { autoPostMiddleware } from '../lib/autoPost';
 import { activeRuleFilter, endFields, NO_REPEAT_CATEGORIES, NO_REPEAT_MESSAGE, ruleScheduleFor } from '../lib/recurringTransactions';
@@ -19,21 +19,21 @@ const router = Router();
 router.use(requireAuth, autoPostMiddleware);
 
 const monthYearQuery = z.object({
-  month: z.coerce.number().int().min(1).max(12).optional(),
-  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  month: num((n) => n.int().min(1).max(12)).optional(),
+  year: num((n) => n.int().min(2000).max(2100)).optional(),
 });
 
 const rangeQuery = z.object({
-  startMonth: z.coerce.number().int().min(1).max(12),
-  startYear: z.coerce.number().int().min(2000).max(2100),
-  endMonth: z.coerce.number().int().min(1).max(12),
-  endYear: z.coerce.number().int().min(2000).max(2100),
+  startMonth: num((n) => n.int().min(1).max(12)),
+  startYear: num((n) => n.int().min(2000).max(2100)),
+  endMonth: num((n) => n.int().min(1).max(12)),
+  endYear: num((n) => n.int().min(2000).max(2100)),
 });
 
 const UNFILTERED_LIMIT = 5000;
 
 const pageQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  limit: num((n) => n.int().min(1).max(200)).default(50),
   // Opaque to the client: "<date>_<id>" of the last row of the previous page.
   cursor: z
     .string()
@@ -52,7 +52,7 @@ const baseSchema = z.object({
   category_key: z.string().min(1).max(64),
   subcategory: optionalText(100),
   note: optionalText(500),
-  date: isoDate(),
+  date: entryDate(),
 });
 
 // Create-only: also save a rule that posts the same entry again every
@@ -245,7 +245,7 @@ router.post(
 // all saved together or not at all, and tagged with one split_group.
 const splitSchema = z.object({
   type: z.enum(['income', 'expense']),
-  date: isoDate(),
+  date: entryDate(),
   note: optionalText(500),
   total: money(),
   lines: z
@@ -299,13 +299,13 @@ router.post(
 // worked out in paise, and any leftover paise stay with the user so the parts
 // always add up to the total.
 const splitPeopleSchema = z.object({
-  date: isoDate(),
+  date: entryDate(),
   note: optionalText(500),
   category_key: z.string().min(1).max(64),
   total: money(),
   method: z.enum(['equal', 'custom']),
   people: z
-    .array(z.object({ person_id: z.coerce.number().int().positive(), amount: money().optional() }))
+    .array(z.object({ person_id: num((n) => n.int().positive()), amount: money().optional() }))
     .min(1, 'Choose at least one person.')
     .max(20, 'At most 20 people.'),
 });

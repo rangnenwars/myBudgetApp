@@ -377,7 +377,8 @@ describe('bad request bodies', () => {
 
   it('accepts 29 February only in a leap year', async () => {
     const { accessToken } = await registerUser();
-    expect((await call('post', '/api/v1/transactions', accessToken, { ...VALID_TXN, date: '2028-02-29' })).status).toBe(201);
+    expect((await call('post', '/api/v1/transactions', accessToken, { ...VALID_TXN, date: '2024-02-29' })).status).toBe(201);
+    expect((await call('post', '/api/v1/transactions', accessToken, { ...VALID_TXN, date: '2026-02-29' })).status).toBe(400);
   });
 
   it.each([
