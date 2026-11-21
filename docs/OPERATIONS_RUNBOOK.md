@@ -275,7 +275,7 @@ deploy@droplet$ cat release.env
 
 ---
 
-> Migrations 0025 and 0026: checks, manual steps and rollback are in [MIGRATION_STEPS.md](MIGRATION_STEPS.md).
+> Migrations 0025 onward: run `server/scripts/migrate-safe.sh` (backup, apply, verify); checks, manual steps and rollback are in [MIGRATION_STEPS.md](MIGRATION_STEPS.md).
 
 ## 6A. Switching on the paid plan (one-off)
 
