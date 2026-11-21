@@ -711,3 +711,54 @@ export const setUserFeature = async (userId: number, key: FeatureKey, on: boolea
   const { data } = await api.put(`/admin/users/${userId}/features/${key}`, { on, ...(period ? { period } : {}) });
   return data;
 };
+
+// ---- User activity (sign-ins, sign-outs, page hits) ----
+
+export interface SignInEntry {
+  kind: 'login' | 'logout';
+  platform: string | null;
+  location: string | null;
+  detail: string | null;
+  at: string;
+}
+export const getMySignInHistory = async (): Promise<SignInEntry[]> => (await api.get('/activity/me')).data;
+
+export const setActivitySharing = async (on: boolean): Promise<boolean> => (await api.patch('/auth/me/activity-sharing', { on })).data.shareActivity;
+
+export const sendPageHits = async (pages: { path: string; at: string }[]): Promise<void> => {
+  await api.post('/activity/pages', { pages });
+};
+
+export interface ActivityOverview {
+  days: number;
+  logins: number;
+  people: number;
+  pageViews: number;
+  topPages: { page: string; label: string; count: number }[];
+  platforms: Record<string, number>;
+  byDay: { day: string; logins: number; pageViews: number }[];
+}
+export const getActivityOverview = async (days: number): Promise<ActivityOverview> => (await api.get('/admin/activity/overview', { params: { days } })).data;
+
+export interface ActivityEvent {
+  kind: 'login' | 'logout' | 'page';
+  page: string | null;
+  label: string | null;
+  at: string;
+  detail: string | null;
+}
+export interface ActivitySession {
+  start: string;
+  end: string;
+  platform: string | null;
+  location: string | null;
+  events: ActivityEvent[];
+}
+export interface UserActivity {
+  person: { id: number; email: string; name: string };
+  days: number;
+  lastSeen: string | null;
+  logins: number;
+  sessions: ActivitySession[];
+}
+export const getUserActivity = async (id: number, days: number): Promise<UserActivity> => (await api.get(`/admin/activity/users/${id}`, { params: { days } })).data;

@@ -19,6 +19,15 @@ export default function PrivacyScreen() {
           or delete everything from Settings at any time.
         </Text>
         <View style={styles.section}>
+          <Text style={styles.heading}>Sign-ins and pages visited</Text>
+          <Text style={kit.muted}>
+            We record when you sign in or out, with the kind of device and the first part of your internet address, to show you your own sign-in history and to understand how the app is used.
+            Unless you switch it off in Settings, we also record the names of the pages you open, never what is on them: no amounts, names or what you type.
+            Detailed records are kept for 90 days, then only anonymous daily counts remain. Our administrators can see your sign-ins and pages visited, and each time they look is written to an audit log.
+            You can download these records with your data, and they are deleted with your account.
+          </Text>
+        </View>
+        <View style={styles.section}>
           <Text style={styles.heading}>Problem reports</Text>
           <Text style={kit.muted}>
             When you report a problem, only our team reads it, to fix the problem. A screenshot you attach can be opened

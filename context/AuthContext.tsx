@@ -1,4 +1,6 @@
 import { markTourPending } from '../utils/tourPrefs';
+import { resetSessionId } from '../utils/activity';
+import { setActivitySharing } from '../utils/database';
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api, apiErrorMessage, registerSessionExpiredHandler } from '../utils/api';
 import type { FeatureKey } from '../constants/features';
@@ -25,6 +27,8 @@ interface SessionUser {
   accountKind?: 'customer' | 'company';
   /** Where the user stands on the paid plan; the server decides, the app only shows it. */
   plan?: PlanInfo;
+  /** "Share which pages I visit" in Settings. Missing means on. */
+  shareActivity?: boolean;
 }
 
 interface AuthContextValue {
@@ -40,6 +44,8 @@ interface AuthContextValue {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Ends every session, this one included. */
   logoutEverywhere: () => Promise<void>;
+  /** Switches "Share which pages I visit" on or off. */
+  setShareActivity: (on: boolean) => Promise<void>;
   /** Permanently deletes the account (password required), then signs out. */
   deleteMyAccount: (password: string) => Promise<void>;
   isPro: boolean;
@@ -94,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (email: string, password: string) => {
     try {
+      resetSessionId();
       const { data } = await api.post('/auth/login', { email, password });
       await setTokens(data.accessToken, data.refreshToken);
       setUser(data.user);
@@ -105,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = useCallback(async (name: string, email: string, phone: string, password: string) => {
     try {
+      resetSessionId();
       const { data } = await api.post('/auth/register', { name: name.trim(), email, phone, password });
       await setTokens(data.accessToken, data.refreshToken);
       // Before the user is set, so the tour is waiting for them the moment they land.
@@ -125,6 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await api.post('/auth/logout', refreshToken ? { refreshToken } : {}).catch(() => {});
     }
     await clearTokens();
+    resetSessionId();
     setUser(null);
   }, []);
 
@@ -163,7 +172,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logoutEverywhere = useCallback(async () => {
     await api.post('/auth/me/logout-all').catch(() => {});
     await clearTokens();
+    resetSessionId();
     setUser(null);
+  }, []);
+
+  const setShareActivity = useCallback(async (on: boolean) => {
+    const shareActivity = await setActivitySharing(on);
+    setUser((u) => (u ? { ...u, shareActivity } : u));
   }, []);
 
   // Errors (wrong password, last admin) propagate so the screen can show them.
@@ -183,6 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTier,
     reloadUser,
     changePassword,
+    setShareActivity,
     logoutEverywhere,
     deleteMyAccount,
     isPro: user?.tier === 'pro',

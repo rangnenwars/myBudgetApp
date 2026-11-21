@@ -204,6 +204,13 @@
       "when": 1795258987097,
       "tag": "0028_tour_outcomes",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795261177681,
+      "tag": "0029_user_activity",
+      "breakpoints": true
     }
   ]
 }

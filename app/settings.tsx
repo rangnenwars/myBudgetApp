@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, View, StyleSheet, KeyboardAvoidingView, Platform, Switch } from 'react-native';
 import { Text } from '../components/i18n';
 import { Redirect, router } from 'expo-router';
 import { Card } from '../components/Card';
@@ -20,7 +20,7 @@ import { t } from '../utils/i18n';
 const ROLE_LABEL: Record<string, string> = { user: 'Member', admin: 'Admin', support: 'Support', system_manager: 'System manager' };
 
 export default function SettingsScreen() {
-  const { user, isLoading, changePassword, logoutEverywhere, deleteMyAccount, reloadUser } = useAuth();
+  const { user, isLoading, changePassword, logoutEverywhere, deleteMyAccount, reloadUser, setShareActivity } = useAuth();
   const { lang, setLang } = useLanguage();
   const { start: startTour } = useTour();
 
@@ -140,6 +140,18 @@ export default function SettingsScreen() {
         <SectionTitle>Language</SectionTitle>
         <Segmented<Language> options={LANGUAGES.map((l) => ({ key: l.key, label: l.label }))} value={lang} onChange={setLang} />
 
+        <SectionTitle>Privacy</SectionTitle>
+        <Card style={styles.formCard}>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>Share which pages I visit</Text>
+              <Text style={kit.muted}>Helps us see which parts of the app are used. Only page names, never amounts, names or what you type. Sign-ins are always recorded.</Text>
+            </View>
+            <Switch value={user.shareActivity !== false} onValueChange={(on) => setShareActivity(on).catch(() => {})} />
+          </View>
+          <Button label="My sign-in history" variant="outline" onPress={() => router.push('/sign-in-history')} />
+        </Card>
+
         <SectionTitle>How to use Prapanji</SectionTitle>
         <Button label="Replay the tour" variant="outline" onPress={startTour} />
 
@@ -184,6 +196,7 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   name: { color: COLORS.text, fontSize: 17, fontWeight: '700' },
   role: { marginTop: SPACING.xs },
   formCard: { gap: SPACING.sm },

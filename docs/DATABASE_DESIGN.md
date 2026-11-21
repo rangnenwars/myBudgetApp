@@ -436,6 +436,12 @@ CREATE INDEX idx_user_features_requested ON user_features(requested_at) WHERE re
 --   user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 --   outcome TEXT ('finished' | 'skipped'), step SMALLINT (1-20), language TEXT ('en' | 'hi'), created_at.
 --   Counts only, shown on System metrics. No other data about the person.
+-- user_activity (migration 0029): sign-ins, sign-outs and page hits (USER_ACTIVITY.md).
+--   id, user_id (cascade), kind 'login'|'logout'|'page', page (a fixed pattern; set only when kind = 'page'),
+--   session_id, platform 'web'|'android'|'ios', app_version, location (coarse: /24 or /48), detail, created_at.
+--   Kept 90 days, then rolled up and deleted.
+-- activity_daily (0029): anonymous daily counts, PK (day, kind, page, platform), events, people. Customers only.
+-- users.share_activity BOOLEAN NOT NULL DEFAULT true: "Share which pages I visit".
 -- app_settings key 'plan' = price, trial months, notice days, features, enforced flags.
 -- ============================================================
 

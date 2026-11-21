@@ -1,4 +1,4 @@
-# Migration steps: 0025 to 0028
+# Migration steps: 0025 to 0029
 
 Migrations normally apply by themselves. This page is for checking they did, and for doing them by hand if they did not.
 
@@ -7,6 +7,7 @@ Migrations normally apply by themselves. This page is for checking they did, and
 | `0025_paid_access` | Adds the tables `access_grants`, `access_notices`, `payment_claims`, `payment_settings`; the columns `users.account_kind` and `user_features.denied`; then **fills data**: marks admin, support, system manager and `@mybudget.local` accounts as Company, and gives every other existing user a free period of 6 months from their own sign-up date. | Medium. It writes one row per existing customer. The plan stays **switched off**, so nobody loses access. |
 | `0026_loan_payment_links` | Adds two empty columns to `loan_payments` (`transaction_id`, `emi_before`) and a link to `transactions`. Changes no existing row. | Low. Needs 0025 first (it is numbered after it, nothing else depends on it). |
 | `0027_investment_sip` | Adds optional SIP columns to `investments` (`sip_amount`, `sip_day`, `sip_category`, `sip_ends_on`, `sip_no_end`, `sip_posted_through`) with four safety checks. Changes no existing row. | Low. |
+| `0029_user_activity` | Creates `user_activity` and `activity_daily`, adds `users.share_activity` (default true). | Low. New tables and one column with a default. |
 | `0028_tour_outcomes` | Creates the small table `tour_outcomes` (one row per person: how the first-time tour ended). | Low. New table only. |
 
 ## 1. The normal way: do nothing
@@ -39,7 +40,7 @@ WHERE table_name = 'loan_payments' AND column_name IN ('transaction_id', 'emi_be
 SELECT id, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 5;
 ```
 
-After 0025 the newest `created_at` is `1794192226363`; after 0026 `1794326603658`; after 0027 `1795257939468`; after 0028 `1795258987097`. The migrator applies every file whose timestamp in `server/drizzle/meta/_journal.json` is **newer than the newest row** in that table, so what matters is that table, not the file hash.
+After 0025 the newest `created_at` is `1794192226363`; after 0026 `1794326603658`; after 0027 `1795257939468`; after 0028 `1795258987097`; after 0029 `1795261177681`. The migrator applies every file whose timestamp in `server/drizzle/meta/_journal.json` is **newer than the newest row** in that table, so what matters is that table, not the file hash.
 
 ## 4. Apply by hand: the safe way
 
@@ -66,6 +67,7 @@ psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0
 psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0026_loan_payment_links.sql
 psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0027_investment_sip.sql
 psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0028_tour_outcomes.sql
+psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0029_user_activity.sql
 ```
 
 `--single-transaction` and `ON_ERROR_STOP` make a failure leave nothing half-applied. Skip any file the checks in section 3 say is already applied.
@@ -77,6 +79,7 @@ INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0025 applie
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0026 applied by hand', 1794326603658);
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0027 applied by hand', 1795257939468);
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0028 applied by hand', 1795258987097);
+INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0029 applied by hand', 1795261177681);
 ```
 
 If you skip this step, the next server start tries to apply the file again and stops with "already exists".
@@ -93,6 +96,8 @@ SELECT count(*) FROM users u WHERE u.account_kind = 'customer'
 -- 0027: the SIP columns exist and no existing investment has a SIP
 SELECT count(*) FILTER (WHERE sip_amount IS NOT NULL) AS with_sip, count(*) AS total FROM investments;   -- with_sip = 0 right after migrating
 
+-- 0029: activity tables and column exist
+SELECT to_regclass('public.user_activity') IS NOT NULL AND to_regclass('public.activity_daily') IS NOT NULL AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'share_activity') AS m0029_applied;
 -- 0028: the tour table exists and is empty
 SELECT to_regclass('public.tour_outcomes') IS NOT NULL AS m0028_applied;
 
@@ -112,6 +117,14 @@ Prefer restoring the backup from section 2 if real use has happened since. Other
 ALTER TABLE loan_payments DROP CONSTRAINT IF EXISTS loan_payments_transaction_id_transactions_id_fk;
 ALTER TABLE loan_payments DROP COLUMN IF EXISTS transaction_id, DROP COLUMN IF EXISTS emi_before;
 DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1794326603658;
+```
+
+**0029** (loses all activity records and each person's sharing choice):
+
+```sql
+DROP TABLE IF EXISTS user_activity, activity_daily;
+ALTER TABLE users DROP COLUMN IF EXISTS share_activity;
+DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1795261177681;
 ```
 
 **0028** (loses only the tour counts):
@@ -143,7 +156,7 @@ DELETE FROM app_settings WHERE key = 'plan';
 DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1794192226363;
 ```
 
-Roll back in reverse order (0028, 0027, 0026, then 0025) if you need more than one. After a rollback, deploy the previous image, because the new code expects the columns.
+Roll back in reverse order (0029, 0028, 0027, 0026, then 0025) if you need more than one. After a rollback, deploy the previous image, because the new code expects the columns.
 
 ## 8. Order of a release that includes both
 

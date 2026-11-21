@@ -56,6 +56,9 @@ export const users = pgTable('users', {
   // Set on successful register/login (routes/auth.ts) — powers the
   // system-manager usage metrics; not updated on token refresh.
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  // "Share which pages I visit" in Settings. Off: page hits are not recorded for this person. Sign-ins and
+  // sign-outs are always recorded (they are also the security history shown in Settings).
+  shareActivity: boolean('share_activity').notNull().default(true),
   // Set when the user opens the link from their verification email
   // (routes/auth.ts). Unverified accounts still work — the app just nudges.
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
@@ -733,4 +736,43 @@ export const tourOutcomes = pgTable('tour_outcomes', {
   check('tour_outcomes_outcome_check', sql`${table.outcome} IN ('finished', 'skipped')`),
   check('tour_outcomes_step_check', sql`${table.step} BETWEEN 1 AND 20`),
   check('tour_outcomes_language_check', sql`${table.language} IN ('en', 'hi')`),
+]);
+
+// ============================================================
+// user_activity: sign-ins, sign-outs and page hits, for understanding how the app is used (lib/activity.ts).
+// A page hit stores one of a fixed list of page patterns (utils/pagePatterns.ts), never an address, id,
+// amount or name. A login keeps a coarse location (first part of the address). Raw rows are kept 90 days,
+// then rolled up into activity_daily and deleted (lib/activityRetention.ts). Removed with the account.
+// ============================================================
+export const userActivity = pgTable('user_activity', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['login', 'logout', 'page'] }).notNull(),
+  page: text('page'),
+  sessionId: text('session_id'),
+  platform: text('platform', { enum: ['web', 'android', 'ios'] }),
+  appVersion: text('app_version'),
+  location: text('location'),
+  detail: text('detail'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_user_activity_user_time').on(table.userId, table.createdAt),
+  index('idx_user_activity_time').on(table.createdAt),
+  index('idx_user_activity_kind_time').on(table.kind, table.createdAt),
+  check('user_activity_kind_check', sql`${table.kind} IN ('login', 'logout', 'page')`),
+  check('user_activity_page_check', sql`(${table.kind} = 'page') = (${table.page} IS NOT NULL)`),
+  check('user_activity_platform_check', sql`${table.platform} IS NULL OR ${table.platform} IN ('web', 'android', 'ios')`),
+  check('user_activity_lengths_check', sql`length(coalesce(${table.page}, '')) <= 80 AND length(coalesce(${table.location}, '')) <= 60 AND length(coalesce(${table.appVersion}, '')) <= 20 AND length(coalesce(${table.sessionId}, '')) <= 40`),
+]);
+
+// Anonymous daily counts kept after the raw rows are gone: per day, kind, page and platform (customers only).
+export const activityDaily = pgTable('activity_daily', {
+  day: date('day').notNull(),
+  kind: text('kind').notNull(),
+  page: text('page').notNull().default(''),
+  platform: text('platform').notNull().default(''),
+  events: integer('events').notNull(),
+  people: integer('people').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.day, table.kind, table.page, table.platform] }),
 ]);

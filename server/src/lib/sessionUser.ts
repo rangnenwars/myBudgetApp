@@ -16,6 +16,7 @@ export const buildSessionUser = async (user: typeof users.$inferSelect) => {
     ...toUserResponse(user),
     tier: effectiveTier(user.tier, access, plan),
     accountKind: user.accountKind,
+    shareActivity: user.shareActivity,
     features,
     plan: planSummary(access, plan),
   };

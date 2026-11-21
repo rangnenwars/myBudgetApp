@@ -26,6 +26,7 @@ const ACTION_LABEL: Record<string, string> = {
   exception_set: 'Set an exception',
   exception_cleared: 'Turned off an exception',
   account_kind_changed: 'Changed account type',
+  viewed_activity: 'Viewed a person’s activity',
 };
 
 const fmtWhen = (iso: string) =>

@@ -165,6 +165,11 @@ export default function AdminUsersScreen() {
               <Ionicons name="stats-chart-outline" size={20} color={COLORS.textMuted} />
             </Pressable>
           )}
+          {canViewMetrics && (
+            <Pressable onPress={() => router.push('/admin/activity')} hitSlop={6} accessibilityLabel="User activity">
+              <Ionicons name="pulse-outline" size={21} color={COLORS.textMuted} />
+            </Pressable>
+          )}
           <Pressable onPress={() => router.push('/admin/plan')} hitSlop={6} accessibilityLabel="Plan and pricing">
             <Ionicons name="card-outline" size={21} color={COLORS.textMuted} />
           </Pressable>

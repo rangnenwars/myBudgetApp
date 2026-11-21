@@ -11,6 +11,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { LanguageProvider } from '../context/LanguageContext';
 import { TourProvider } from '../context/TourContext';
 import { TourSheet } from '../components/TourSheet';
+import { ActivityTracker } from '../components/ActivityTracker';
 import { RemountOnLanguage } from '../components/i18n/RemountOnLanguage';
 import { CategoriesProvider } from '../context/CategoriesContext';
 import { COLORS, SCHEME } from '../constants/theme';
@@ -56,6 +57,9 @@ export default function RootLayout() {
               <Stack.Screen name="admin/audit-log" />
               <Stack.Screen name="admin/metrics" />
               <Stack.Screen name="admin/features" />
+              <Stack.Screen name="admin/activity" />
+              <Stack.Screen name="admin/activity-user" />
+              <Stack.Screen name="sign-in-history" />
               <Stack.Screen name="settings" />
               <Stack.Screen name="accounts" />
               <Stack.Screen name="budgets" />
@@ -77,6 +81,7 @@ export default function RootLayout() {
             </RemountOnLanguage>
           </ResponsiveContainer>
           <TourSheet />
+          <ActivityTracker />
         </CategoriesProvider>
         </TourProvider>
       </AuthProvider>

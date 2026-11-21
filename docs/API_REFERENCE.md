@@ -600,6 +600,19 @@ Requires `role: 'admin'` or `role: 'system_manager'` (`requireSystemManager`). E
 
 ---
 
+## User activity 🔒
+
+See [USER_ACTIVITY.md](USER_ACTIVITY.md). Every request may carry `X-App-Platform` (`web|android|ios`), `X-App-Version` and `X-Session-Id` (uuid); invalid values are ignored.
+
+* `POST /activity/pages` body `{ pages: [{ path, at? }] }` (1 to 50, `path` up to 200 characters, `at` within the last 24 hours). Only known page patterns are kept. Returns `{ recorded, dropped, sharing }`; with sharing off nothing is stored. 30 a minute per account (429).
+* `GET /activity/me` my sign-ins and sign-outs for 90 days, newest first (up to 200).
+* `PATCH /auth/me/activity-sharing` body `{ on: boolean }` returns `{ shareActivity }`.
+* `GET /admin/activity/overview?days=1..90` (default 7) 🛡️ admin or system manager: `{ days, logins, people, pageViews, topPages, platforms, byDay }`, counts only.
+* `GET /admin/activity/users/:id?days=1..90` (default 30) 🛡️ admin only: `{ person, days, lastSeen, logins, sessions }`. Writes an audit entry `viewed_activity`.
+* Sign-in, sign-up, `POST /auth/logout` and `POST /auth/me/logout-all` record events. `GET /auth/me/export` now includes `activity`.
+
+---
+
 ## Report issue — `/api/v1/issues` 🔒
 
 Any signed-in user can file a report. This route alone accepts JSON bodies up to 3 MB (everything else keeps express's 100 kB default) because the screenshot travels base64-encoded. Rate-limited to 10 reports per IP per 15 minutes.

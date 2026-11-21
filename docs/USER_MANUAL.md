@@ -227,6 +227,7 @@ Something broken or confusing? Dashboard → **bug icon**.
 * Your data is private to your account. Administrators can see account details (name, email, role, status) to run the service — **not** your transactions, loans, investments or goals. The one exception is a screenshot you choose to attach to a problem report (see §12).
 * Your password is stored only as a one-way hash; nobody, including the administrators, can read it.
 * The connection is encrypted (HTTPS). Sessions expire quickly and refresh on their own; **Sign out everywhere** ends them all immediately.
+* Settings, **Privacy**, shows **My sign-in history** (when you signed in and out in the last 90 days) and a switch, **Share which pages I visit**. With it on we record page names only, never amounts, names or what you type. Detailed records are kept 90 days.
 * Use a password that is unique to this app. Never share it. Staff will never ask for your password.
 
 ---
