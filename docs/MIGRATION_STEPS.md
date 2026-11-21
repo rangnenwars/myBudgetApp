@@ -10,6 +10,31 @@ Migrations normally apply by themselves. This page is for checking they did, and
 | `0029_user_activity` | Creates `user_activity` and `activity_daily`, adds `users.share_activity` (default true). | Low. New tables and one column with a default. |
 | `0028_tour_outcomes` | Creates the small table `tour_outcomes` (one row per person: how the first-time tour ended). | Low. New table only. |
 
+## 0. The automated way (use this)
+
+One command does the backup, applies what is pending, and checks every result is really in the database. It stops at the first problem and tells you how to go back.
+
+```bash
+server/scripts/migrate-safe.sh --dry-run   # only show what is pending; changes nothing
+server/scripts/migrate-safe.sh             # backup, apply, verify, inside the running server container
+server/scripts/migrate-safe.sh --local     # same, from a checkout using DATABASE_URL in server/.env
+```
+
+The pieces, if you want one on its own (run inside `server/`, or with `docker compose exec server` in front):
+
+| Command | What it does |
+|---|---|
+| `npm run db:plan -- status` | Lists migrations: applied or pending, and for each planned one whether its result is really there. Add `--all` to show the old ones too. |
+| `npm run db:plan -- verify` | Same, and exits 1 if anything is pending, or recorded but missing, or there but not recorded. CI runs this after migrating an empty database. |
+| `npm run db:plan -- rollback <tag> --yes` | Undoes that migration and every newer one in one transaction. Without `--yes` it only says what you would lose. |
+| `npm run db:migrate` | Applies pending migrations (the container does this at every start). |
+
+The plan lives in code: `server/src/db/migrationPlan.ts` holds, for each migration from 0025, its check and its undo statements (the same SQL as sections 6 and 7 below). A test (`migrationPlan.test.ts`) applies every migration to a throwaway database, undoes them newest first, and applies them again, and it fails if a new migration is added without an entry. **When you add a migration, add its entry** (`verify`, `rollback`, `rollbackLoses`).
+
+Restoring the backup is still the way back once real use has happened after the migration.
+
+The sections below are the same steps by hand, for when the command cannot run.
+
 ## 1. The normal way: do nothing
 
 `server/docker-entrypoint.sh` runs `npx tsx src/db/migrate.ts` every time the server container starts, before the API begins to listen. Deploy the new image as usual (see [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) section 5) and the migrations apply once, in order. Already-applied ones are skipped.

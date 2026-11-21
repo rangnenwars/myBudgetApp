@@ -58,6 +58,7 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - run: npm ci
       - run: npm run db:migrate         # every drizzle migration must apply cleanly to an empty DB
+      - run: npm run db:plan -- verify  # and every result must really be there (db/migrationPlan.ts)
       - run: npm run db:seed            # tests expect the system categories
       - run: npm run quality            # tsc --noEmit + jest
 

@@ -30,7 +30,7 @@ Prapanji (formerly "My Budget") is a personal money app for everyone — student
 | [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (25 total, Mermaid) — almost no prose; renders on GitHub |
 | [USER_ACTIVITY.md](USER_ACTIVITY.md) | What sign-in and page-hit activity is recorded, what never is, who can see it and how long it is kept |
 | [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md) | The Hindi language layer (how it works, how to add text, the review request) and the first-time tour with its finished and skipped counts |
-| [MIGRATION_STEPS.md](MIGRATION_STEPS.md) | Migrations 0025 (paid plan) and 0026 (delete a part payment): how they apply by themselves, how to check, apply by hand, verify and roll back |
+| [MIGRATION_STEPS.md](MIGRATION_STEPS.md) | Migrations 0025 to 0029: the one-command backup, apply and verify (`server/scripts/migrate-safe.sh`), the rollback command, and the same steps by hand |
 | [PAID_PLAN.md](PAID_PLAN.md) | The paid plan: six months free then ₹200 a year, who has access, how people pay by QR or UPI ID, admin controls, and how to switch it on safely |
 | [INVESTOR_PITCH.md](INVESTOR_PITCH.md) · [deck](Prapanji_Investor_Pitch.pptx) | The 12-slide investor deck, the talking line for each slide, and what is built versus not yet built |
 | [USER_DISTRIBUTION.md](USER_DISTRIBUTION.md) | How to get the app and manual to end users, plus the marketing plan (WhatsApp groups, leaflets, YouTube ads) — web first, Android APK / Play / TestFlight later — with onboarding message and rollout plan |

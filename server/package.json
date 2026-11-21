@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "db:plan": "tsx src/db/migratePlan.ts",
+    "db:migrate:safe": "bash scripts/migrate-safe.sh --local",
     "db:seed": "tsx src/db/seed-categories.ts",
     "db:seed:accounts": "tsx src/db/seed-accounts.ts",
     "test": "jest",
