@@ -1,4 +1,4 @@
-# Migration steps: 0025 (paid plan) and 0026 (delete a part payment)
+# Migration steps: 0025 to 0028
 
 Migrations normally apply by themselves. This page is for checking they did, and for doing them by hand if they did not.
 
@@ -6,6 +6,8 @@ Migrations normally apply by themselves. This page is for checking they did, and
 |---|---|---|
 | `0025_paid_access` | Adds the tables `access_grants`, `access_notices`, `payment_claims`, `payment_settings`; the columns `users.account_kind` and `user_features.denied`; then **fills data**: marks admin, support, system manager and `@mybudget.local` accounts as Company, and gives every other existing user a free period of 6 months from their own sign-up date. | Medium. It writes one row per existing customer. The plan stays **switched off**, so nobody loses access. |
 | `0026_loan_payment_links` | Adds two empty columns to `loan_payments` (`transaction_id`, `emi_before`) and a link to `transactions`. Changes no existing row. | Low. Needs 0025 first (it is numbered after it, nothing else depends on it). |
+| `0027_investment_sip` | Adds optional SIP columns to `investments` (`sip_amount`, `sip_day`, `sip_category`, `sip_ends_on`, `sip_no_end`, `sip_posted_through`) with four safety checks. Changes no existing row. | Low. |
+| `0028_tour_outcomes` | Creates the small table `tour_outcomes` (one row per person: how the first-time tour ended). | Low. New table only. |
 
 ## 1. The normal way: do nothing
 
@@ -37,7 +39,7 @@ WHERE table_name = 'loan_payments' AND column_name IN ('transaction_id', 'emi_be
 SELECT id, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 5;
 ```
 
-After 0025 the newest `created_at` is `1794192226363`; after 0026 it is `1794326603658`. The migrator applies every file whose timestamp in `server/drizzle/meta/_journal.json` is **newer than the newest row** in that table, so what matters is that table, not the file hash.
+After 0025 the newest `created_at` is `1794192226363`; after 0026 `1794326603658`; after 0027 `1795257939468`; after 0028 `1795258987097`. The migrator applies every file whose timestamp in `server/drizzle/meta/_journal.json` is **newer than the newest row** in that table, so what matters is that table, not the file hash.
 
 ## 4. Apply by hand: the safe way
 
@@ -62,6 +64,8 @@ Use this only if you must apply the SQL yourself (for example an operator withou
 ```bash
 psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0025_paid_access.sql
 psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0026_loan_payment_links.sql
+psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0027_investment_sip.sql
+psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 -f server/drizzle/0028_tour_outcomes.sql
 ```
 
 `--single-transaction` and `ON_ERROR_STOP` make a failure leave nothing half-applied. Skip any file the checks in section 3 say is already applied.
@@ -71,6 +75,8 @@ Then record each one you applied (the migrator reads only `created_at`; the hash
 ```sql
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0025 applied by hand', 1794192226363);
 INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0026 applied by hand', 1794326603658);
+INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0027 applied by hand', 1795257939468);
+INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('0028 applied by hand', 1795258987097);
 ```
 
 If you skip this step, the next server start tries to apply the file again and stops with "already exists".
@@ -83,6 +89,12 @@ SELECT account_kind, count(*) FROM users GROUP BY 1;
 SELECT kind, count(*) FROM access_grants GROUP BY 1;            -- trial = number of customers
 SELECT count(*) FROM users u WHERE u.account_kind = 'customer'
   AND NOT EXISTS (SELECT 1 FROM access_grants g WHERE g.user_id = u.id);   -- expect 0
+
+-- 0027: the SIP columns exist and no existing investment has a SIP
+SELECT count(*) FILTER (WHERE sip_amount IS NOT NULL) AS with_sip, count(*) AS total FROM investments;   -- with_sip = 0 right after migrating
+
+-- 0028: the tour table exists and is empty
+SELECT to_regclass('public.tour_outcomes') IS NOT NULL AS m0028_applied;
 
 -- 0026: both columns exist and old rows are untouched (all null)
 SELECT count(*) FILTER (WHERE transaction_id IS NOT NULL OR emi_before IS NOT NULL) AS filled, count(*) AS total FROM loan_payments;   -- filled = 0 right after migrating
@@ -102,6 +114,24 @@ ALTER TABLE loan_payments DROP COLUMN IF EXISTS transaction_id, DROP COLUMN IF E
 DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1794326603658;
 ```
 
+**0028** (loses only the tour counts):
+
+```sql
+DROP TABLE IF EXISTS tour_outcomes;
+DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1795258987097;
+```
+
+**0027** (drops the SIP settings; SIP transactions already added stay in Transactions):
+
+```sql
+ALTER TABLE investments DROP CONSTRAINT IF EXISTS investments_sip_end_check, DROP CONSTRAINT IF EXISTS investments_sip_day_check,
+  DROP CONSTRAINT IF EXISTS investments_sip_amount_check, DROP CONSTRAINT IF EXISTS investments_sip_together_check,
+  DROP CONSTRAINT IF EXISTS investments_sip_category_categories_key_fk;
+ALTER TABLE investments DROP COLUMN IF EXISTS sip_amount, DROP COLUMN IF EXISTS sip_day, DROP COLUMN IF EXISTS sip_category,
+  DROP COLUMN IF EXISTS sip_ends_on, DROP COLUMN IF EXISTS sip_no_end, DROP COLUMN IF EXISTS sip_posted_through;
+DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1795257939468;
+```
+
 **0025** (destroys every access grant, payment claim and the saved QR, so use only before the plan has been used):
 
 ```sql
@@ -113,7 +143,7 @@ DELETE FROM app_settings WHERE key = 'plan';
 DELETE FROM drizzle.__drizzle_migrations WHERE created_at = 1794192226363;
 ```
 
-Roll back 0026 before 0025 if you need both. After a rollback, deploy the previous image, because the new code expects the columns.
+Roll back in reverse order (0028, 0027, 0026, then 0025) if you need more than one. After a rollback, deploy the previous image, because the new code expects the columns.
 
 ## 8. Order of a release that includes both
 
