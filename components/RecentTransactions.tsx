@@ -4,6 +4,7 @@ import { Text } from './i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
 import { COLORS, SPACING } from '../constants/theme';
+import { TourTarget } from '../context/TourTargetsContext';
 import { useAuth } from '../context/AuthContext';
 import { useCategories } from '../context/CategoriesContext';
 import { getTransactionsPage, Transaction } from '../utils/database';
@@ -36,7 +37,7 @@ export const RecentTransactions: React.FC<{ refreshKey?: number }> = ({ refreshK
   const today = todayLocalIso();
 
   return (
-    <>
+    <TourTarget id="home-recent" style={{ gap: SPACING.md }}>
       <Text style={styles.sectionTitle}>Recent transactions</Text>
       <Card>
         {items.map((txn, i) => {
@@ -70,7 +71,7 @@ export const RecentTransactions: React.FC<{ refreshKey?: number }> = ({ refreshK
           <Text style={styles.seeAllText}>See all ›</Text>
         </Pressable>
       </Card>
-    </>
+    </TourTarget>
   );
 };
 

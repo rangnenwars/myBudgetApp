@@ -8,6 +8,7 @@ import { AmountText } from './AmountText';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { getFreeMoneyDay, FreeMoneyDayInfo } from '../utils/database';
 import { useAuth } from '../context/AuthContext';
+import { TourTarget } from '../context/TourTargetsContext';
 import { fmtInr } from './ScreenKit';
 
 import { t, dateLocale } from '../utils/i18n';
@@ -62,6 +63,7 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
   const sharePct = Math.min(Math.max(info.share * 100, 0), 100);
 
   return (
+    <TourTarget id="home-money">
     <Pressable onPress={() => router.push('/free-money-day')} accessibilityRole="button" accessibilityLabel="Money left after fixed bills, open details">
       <Card>
         <View style={styles.top}>
@@ -106,6 +108,7 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
         )}
       </Card>
     </Pressable>
+    </TourTarget>
   );
 };
 

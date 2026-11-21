@@ -7,6 +7,7 @@ import { Card } from './Card';
 import { COLORS, SPACING } from '../constants/theme';
 import { FEATURES } from '../constants/features';
 import { useAuth } from '../context/AuthContext';
+import { TourTarget } from '../context/TourTargetsContext';
 
 /** How many optional features the signed-in user doesn't have switched on. */
 export const useUnlockableCount = (): number => {
@@ -19,6 +20,7 @@ export const MoreFeaturesLink: React.FC = () => {
   const count = useUnlockableCount();
   if (count === 0) return null;
   return (
+    <TourTarget id="home-more">
     <Pressable onPress={() => router.push('/more-features')} accessibilityRole="button" accessibilityLabel="Explore more features">
       <Card style={styles.row}>
         <Text style={styles.text}>
@@ -27,6 +29,7 @@ export const MoreFeaturesLink: React.FC = () => {
         <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
       </Card>
     </Pressable>
+    </TourTarget>
   );
 };
 

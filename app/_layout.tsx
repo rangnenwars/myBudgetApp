@@ -11,6 +11,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { LanguageProvider } from '../context/LanguageContext';
 import { TourProvider } from '../context/TourContext';
 import { TourSheet } from '../components/TourSheet';
+import { TourTargetsProvider } from '../context/TourTargetsContext';
 import { ActivityTracker } from '../components/ActivityTracker';
 import { RemountOnLanguage } from '../components/i18n/RemountOnLanguage';
 import { CategoriesProvider } from '../context/CategoriesContext';
@@ -43,6 +44,7 @@ export default function RootLayout() {
       <LanguageProvider>
       <AuthProvider>
         <TourProvider>
+        <TourTargetsProvider>
         <CategoriesProvider>
           <StatusBar style={SCHEME === 'dark' ? 'light' : 'dark'} />
           <ResponsiveContainer>
@@ -83,6 +85,7 @@ export default function RootLayout() {
           <TourSheet />
           <ActivityTracker />
         </CategoriesProvider>
+        </TourTargetsProvider>
         </TourProvider>
       </AuthProvider>
       </LanguageProvider>
