@@ -153,7 +153,7 @@ export default function SettingsScreen() {
         </Card>
 
         <SectionTitle>How to use Prapanji</SectionTitle>
-        <Button label="Replay the tour" variant="outline" onPress={startTour} />
+        <Button label="Replay the tour" variant="outline" onPress={() => { router.replace('/(tabs)'); startTour(); }} />
 
         <SectionTitle>Change password</SectionTitle>
         <Card style={styles.formCard}>
