@@ -49,7 +49,7 @@ From the top, the Dashboard shows only what matters, in this order:
 * **Money left after fixed bills** — how much of your income is yours to spend after EMIs and repeating bills. Tap it for the breakdown and the free-money day (section 2a). If Plan ahead is switched on for you, a **Plan ahead** link at the bottom opens the next 12 months.
 * **People** and **Accounts** buttons.
 * **Income / Expense / Net savings** for the month shown. Tap Income or Expense to see the entries behind it.
-* **Top expense categories** — your five biggest spending areas. Tap one to see its entries, or **All categories** to open Reports.
+* **Top expense categories** — your five biggest spending areas this month. The **Highest | Lowest** switch beside the title flips it to the **five smallest** categories that have any spending (the title becomes *Smallest expense categories*). Your choice is remembered on this device. Tap a row to see its entries, or **All categories** to open Reports.
 * **Recent transactions** — your last three entries, with **See all**.
 * **Pro insights** — month-over-month changes and your savings rate (Pro).
 * **Explore more features** — shown until every optional feature is on for you.
@@ -81,7 +81,8 @@ Tap the orange **+** on the dashboard: pick Expense or Income, type the amount o
 * **Date** — today by default. Choose *Yesterday* or *Other date*, then type it as `YYYY-MM-DD` or tap the calendar button and pick a day. Future dates aren't allowed. Every date box in the app (Ends on, goal target date, loan start date, "pay back by") has the same calendar button.
 * **How often** — *Once* records the exact amount on that date. *Monthly / Quarterly / Yearly* converts the amount to its monthly equivalent (a ₹12,000 yearly bill is recorded as ₹1,000/month). This choice is hidden when **Repeat** is on.
 * **Repeat** — switch it on for salary, rent, insurance or any fixed amount. The same entry is added automatically every month, quarter or year on the same day (29th–31st use the month's last day). A quarterly or yearly repeat adds the **full** amount each time. A **Loan EMI** can't be set to repeat — add the loan under Loans and its EMI is added every month for you. Choose **Ends on**: 3, 6 or 12 months, a date, or **No end date** (for salary or rent). After the end date nothing more is added, the repeat leaves the Repeating list and your free-money day, and entries already added stay in your reports. Repeats made before this existed show "needs an end date" until you choose one. To change the amount, the frequency, the day or the end — or to stop it — tap the **Repeating** button.
-* **Edit** — tap a row, change it, save. **Delete** — the trash icon (you'll be asked to confirm).
+* **Edit** — tap a row, change it, save. If the entry **repeats** and you change its amount, you're asked *This and future months* (the repeat takes the new amount, so Plan ahead and next month's entry follow) or *Only this one*. **Delete** — the trash icon (you'll be asked to confirm).
+* **Dates** — the **Dates** button beside the search box lists only the transactions in a period: **This week** (Monday to Sunday), **This month**, **This year**, or **Custom range** with a From and To date (type them or tap the calendar; both days are included, and To can't be before From). A chip such as *This week · 16 Nov to 22 Nov* shows what's applied; tap its ✕ to clear it. A line under it shows *In · Out · Net* for that period. It works together with search and the All / Expenses / Income filter, and choosing the Today or This month tab replaces it.
 * **Find things** — search by note, category or amount; filter **All / Expenses / Income**. The list loads 50 at a time as you scroll.
 
 ---

@@ -107,11 +107,14 @@ export const addSplitWithPeople = async (input: {
   return data;
 };
 
+/** `updateRepeat` also moves the repeating entry this transaction belongs to onto the new amount. */
 export const updateTransaction = async (
   id: number,
-  patch: Partial<{ amount: number; type: TxnType; category: string; subcategory: string | null; note: string | null; date: string }>
+  patch: Partial<{ amount: number; type: TxnType; category: string; subcategory: string | null; note: string | null; date: string }>,
+  updateRepeat = false
 ): Promise<Transaction> => {
   const { data } = await api.patch(`/transactions/${id}`, {
+    ...(updateRepeat ? { update_repeat: true } : {}),
     amount: patch.amount,
     type: patch.type,
     category_key: patch.category,
