@@ -298,7 +298,7 @@ export default function DashboardScreen() {
         {topCategories.length > 0 && (
           <Pressable
             style={styles.allCats}
-            onPress={() => router.push({ pathname: '/(tabs)/reports', params: { view: 'categories', n: String(Date.now()) } })}
+            onPress={() => router.push({ pathname: '/(tabs)/reports', params: { view: 'categories', n: String(Date.now()), order: categoryOrder, month: String(view.month), year: String(view.year) } })}
             accessibilityRole="link"
             accessibilityLabel="All categories, open Reports"
           >

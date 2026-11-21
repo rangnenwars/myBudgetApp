@@ -1,4 +1,4 @@
-import { OTHERS_KEY, categoryByMonth, categoryPeriod, categoryRows, changePct, changeText, monthlyExpenseRows, topSpendInsight } from '../expenseReports';
+import { KEEP_MAX, KEEP_MIN, OTHERS_KEY, categoryByMonth, coverageKeep, categoryPeriod, categoryRows, changePct, changeText, monthlyExpenseRows, topSpendInsight } from '../expenseReports';
 
 const m = (month: number, expense: number, year = 2026) => ({ year, month, label: `M${month}`, expense });
 
@@ -179,5 +179,72 @@ describe('categoryPeriod', () => {
       current: { startMonth: 1, startYear: 2025, endMonth: 12, endYear: 2025 },
       previous: { startMonth: 1, startYear: 2024, endMonth: 12, endYear: 2024 },
     });
+  });
+});
+
+describe('coverageKeep (how many categories Reports lists)', () => {
+  it('lists enough categories to explain 85% of the money', () => {
+    expect(coverageKeep([5000, 3000, 1000, 500, 300, 200])).toBe(3); // 90% in three
+    expect(coverageKeep([3000, 2500, 2000, 1000, 700, 500, 300])).toBe(4); // exactly 85% in four
+    expect(coverageKeep([3000, 2500, 2000, 900, 700, 500, 400])).toBe(5); // 84% in four, so one more
+  });
+  it('never lists fewer than 3, even when one category is nearly everything', () => {
+    expect(coverageKeep([9900, 50, 50])).toBe(KEEP_MIN);
+    expect(coverageKeep([100])).toBe(KEEP_MIN);
+  });
+  it('never lists more than 8, even when spending is spread evenly', () => {
+    expect(coverageKeep(Array.from({ length: 20 }, () => 100))).toBe(KEEP_MAX);
+  });
+  it('ignores order and categories with nothing', () => {
+    expect(coverageKeep([200, 0, 5000, 300, 3000, 1000, 500])).toBe(3);
+    expect(coverageKeep([])).toBe(KEEP_MIN);
+  });
+});
+
+describe('categoryRows, lowest first', () => {
+  const cur = [
+    { category: 'food', total: 2900 },
+    { category: 'travel', total: 1600 },
+    { category: 'gifts', total: 300 },
+    { category: 'recharge', total: 800 },
+    { category: 'idle', total: 0 },
+  ];
+  it('lists every category with something, smallest first, and still adds up', () => {
+    const { total, rows } = categoryRows(cur, null, 2, () => true, 'lowest');
+    expect(rows.map((r) => r.category)).toEqual(['gifts', 'recharge', 'travel', 'food']);
+    expect(rows.reduce((s, r) => s + r.total, 0)).toBe(total);
+  });
+  it('bars are against the biggest category, so a small one looks small', () => {
+    const { rows } = categoryRows(cur, null, 2, () => true, 'lowest');
+    expect(rows[0].barPct).toBeCloseTo((300 / 2900) * 100);
+    expect(rows[3].barPct).toBe(100);
+  });
+  it('still puts unknown categories under Others, last', () => {
+    const { rows } = categoryRows([{ category: 'gone', total: 50 }, ...cur], null, 2, (c) => c !== 'gone', 'lowest');
+    expect(rows[rows.length - 1]).toMatchObject({ category: OTHERS_KEY, total: 50 });
+  });
+  it('highest stays as it was by default', () => {
+    expect(categoryRows(cur, null, 2, () => true).rows.map((r) => r.category)).toEqual(['food', 'travel', OTHERS_KEY]);
+  });
+  it('breaks ties by name so the list does not jump around', () => {
+    const { rows } = categoryRows([{ category: 'b', total: 100 }, { category: 'a', total: 100 }], null, 5, () => true);
+    expect(rows.map((r) => r.category)).toEqual(['a', 'b']);
+  });
+});
+
+describe('income', () => {
+  const txns = [
+    { category: 'salary', type: 'income', amount: 60000, month: 3 },
+    { category: 'salary', type: 'expense', amount: 5, month: 3 },
+    { category: 'salary', type: 'income', amount: 100, month: 4 },
+  ];
+  it('categoryByMonth counts income only when asked for income', () => {
+    expect(categoryByMonth(txns, 'salary', 'income').map((m) => m.total).slice(2, 4)).toEqual([60000, 100]);
+    expect(categoryByMonth(txns, 'salary').map((m) => m.total).slice(2, 4)).toEqual([5, 0]);
+  });
+  it('the top line says income, and names the biggest row even when listed smallest first', () => {
+    const { rows } = categoryRows([{ category: 'salary', total: 60000 }, { category: 'interest', total: 1200 }], null, 5, () => true, 'lowest');
+    expect(topSpendInsight(rows, (c) => c, 'income')).toBe('salary is your top income');
+    expect(topSpendInsight(rows, (c) => c)).toBe('salary is your top spend');
   });
 });

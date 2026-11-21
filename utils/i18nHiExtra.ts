@@ -88,4 +88,8 @@ export const HI_EXTRA: Record<string, string> = {
   'Save towards something and see when you will get there.': 'किसी चीज़ के लिए बचत करें और देखें कि कब पहुँचेंगे।',
   'Track EMIs and part payments, and see how soon you will be done with them.': 'ईएमआई और आंशिक भुगतान देखें, और जानें कि कब तक पूरा होगा।',
   'Keep your investments in one place, including a monthly SIP that adds itself to Transactions.': 'अपने निवेश एक जगह रखें, जिसमें मासिक एसआईपी भी है जो अपने आप लेन-देन में जुड़ जाता है।',
+  'No income in {0}.': '{0} में कोई आय नहीं।',
+  'No expenses in {0}.': '{0} में कोई खर्च नहीं।',
+  'Total earned': 'कुल कमाई',
+  '{0} is your top income{1}': 'आपकी सबसे बड़ी आय {0} है{1}',
 };
