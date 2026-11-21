@@ -3,7 +3,7 @@ import { db } from '../db/client';
 import { categories, loans, recurringTransactions, transactions } from '../db/schema';
 import { addMonths, localToday, LocalDate } from './clock';
 import { hasFeature } from './features';
-import { monthlyIncome } from './freeMoneyDay';
+import { forecastIncome } from './freeMoneyDay';
 import { FREQUENCY_MONTHS, RepeatFrequency, nextDueAfter, postingDate } from './recurringTransactions';
 import { monthStart } from './loanEmiExpenses';
 import { splitEmi } from '../calculations';
@@ -309,7 +309,7 @@ export const getForecast = async (userId: number, now: Date = new Date()): Promi
   const labelRows = await db.select({ key: categories.key, label: categories.label }).from(categories);
 
   const activeIncomeRule = rules.some((r) => r.type === 'income' && ruleDatesBetween(r, thisMonthStart, '9999-12-31').length > 0);
-  const averageIncome = activeIncomeRule ? null : await monthlyIncome(userId, 0, today);
+  const averageIncome = activeIncomeRule ? null : await forecastIncome(userId, today);
 
   return buildForecast({
     today,

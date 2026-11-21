@@ -67,9 +67,13 @@ const createSchema = baseSchema.extend({
   repeat_no_end: z.boolean().optional(),
 });
 
+// `update_repeat: true` also moves the repeating entry this transaction belongs to onto the new
+// amount (same type, category and old amount, as the delete's stop_repeat finds it), so what Plan
+// ahead projects and what posts next month follow the edit. Off unless asked for.
 const updateSchema = baseSchema
   .partial()
-  .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update.' });
+  .extend({ update_repeat: z.boolean().optional() })
+  .refine((b) => Object.keys(b).some((k) => k !== 'update_repeat'), { message: 'Provide at least one field to update.' });
 
 /**
  * Shared by POST and PATCH — a category key existing at all isn't enough:
@@ -452,18 +456,50 @@ router.patch(
       updateData.year = y;
     }
 
-    const [row] = await db
-      .update(transactions)
-      .set(updateData)
-      .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId!)))
-      .returning();
+    // Only reported back when the caller asked for the repeat to follow.
+    let repeatUpdated: boolean | undefined;
+    const row = await db.transaction(async (tx) => {
+      const [before] = body.update_repeat
+        ? await tx
+            .select({ type: transactions.type, category: transactions.category, amount: transactions.amount })
+            .from(transactions)
+            .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId!)))
+        : [];
+      const [updated] = await tx
+        .update(transactions)
+        .set(updateData)
+        .where(and(eq(transactions.id, id), eq(transactions.userId, req.userId!)))
+        .returning();
+      if (updated && body.update_repeat) {
+        repeatUpdated = false;
+        if (before && body.amount !== undefined && body.amount !== before.amount) {
+          const matches = await tx
+            .select({ id: recurringTransactions.id })
+            .from(recurringTransactions)
+            .where(
+              and(
+                eq(recurringTransactions.userId, req.userId!),
+                eq(recurringTransactions.type, before.type),
+                eq(recurringTransactions.category, before.category),
+                eq(recurringTransactions.amount, before.amount)
+              )
+            );
+          // Two repeats that look alike: do not guess which one this entry came from.
+          if (matches.length === 1) {
+            await tx.update(recurringTransactions).set({ amount: body.amount }).where(eq(recurringTransactions.id, matches[0].id));
+            repeatUpdated = true;
+          }
+        }
+      }
+      return updated;
+    });
     if (!row) throw notFound('Transaction not found.');
 
     // Amount/type/date can all shift which month a transaction counts
     // toward — recompute the same way POST does rather than leaving a
     // stale budgetClass behind.
     await recomputeBudgetClass(req.userId!);
-    res.json(row);
+    res.json(repeatUpdated === undefined ? row : { ...row, repeat_updated: repeatUpdated });
   })
 );
 
