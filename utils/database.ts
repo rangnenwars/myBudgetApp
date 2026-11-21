@@ -571,6 +571,9 @@ export const recordTourOutcome = async (outcome: 'finished' | 'skipped', step: n
   await api.post('/tour/outcome', { outcome, step, language });
 };
 
+/** Whether the server wants this person to see the first-time tour (recent sign-up, no outcome yet). */
+export const getTourPending = async (): Promise<boolean> => (await api.get('/tour/status')).data.pending === true;
+
 export const getSystemMetrics = async (): Promise<SystemMetrics> => {
   const { data } = await api.get('/system/metrics');
   return data;

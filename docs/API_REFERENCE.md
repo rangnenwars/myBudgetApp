@@ -558,6 +558,9 @@ All changes are audit-logged.
 
 ## First-time tour — `/api/v1/tour` 🔒
 
+### `GET /tour/status` 🔒
+→ `{ pending: boolean }`. True for a customer account created in the last 7 days that has no tour outcome yet; false otherwise (older account, company account, or already finished or skipped). The app opens the first-time tour when this is true.
+
 ### `POST /tour/outcome` 🔒
 Body: `{ outcome: 'finished' | 'skipped', step: 1–20, language?: 'en' | 'hi' }` (language defaults to `en`). Records how the tour ended for the caller, **once**: the first outcome is kept and a later call changes nothing.
 → **201** `{ recorded: true }`, or **200** `{ recorded: false }` when one was already saved

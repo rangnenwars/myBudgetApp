@@ -5,7 +5,7 @@ Two features that shipped together: the app can be used in **Hindi** on every pa
 ## For people using the app
 
 - **Language:** Settings, then **Language**, switches between English and हिन्दी. The whole app changes at once, on the page you are on, and the choice is remembered on that device. English is the default. A new sign-up can also choose on the first tour card.
-- **The tour:** opens by itself once, right after sign-up. Five cards: Welcome, Add a spend, See your month, Split bills, You're ready. **Skip tour** is on every card but the last. The last card offers **Add my first spend**. People who already use the app never get it by itself. **Settings, then How to use Prapanji, then Replay the tour** opens it any time.
+- **The tour:** opens by itself right after sign-up, and again at each sign-in on any device until it has been finished or skipped once, for the first 7 days of the account (the server decides: `GET /tour/status`). If the server cannot be reached, the flag saved on the device at sign-up is used. Five cards: Welcome, Add a spend, See your month, Split bills, You're ready. **Skip tour** is on every card but the last. The last card offers **Add my first spend**. Accounts older than 7 days, and company (staff) accounts, never get it by itself. **Settings, then How to use Prapanji, then Replay the tour** opens it any time.
 
 ## How the Hindi works
 
