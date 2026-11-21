@@ -31,6 +31,15 @@ The pieces, if you want one on its own (run inside `server/`, or with `docker co
 
 The plan lives in code: `server/src/db/migrationPlan.ts` holds, for each migration from 0025, its check and its undo statements (the same SQL as sections 6 and 7 below). A test (`migrationPlan.test.ts`) applies every migration to a throwaway database, undoes them newest first, and applies them again, and it fails if a new migration is added without an entry. **When you add a migration, add its entry** (`verify`, `rollback`, `rollbackLoses`).
 
+**On the production Droplet** the new image applies the migrations itself when it starts, so the order is: (1) back up with the `pg_dump` command in [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) section 5.0, (2) deploy the release, (3) check it:
+
+```bash
+deploy@droplet$ cd /opt/mybudget
+deploy@droplet$ COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env" bash server/scripts/migrate-safe.sh --dry-run
+```
+
+`--dry-run` only reads, so it is the safe check after a deploy: every line should say `applied, verified`. (Without `--dry-run` it takes a second backup into `backups/` and re-applies, which changes nothing.) If a line says `RESULT MISSING` or `pending`, stop and use the rollback in section 7 or restore the backup. Copy `server/scripts/migrate-safe.sh` to the Droplet, or run it from a checkout there.
+
 Restoring the backup is still the way back once real use has happened after the migration.
 
 The sections below are the same steps by hand, for when the command cannot run.

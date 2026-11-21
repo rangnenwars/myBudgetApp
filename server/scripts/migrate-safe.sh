@@ -6,6 +6,11 @@
 #   server/scripts/migrate-safe.sh --local    run from a checkout, using DATABASE_URL in server/.env
 #   server/scripts/migrate-safe.sh --dry-run  only show what is pending; changes nothing, no backup
 #
+# On the production Droplet, from /opt/mybudget, name the compose command (the runbook's `dc` alias):
+#   COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env" \n#     bash server/scripts/migrate-safe.sh
+# (Run it after the new image is up: the old image does not have the db:plan command.)
+# The backup then comes from `pg_dump` inside that stack's postgres, into ./backups/.
+#
 # Applying is idempotent: the server container does the same at every start, so running this again is harmless.
 set -euo pipefail
 
@@ -22,8 +27,10 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
+COMPOSE="${COMPOSE:-docker compose}"
+
 run() {  # run an npm script of the server, wherever it lives
-  if [ "$MODE" = docker ]; then docker compose exec -T server npm run --silent "$@"; else (cd "$SCRIPT_DIR/.." && npm run --silent "$@"); fi
+  if [ "$MODE" = docker ]; then $COMPOSE exec -T server npm run --silent "$@"; else (cd "$SCRIPT_DIR/.." && npm run --silent "$@"); fi
 }
 
 log "Where things stand:"
@@ -35,7 +42,15 @@ if [ "$DRY" = 1 ]; then
 fi
 
 log "Backing up first..."
-"$SCRIPT_DIR/backup-db.sh"
+if [ "$MODE" = docker ] && [ "$COMPOSE" != "docker compose" ]; then
+  mkdir -p backups
+  DUMP="backups/pre-migrate_$(date +%F_%H%M).dump"
+  $COMPOSE exec -T postgres pg_dump -U "${POSTGRES_USER:-mybudget}" -d "${POSTGRES_DB:-mybudget}" --format=custom > "$DUMP"
+  [ -s "$DUMP" ] || { log "Backup is empty. Stopping."; rm -f "$DUMP"; exit 1; }
+  log "Backup written to $DUMP"
+else
+  "$SCRIPT_DIR/backup-db.sh"
+fi
 
 log "Applying pending migrations..."
 if ! run db:migrate; then
