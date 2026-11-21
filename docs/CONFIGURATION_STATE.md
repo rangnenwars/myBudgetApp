@@ -166,3 +166,16 @@ Full findings and their status: [SECURITY_REVIEW.md](SECURITY_REVIEW.md). What c
 | Server gate | `server` `npm run quality` now runs with coverage, so the floors in `jest.config.js` are enforced by the commit hook too (before it ran tests only). |
 | Tests | New `numberEdges.test.ts` (money bounds, rounding, sums that must not drift, shares that add back, balances that end on exactly zero) and `negativeApi.test.ts` (no token, forged token, wrong role, other users data, bad ids, bodies, dates, queries, sign-up and sign-in abuse, payment abuse). |
 | Fix found by the new tests | A text value containing a null byte caused a 500; any Postgres "data exception" (class 22) is now a 400. |
+
+
+---
+
+## Change log: 2026-11-21 (SIP, Hindi, tour)
+
+| Area | Change |
+|---|---|
+| Database | Migration `0027_investment_sip` (SIP columns on `investments`) and `0028_tour_outcomes` (one row per person: finished or skipped, card, language). Both additive. Check and manual steps in [MIGRATION_STEPS.md](MIGRATION_STEPS.md). |
+| SIPs | An investment can have a monthly SIP, added to Transactions each month and to the investment (like loan EMIs). Runs with the other automatic posting before every money read. |
+| Hindi | Language layer in the app (`utils/i18n*.ts`, `components/i18n`). English default. No server change: the server's messages are translated on the phone. Coverage is enforced by a test. |
+| Tour | First-time tour after sign-up; counts on System metrics (`POST /tour/outcome`). |
+| Tests | App 330 and up, server 1136 and up. New: SIP rules, tour counts, translation, storage preferences and a text-coverage test. |

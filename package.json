@@ -56,6 +56,7 @@
     "typecheck": "tsc --noEmit",
     "quality": "npm run typecheck && npm run test:coverage",
     "check": "sh scripts/check.sh",
+    "i18n:missing": "jest utils/__tests__/i18nCoverage.test.ts",
     "check:fast": "sh scripts/check.sh fast",
     "check:docker": "sh scripts/check.sh docker",
     "verify": "sh scripts/check.sh",

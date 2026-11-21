@@ -12,6 +12,7 @@
 
 import type { FeatureKey } from '../constants/features';
 import { api } from './api';
+import { SipInput } from './sip';
 import {
   TxnType,
   Transaction,
@@ -318,19 +319,21 @@ export const getLoanPayments = async (id: number): Promise<LoanPayment[]> => {
 
 // ---------- Investments ----------
 
-export const addInvestment = async (i: Omit<Investment, 'id'>): Promise<Investment> => {
+export const addInvestment = async (i: Omit<Investment, 'id'>, sip?: SipInput | null): Promise<Investment> => {
   const { data } = await api.post('/investments', {
     name: i.name,
     type: i.type,
     amount: i.amount,
     current_value: i.current_value,
+    ...(sip ? { sip } : {}),
   });
   return data;
 };
 
+/** `sip`: an object starts or changes the SIP, null stops it, left out leaves it as it is. */
 export const updateInvestment = async (
   id: number,
-  patch: Partial<{ name: string; type: string; amount: number; current_value: number | null }>
+  patch: Partial<{ name: string; type: string; amount: number; current_value: number | null; sip: SipInput | null }>
 ): Promise<Investment> => {
   const { data } = await api.patch(`/investments/${id}`, patch);
   return data;
@@ -550,6 +553,8 @@ export interface SystemMetrics {
   users: { total: number; active: number; inactive: number; byRole: Record<AdminRole, number>; byTier: Record<'standard' | 'pro', number> };
   signups: { last30Days: number };
   engagement: { loggedInLast30Days: number; loggedInLast7Days: number };
+  /** How the first-time tour ended for customers: finished, skipped (and on which card), and how many chose Hindi. */
+  tour: { finished: number; skipped: number; skippedByStep: Record<string, number>; hindi: number };
   usage: { transactions: number; loans: number; investments: number; goals: number; customCategories: number };
   finance: {
     costPerUserPerYearInr: number;
@@ -560,6 +565,11 @@ export interface SystemMetrics {
     revenueNote: string;
   };
 }
+
+/** Records how the first-time tour ended. The first outcome per person is kept; the server ignores the rest. */
+export const recordTourOutcome = async (outcome: 'finished' | 'skipped', step: number, language: 'en' | 'hi'): Promise<void> => {
+  await api.post('/tour/outcome', { outcome, step, language });
+};
 
 export const getSystemMetrics = async (): Promise<SystemMetrics> => {
   const { data } = await api.get('/system/metrics');
@@ -701,3 +711,54 @@ export const setUserFeature = async (userId: number, key: FeatureKey, on: boolea
   const { data } = await api.put(`/admin/users/${userId}/features/${key}`, { on, ...(period ? { period } : {}) });
   return data;
 };
+
+// ---- User activity (sign-ins, sign-outs, page hits) ----
+
+export interface SignInEntry {
+  kind: 'login' | 'logout';
+  platform: string | null;
+  location: string | null;
+  detail: string | null;
+  at: string;
+}
+export const getMySignInHistory = async (): Promise<SignInEntry[]> => (await api.get('/activity/me')).data;
+
+export const setActivitySharing = async (on: boolean): Promise<boolean> => (await api.patch('/auth/me/activity-sharing', { on })).data.shareActivity;
+
+export const sendPageHits = async (pages: { path: string; at: string }[]): Promise<void> => {
+  await api.post('/activity/pages', { pages });
+};
+
+export interface ActivityOverview {
+  days: number;
+  logins: number;
+  people: number;
+  pageViews: number;
+  topPages: { page: string; label: string; count: number }[];
+  platforms: Record<string, number>;
+  byDay: { day: string; logins: number; pageViews: number }[];
+}
+export const getActivityOverview = async (days: number): Promise<ActivityOverview> => (await api.get('/admin/activity/overview', { params: { days } })).data;
+
+export interface ActivityEvent {
+  kind: 'login' | 'logout' | 'page';
+  page: string | null;
+  label: string | null;
+  at: string;
+  detail: string | null;
+}
+export interface ActivitySession {
+  start: string;
+  end: string;
+  platform: string | null;
+  location: string | null;
+  events: ActivityEvent[];
+}
+export interface UserActivity {
+  person: { id: number; email: string; name: string };
+  days: number;
+  lastSeen: string | null;
+  logins: number;
+  sessions: ActivitySession[];
+}
+export const getUserActivity = async (id: number, days: number): Promise<UserActivity> => (await api.get(`/admin/activity/users/${id}`, { params: { days } })).data;

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Text } from '../../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { AmountText } from '../../components/AmountText';
 import { Card } from '../../components/Card';
@@ -10,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getPeople, PeopleSummary } from '../../utils/database';
 import { balanceLabel, filterPeople, fmtAmount, PeopleFilter, shortDate } from '../../utils/people';
 
+import { t } from '../../utils/i18n';
 const FILTERS: { key: PeopleFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'get', label: 'You get' },
@@ -96,7 +98,7 @@ export default function PeopleScreen() {
               <Card style={styles.list}>
                 {shown.map((p, i) => {
                   const label = balanceLabel(p.balance);
-                  const sub = p.dueDate && p.balance !== 0 ? `Pay back by ${shortDate(p.dueDate)}` : p.lastActivity ? `Last activity ${shortDate(p.lastActivity)}` : 'No activity yet';
+                  const sub = p.dueDate && p.balance !== 0 ? t('Pay back by {0}', { 0: shortDate(p.dueDate) }) : p.lastActivity ? t('Last activity {0}', { 0: shortDate(p.lastActivity) }) : 'No activity yet';
                   return (
                     <Pressable
                       key={p.id}

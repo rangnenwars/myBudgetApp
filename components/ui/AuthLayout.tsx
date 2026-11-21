@@ -1,8 +1,6 @@
 import React, { useId, useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   TextInputProps,
   Pressable,
   StyleSheet,
@@ -11,6 +9,7 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import { Text, TextInput } from '../i18n';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { FONTS, RADIUS, T } from '../../constants/theme';

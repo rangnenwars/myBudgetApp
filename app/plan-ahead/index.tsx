@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Text } from '../../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { withFeature } from '../../components/FeatureGate';
@@ -9,6 +10,7 @@ import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { getForecast, Forecast } from '../../utils/database';
 
+import { t } from '../../utils/i18n';
 type View_ = 'likely' | 'known';
 
 function PlanAheadScreen() {
@@ -100,7 +102,7 @@ function PlanAheadScreen() {
 
             <Notice>
               {likely
-                ? `Typical spend is estimated from your last ${forecast.typical.monthsUsed} ${forecast.typical.monthsUsed === 1 ? 'month' : 'months'}, leaving out bills that repeat on their own.`
+                ? t('Typical spend is estimated from your last {0} {1}, leaving out bills that repeat on their own.', { 0: forecast.typical.monthsUsed, 1: forecast.typical.monthsUsed === 1 ? 'month' : 'months' })
                 : forecast.typical.available
                   ? 'Known only: your income minus repeating bills and EMIs. Everyday spending is not included.'
                   : 'Not enough history yet to estimate your everyday spending, so this shows income minus repeating bills and EMIs.'}

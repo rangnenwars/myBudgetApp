@@ -30,6 +30,12 @@ export const refreshLimiter = limiter(60, 'Too many requests. Try again later.')
 /** Anything that sends an email (password reset, verification resend) — stops it being used to spam an inbox. */
 export const emailLimiter = limiter(5, 'Too many emails requested. Try again in 15 minutes.');
 
+/** Page hits reported by the app: a person opens a page every few seconds at most, and the app batches them. Per account. */
+export const activityLimiter = limiter(30, 'Too many activity reports. Try again in a minute.', {
+  windowMs: 60 * 1000,
+  keyGenerator: (req) => `activity:${req.userId}`,
+});
+
 /** Report issue submissions carry up to a 2 MB screenshot each — cap how much one network can push per window. */
 export const issueReportLimiter = limiter(10, 'Too many issue reports. Try again in 15 minutes.');
 

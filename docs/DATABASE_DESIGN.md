@@ -319,6 +319,12 @@ CREATE TABLE investments (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_investments_user ON investments(user_id);
+-- Migration 0027 adds the SIP columns (all optional; an investment without a SIP leaves them empty):
+--   sip_amount NUMERIC(12,2), sip_day SMALLINT (1-31), sip_category TEXT REFERENCES categories(key),
+--   sip_ends_on DATE, sip_no_end BOOLEAN NOT NULL DEFAULT false,
+--   sip_posted_through DATE   -- first day of the last month settled; null = never posted
+-- Checks: amount, day and category are set together or all empty; amount > 0; day 1-31;
+-- a SIP has exactly one of sip_ends_on / sip_no_end.
 
 -- ============================================================
 -- savings_goals
@@ -426,6 +432,16 @@ CREATE INDEX idx_user_features_requested ON user_features(requested_at) WHERE re
 --   screenshot_hash, status pending|confirmed|rejected|cancelled, amount_inr, grace_until,
 --   decided_by, decided_at, source user|admin. Screenshots purged 30 days after decision.
 -- access_notices: one row per user, notice stage and access_end, so each email is sent once.
+-- tour_outcomes (migration 0028): how the first-time tour ended for each person, once.
+--   user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+--   outcome TEXT ('finished' | 'skipped'), step SMALLINT (1-20), language TEXT ('en' | 'hi'), created_at.
+--   Counts only, shown on System metrics. No other data about the person.
+-- user_activity (migration 0029): sign-ins, sign-outs and page hits (USER_ACTIVITY.md).
+--   id, user_id (cascade), kind 'login'|'logout'|'page', page (a fixed pattern; set only when kind = 'page'),
+--   session_id, platform 'web'|'android'|'ios', app_version, location (coarse: /24 or /48), detail, created_at.
+--   Kept 90 days, then rolled up and deleted.
+-- activity_daily (0029): anonymous daily counts, PK (day, kind, page, platform), events, people. Customers only.
+-- users.share_activity BOOLEAN NOT NULL DEFAULT true: "Share which pages I visit".
 -- app_settings key 'plan' = price, trial months, notice days, features, enforced flags.
 -- ============================================================
 

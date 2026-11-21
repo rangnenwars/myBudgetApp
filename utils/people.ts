@@ -3,6 +3,7 @@ import { splitEqually } from './calculations';
 import { LedgerKind, Person } from './types';
 import { parseAmount } from './amount';
 
+import { t, dateLocale } from './i18n';
 /** ₹1,200 for whole rupees, ₹1,200.50 when there are paise. */
 export const fmtAmount = (n: number): string => {
   const abs = Math.abs(n);
@@ -12,8 +13,8 @@ export const fmtAmount = (n: number): string => {
 
 /** "You get ₹600", "You owe ₹500" or "Settled", with a colour. The words carry the meaning, not only the colour. */
 export const balanceLabel = (balance: number): { text: string; color: string } => {
-  if (balance > 0) return { text: `You get ${fmtAmount(balance)}`, color: COLORS.positive };
-  if (balance < 0) return { text: `You owe ${fmtAmount(balance)}`, color: COLORS.red };
+  if (balance > 0) return { text: t('You get {0}', { 0: fmtAmount(balance) }), color: COLORS.positive };
+  if (balance < 0) return { text: t('You owe {0}', { 0: fmtAmount(balance) }), color: COLORS.red };
   return { text: 'Settled', color: COLORS.textDim };
 };
 
@@ -39,7 +40,7 @@ export const filterPeople = (people: Person[], filter: PeopleFilter): Person[] =
 export const shortDate = (iso: string, now: Date = new Date()): string => {
   const d = new Date(`${iso}T00:00:00`);
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+  return d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
 };
 
 // ---------- Splitting a bill with people ----------
@@ -80,6 +81,6 @@ export const peopleSplitProblem = (total: number, v: PeopleSplitState): string |
   const plan = planPeopleSplit(total, v);
   if (plan.keys.length === 0) return 'Choose who shared it.';
   if (plan.keys.some((k) => !(plan.shares[k] > 0))) return v.method === 'equal' ? 'That amount is too small to split.' : "Enter each person's share.";
-  if (plan.myShare < 0) return `The shares are ${fmtAmount(-plan.myShare)} more than the total.`;
+  if (plan.myShare < 0) return t('The shares are {0} more than the total.', { 0: fmtAmount(-plan.myShare) });
   return null;
 };

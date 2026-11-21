@@ -117,6 +117,10 @@ Investments tab → **+**: name, type, amount invested, current value and a note
 
 ---
 
+**SIP (a fixed amount every month).** In an investment's form, switch on **I invest here every month (SIP)**, then enter the **amount**, the **day of the month**, when it **ends** (pick a date, or *No end date*) and which category it is **added to Transactions as** (Mutual funds, Fixed deposit, Bonds or Gold). From then on, on or after that day each month the app adds the SIP to **Transactions** as an expense, and adds it to the investment's **invested amount** and **current value**, so you don't have to. The card shows *SIP ₹5,000 on the 5th* and when the next one is due. The first time, only the expense is added and the amount you entered stays as it is. Nothing is added for earlier months, and nothing is dated ahead of time. Days 29 to 31 use the last day of a shorter month. Switch the SIP off to stop it; what was already added stays. If you already repeat the same payment in Transactions, remove that repeat so it isn't added twice.
+
+---
+
 ## 7. Goals
 
 Goals tab → **+**: name, target amount, optional deadline, colour and icon.
@@ -159,6 +163,12 @@ Dashboard → the **People** button (it shows what you get and owe underneath). 
 Your friends don't need Prapanji, and nothing is sent to them. Your bank balances aren't changed either: update them under Accounts if you want them to match.
 
 ---
+
+### Language and the tour
+
+**Settings, then Language** switches the whole app between **English** and **हिन्दी**, on the page you are on. English is the default, and your choice is remembered on that device. New accounts can also choose on the first card of the tour.
+
+**The tour.** Right after you sign up, a short tour shows the five things you will use most. Tap **Skip tour** on any card if you already know the app. You can open it again any time from **Settings, then How to use Prapanji, then Replay the tour**.
 
 ### Your plan
 
@@ -217,6 +227,7 @@ Something broken or confusing? Dashboard → **bug icon**.
 * Your data is private to your account. Administrators can see account details (name, email, role, status) to run the service — **not** your transactions, loans, investments or goals. The one exception is a screenshot you choose to attach to a problem report (see §12).
 * Your password is stored only as a one-way hash; nobody, including the administrators, can read it.
 * The connection is encrypted (HTTPS). Sessions expire quickly and refresh on their own; **Sign out everywhere** ends them all immediately.
+* Settings, **Privacy**, shows **My sign-in history** (when you signed in and out in the last 90 days) and a switch, **Share which pages I visit**. With it on we record page names only, never amounts, names or what you type. Detailed records are kept 90 days.
 * Use a password that is unique to this app. Never share it. Staff will never ask for your password.
 
 ---

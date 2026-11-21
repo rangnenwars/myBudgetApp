@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LayoutChangeEvent, StyleProp, StyleSheet, Text, TextStyle, View } from 'react-native';
+import { LayoutChangeEvent, StyleProp, StyleSheet, TextStyle, View } from 'react-native';
+import { Text } from './i18n';
 import { compactInr, fitAmount, fitFontSize, MIN_SCALE } from '../utils/fitAmount';
 
 interface Props {

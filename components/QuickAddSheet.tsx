@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, TextInput } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { CategoryPicker } from './CategoryPicker';
@@ -9,6 +10,7 @@ import { addTransaction, getTransactionsPage, TxnType } from '../utils/database'
 import { monthYearOf, todayLocalIso } from '../utils/dates';
 import { parseAmount } from '../utils/amount';
 
+import { t } from '../utils/i18n';
 const CHIP_COUNT = 4;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back'] as const;
 
@@ -134,7 +136,7 @@ export const QuickAddSheet: React.FC<Props> = ({ visible, onClose, onSaved }) =>
 
           <View style={styles.amountBox}>
             <Text style={styles.amountLabel}>Amount</Text>
-            <Text style={[styles.amount, !amount && styles.amountEmpty]} accessibilityLabel={`Amount ${amount || 0} rupees`}>
+            <Text style={[styles.amount, !amount && styles.amountEmpty]} accessibilityLabel={t('Amount {0} rupees', { 0: amount || 0 })}>
               ₹ {amount || '0'}
             </Text>
           </View>

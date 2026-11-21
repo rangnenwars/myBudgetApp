@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
@@ -11,7 +12,8 @@ import { getMonthlySeriesForRange } from '../utils/database';
 import { shiftMonth } from '../utils/dates';
 import { MonthlyExpenseRow, changeText, monthlyExpenseRows } from '../utils/expenseReports';
 
-const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+import { t, dateLocale } from '../utils/i18n';
+const fmt = (n: number) => '₹' + n.toLocaleString(dateLocale(), { maximumFractionDigits: 0 });
 const MONTHS = 12;
 
 /** Colour for a month-on-month change: spending more is red, less is green. */
@@ -46,7 +48,7 @@ export const MonthlyExpensesView: React.FC = () => {
     }, [user?.id, page])
   );
 
-  const label = (m: { month: number; year: number }) => new Date(m.year, m.month - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  const label = (m: { month: number; year: number }) => new Date(m.year, m.month - 1, 1).toLocaleDateString(dateLocale(), { month: 'short', year: 'numeric' });
   const open = (row: MonthlyExpenseRow) => router.push({ pathname: '/monthly-expenses/[ym]', params: { ym: `${row.year}-${row.month}` } });
 
   return (
@@ -74,7 +76,7 @@ export const MonthlyExpensesView: React.FC = () => {
             </View>
             <View style={styles.tile}>
               <Text style={styles.muted}>Highest</Text>
-              <AmountText style={styles.tileValue}>{data.highest ? `${new Date(data.highest.year, data.highest.month - 1, 1).toLocaleDateString('en-IN', { month: 'short' })} ${fmt(data.highest.total)}` : '₹0'}</AmountText>
+              <AmountText style={styles.tileValue}>{data.highest ? `${new Date(data.highest.year, data.highest.month - 1, 1).toLocaleDateString(dateLocale(), { month: 'short' })} ${fmt(data.highest.total)}` : '₹0'}</AmountText>
             </View>
           </View>
 
@@ -85,7 +87,7 @@ export const MonthlyExpensesView: React.FC = () => {
                 style={[styles.row, i !== 0 && styles.rowBorder]}
                 onPress={() => open(r)}
                 accessibilityRole="button"
-                accessibilityLabel={`${r.label}, ${fmt(r.total)}, see the categories`}
+                accessibilityLabel={t('{0}, {1}, see the categories', { 0: r.label, 1: fmt(r.total) })}
               >
                 <View style={styles.rowTop}>
                   <Text style={styles.month}>{r.label}</Text>

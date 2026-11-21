@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { Text } from '../components/i18n';
 import { router } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { AuthField, AuthLayout, PhoneField, authStyles, isValidIndianMobile } from '../components/ui/AuthLayout';

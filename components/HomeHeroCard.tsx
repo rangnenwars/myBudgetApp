@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
@@ -11,7 +12,8 @@ import { useAuth } from '../context/AuthContext';
 import { getOverallBudget, OverallBudget } from '../utils/database';
 import { changePct, changeText } from '../utils/expenseReports';
 
-const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+import { t, dateLocale } from '../utils/i18n';
+const fmt = (n: number) => '₹' + n.toLocaleString(dateLocale(), { maximumFractionDigits: 0 });
 const STATUS_COLOR = { ok: COLORS.accent, warning: COLORS.yellow, over: COLORS.red } as const;
 
 interface Props {
@@ -50,7 +52,7 @@ export const HomeHeroCard: React.FC<Props> = ({ month, year, isCurrentMonth, spe
     }, [userId, month, year, refreshKey])
   );
 
-  const monthName = new Date(year, month - 1, 1).toLocaleDateString('en-IN', { month: 'long' });
+  const monthName = new Date(year, month - 1, 1).toLocaleDateString(dateLocale(), { month: 'long' });
   const change = changePct(spent, previousSpent);
   const hasBudget = budget?.amount != null;
   const left = budget?.left ?? 0;
@@ -60,7 +62,7 @@ export const HomeHeroCard: React.FC<Props> = ({ month, year, isCurrentMonth, spe
       style={styles.spentRow}
       onPress={() => router.push({ pathname: '/(tabs)/reports', params: { view: 'monthly', n: String(Date.now()) } })}
       accessibilityRole="button"
-      accessibilityLabel={`${monthName} expenses ${fmt(spent)}, open monthly expenses`}
+      accessibilityLabel={t('{0} expenses {1}, open monthly expenses', { 0: monthName, 1: fmt(spent) })}
     >
       <Text style={styles.spentText}>
         Spent <Text style={styles.strong}>{fmt(spent)}</Text>
@@ -74,7 +76,7 @@ export const HomeHeroCard: React.FC<Props> = ({ month, year, isCurrentMonth, spe
     return (
       <Card style={styles.gap}>
         <Text style={styles.title}>{isCurrentMonth ? 'This month' : monthName}</Text>
-        <AmountText style={styles.headline}>{`${fmt(spent)} spent`}</AmountText>
+        <AmountText style={styles.headline}>{t('{0} spent', { 0: fmt(spent) })}</AmountText>
         {change != null && <Text style={{ color: changeColor(change), fontSize: 13, fontWeight: '600' }}>{changeText(change)} vs last month</Text>}
         {isCurrentMonth && (
           <Pressable style={styles.cta} onPress={() => router.push('/budgets')} accessibilityRole="button">
@@ -97,7 +99,7 @@ export const HomeHeroCard: React.FC<Props> = ({ month, year, isCurrentMonth, spe
             <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
           </View>
         </View>
-        <AmountText style={[styles.headline, left < 0 && { color: COLORS.red }]}>{left >= 0 ? fmt(left) : `${fmt(-left)} over`}</AmountText>
+        <AmountText style={[styles.headline, left < 0 && { color: COLORS.red }]}>{left >= 0 ? fmt(left) : t('{0} over', { 0: fmt(-left) })}</AmountText>
         <MiniBar percent={(budget?.ratio ?? 0) * 100} color={color} />
         {(budget?.per_day ?? 0) > 0 && (
           <Text style={styles.detail}>

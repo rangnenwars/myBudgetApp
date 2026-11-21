@@ -330,10 +330,18 @@ Deleting a custom category also removes its limit (in the same transaction, so n
 ### `GET /investments` 🔒
 → **200** `Investment[]`, newest first
 
+### SIP on an investment
+An investment can have a **SIP**: a fixed amount invested every month. Send `sip` on `POST` or `PATCH`:
+`{ amount: number (>0), day: 1–31, category: 'mutual_funds'|'fixed_deposit'|'bonds'|'gold', ends_on?: 'YYYY-MM-DD', no_end?: true }`. It must say when it ends: **exactly one** of `ends_on` (today or later) or `no_end`. On `PATCH`, `sip: null` stops it and leaving `sip` out leaves it unchanged.
+
+Every investment row then also carries `sip_amount`, `sip_day`, `sip_category`, `sip_ends_on`, `sip_no_end`, `sip_posted_through` and `sip_next_date` (the date of the next instalment not yet added, or `null` when there is no SIP or it has ended).
+
+**Automatic posting** (`lib/sipPosting.ts`, run before every investments, transactions, reports and budgets read, like loan EMIs): on or after the SIP day each month it adds an **expense** transaction (category = `sip_category`, note `SIP - <name>`, dated the SIP day, the 29th to 31st falling back to the month's last day) and raises `amount` **and** `current_value` by the SIP amount, recomputing `returns_percent`. Rules: the **first** posting records the expense only and leaves `amount` as entered; a month is added only once its day has arrived, so nothing is ever future-dated; a SIP never backfills history from before it was set up; missed months are caught up (up to 24); months after `ends_on` add nothing; posting is idempotent and row-locked, so a month is never added twice. Switching it off keeps the transactions already added; switching it back on after a gap starts from the current month.
+
 ### `POST /investments` 🔒
-Body: `{ name: string, type: string, amount: number (>0), current_value?: number|null }`
+Body: `{ name: string, type: string, amount: number (>0), current_value?: number|null, sip?: {…} }`
 → **201** `Investment` — `returns_percent` is computed server-side from `amount`/`current_value`, **never** accepted from the client; `current_value` defaults to `amount` if omitted
-Errors: 400 invalid body
+Errors: 400 invalid body, or an invalid `sip` (amount ≤ 0, day outside 1–31, a category that is not an investment category, no end or both, an end date in the past)
 
 ### `PATCH /investments/:id` 🔒
 Body: any non-empty subset of `{ name, type, amount, current_value }`
@@ -548,6 +556,17 @@ All changes are audit-logged.
 
 ---
 
+## First-time tour — `/api/v1/tour` 🔒
+
+### `POST /tour/outcome` 🔒
+Body: `{ outcome: 'finished' | 'skipped', step: 1–20, language?: 'en' | 'hi' }` (language defaults to `en`). Records how the tour ended for the caller, **once**: the first outcome is kept and a later call changes nothing.
+→ **201** `{ recorded: true }`, or **200** `{ recorded: false }` when one was already saved
+Errors: 400 invalid body · 401 not signed in
+
+`GET /system/metrics` now carries `tour: { finished, skipped, skippedByStep: { "<card>": n }, hindi }`: counts only, over customer accounts (company accounts are left out). See [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md).
+
+---
+
 ## Admin audit log — `/api/v1/admin/audit-log` 🔒🛡️
 
 Admin-only (`requireAdmin` — not `support`, since this is a record of what staff did, not an account-management action itself).
@@ -578,6 +597,19 @@ Requires `role: 'admin'` or `role: 'system_manager'` (`requireSystemManager`). E
 }
 ```
 `costPerUserPerYearInr` (₹100) is a planning assumption, not a billed rate. The real plan price (₹200 a year, set in Admin, Plan and pricing) and confirmed payments are in the paid plan routes below, not in this route yet, and this route still counts company accounts. `estimatedAnnualRevenueInr` is always `0` today since there's no real payment processor (see README.md "Known deviations") — this route exists so that stays a visible number instead of a silent gap once real billing is added.
+
+---
+
+## User activity 🔒
+
+See [USER_ACTIVITY.md](USER_ACTIVITY.md). Every request may carry `X-App-Platform` (`web|android|ios`), `X-App-Version` and `X-Session-Id` (uuid); invalid values are ignored.
+
+* `POST /activity/pages` body `{ pages: [{ path, at? }] }` (1 to 50, `path` up to 200 characters, `at` within the last 24 hours). Only known page patterns are kept. Returns `{ recorded, dropped, sharing }`; with sharing off nothing is stored. 30 a minute per account (429).
+* `GET /activity/me` my sign-ins and sign-outs for 90 days, newest first (up to 200).
+* `PATCH /auth/me/activity-sharing` body `{ on: boolean }` returns `{ shareActivity }`.
+* `GET /admin/activity/overview?days=1..90` (default 7) 🛡️ admin or system manager: `{ days, logins, people, pageViews, topPages, platforms, byDay }`, counts only.
+* `GET /admin/activity/users/:id?days=1..90` (default 30) 🛡️ admin only: `{ person, days, lastSeen, logins, sessions }`. Writes an audit entry `viewed_activity`.
+* Sign-in, sign-up, `POST /auth/logout` and `POST /auth/me/logout-all` record events. `GET /auth/me/export` now includes `activity`.
 
 ---
 

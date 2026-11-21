@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, View, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text } from '../components/i18n';
 import { Redirect, useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { AmountText } from '../components/AmountText';
@@ -12,6 +13,7 @@ import { confirmAction } from '../utils/alert';
 import { getAccounts, addAccount, updateAccount, deleteAccount, Account, AccountType } from '../utils/database';
 import { parseAmount } from '../utils/amount';
 
+import { t } from '../utils/i18n';
 const TYPE_OPTIONS: { key: AccountType; label: string }[] = [
   { key: 'bank', label: 'Bank' },
   { key: 'cash', label: 'Cash' },
@@ -107,7 +109,7 @@ export default function AccountsScreen() {
   const onDelete = () => {
     if (!editing || editing === 'new') return;
     const account = editing;
-    confirmAction('Remove account', `Remove "${account.name}"? Your transactions are not affected.`, 'Remove', async () => {
+    confirmAction('Remove account', t('Remove "{0}"? Your transactions are not affected.', { 0: account.name }), 'Remove', async () => {
       await deleteAccount(account.id);
       setEditing(null);
       await load();

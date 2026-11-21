@@ -8,6 +8,11 @@ import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from '@expo-googl
 import { Hind_500Medium } from '@expo-google-fonts/hind';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../context/AuthContext';
+import { LanguageProvider } from '../context/LanguageContext';
+import { TourProvider } from '../context/TourContext';
+import { TourSheet } from '../components/TourSheet';
+import { ActivityTracker } from '../components/ActivityTracker';
+import { RemountOnLanguage } from '../components/i18n/RemountOnLanguage';
 import { CategoriesProvider } from '../context/CategoriesContext';
 import { COLORS, SCHEME } from '../constants/theme';
 import { ResponsiveContainer } from '../components/ResponsiveContainer';
@@ -35,10 +40,13 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <LanguageProvider>
       <AuthProvider>
+        <TourProvider>
         <CategoriesProvider>
           <StatusBar style={SCHEME === 'dark' ? 'light' : 'dark'} />
           <ResponsiveContainer>
+            <RemountOnLanguage>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="login" />
@@ -49,6 +57,9 @@ export default function RootLayout() {
               <Stack.Screen name="admin/audit-log" />
               <Stack.Screen name="admin/metrics" />
               <Stack.Screen name="admin/features" />
+              <Stack.Screen name="admin/activity" />
+              <Stack.Screen name="admin/activity-user" />
+              <Stack.Screen name="sign-in-history" />
               <Stack.Screen name="settings" />
               <Stack.Screen name="accounts" />
               <Stack.Screen name="budgets" />
@@ -67,9 +78,14 @@ export default function RootLayout() {
               <Stack.Screen name="legal/terms" />
               <Stack.Screen name="legal/privacy" />
             </Stack>
+            </RemountOnLanguage>
           </ResponsiveContainer>
+          <TourSheet />
+          <ActivityTracker />
         </CategoriesProvider>
+        </TourProvider>
       </AuthProvider>
+      </LanguageProvider>
     </SafeAreaProvider>
   );
 }

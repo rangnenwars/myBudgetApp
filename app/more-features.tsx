@@ -1,15 +1,18 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Text } from '../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../components/Card';
 import { FeatureRequestSheet } from '../components/FeatureRequestSheet';
 import { Notice, ScreenHeader } from '../components/ScreenKit';
 import { PlanRow } from '../components/PlanRow';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
-import { FeatureKey, priceLabel } from '../constants/features';
+import { FeatureKey } from '../constants/features';
+import { priceText } from '../utils/priceText';
 import { useAuth } from '../context/AuthContext';
 import { getMyFeatures, MyFeature } from '../utils/database';
 
+import { t, dateLocale } from '../utils/i18n';
 // Where each switched-on feature opens.
 const OPEN_ROUTE: Record<FeatureKey, string> = {
   goals: '/(tabs)/goals',
@@ -18,7 +21,7 @@ const OPEN_ROUTE: Record<FeatureKey, string> = {
   forecast: '/plan-ahead',
 };
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 export default function MoreFeaturesScreen() {
   const { user, reloadUser } = useAuth();
@@ -63,7 +66,7 @@ export default function MoreFeaturesScreen() {
                 <View style={styles.rowBetween}>
                   <Text style={styles.name}>{f.label}</Text>
                   {f.on ? (
-                    <Text style={styles.on}>{f.expiresAt ? `On until ${fmtDate(f.expiresAt)}` : 'On'}</Text>
+                    <Text style={styles.on}>{f.expiresAt ? t('On until {0}', { 0: fmtDate(f.expiresAt) }) : 'On'}</Text>
                   ) : (
                     <Text style={styles.badge}>Pro</Text>
                   )}
@@ -75,16 +78,16 @@ export default function MoreFeaturesScreen() {
                   </Pressable>
                 ) : (
                   <View style={styles.rowBetween}>
-                    <Text style={styles.price}>{f.ended ? 'Access ended' : priceLabel(f.price, f.period)}</Text>
+                    <Text style={styles.price}>{f.ended ? 'Access ended' : priceText(f.price, f.period)}</Text>
                     {user?.plan?.enforced ? (
                       // Once the plan is on, the way to get a feature back is renewing, not asking.
-                      <Pressable style={styles.btn} onPress={() => router.push('/renew')} accessibilityRole="button" accessibilityLabel={`Renew to turn on ${f.label}`}>
+                      <Pressable style={styles.btn} onPress={() => router.push('/renew')} accessibilityRole="button" accessibilityLabel={t('Renew to turn on {0}', { 0: f.label })}>
                         <Text style={styles.btnText}>Renew</Text>
                       </Pressable>
                     ) : f.requested ? (
                       <Text style={styles.waiting}>Requested, waiting for your admin</Text>
                     ) : (
-                      <Pressable style={styles.btn} onPress={() => setAsking(f)} accessibilityRole="button" accessibilityLabel={`Request access to ${f.label}`}>
+                      <Pressable style={styles.btn} onPress={() => setAsking(f)} accessibilityRole="button" accessibilityLabel={t('Request access to {0}', { 0: f.label })}>
                         <Text style={styles.btnText}>{f.ended ? 'Ask again' : 'Request access'}</Text>
                       </Pressable>
                     )}

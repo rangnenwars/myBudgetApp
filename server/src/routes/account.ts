@@ -3,8 +3,10 @@ import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '../db/client';
+import { recordLogout } from '../lib/activity';
 import {
   users,
+  userActivity,
   categories,
   transactions,
   recurringTransactions,
@@ -144,8 +146,20 @@ router.post(
   requireAuth,
   asyncHandler(async (req, res) => {
     await revokeAllRefreshTokens(req.userId!);
+    await recordLogout(req.userId!, req, 'everywhere');
     clearRefreshCookie(req, res);
     res.status(204).send();
+  })
+);
+
+// "Share which pages I visit". Off: page hits stop being recorded for this person (sign-ins always are).
+router.patch(
+  '/me/activity-sharing',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { on } = z.object({ on: z.boolean() }).parse(req.body ?? {});
+    await db.update(users).set({ shareActivity: on }).where(eq(users.id, req.userId!));
+    res.json({ shareActivity: on });
   })
 );
 
@@ -197,10 +211,18 @@ router.get(
       ? await db.select().from(goalContributions).where(inArray(goalContributions.goal_id, goals.map((g) => g.id)))
       : [];
 
+    // Their own sign-ins, sign-outs and page hits still on file (the last 90 days).
+    const activity = await db
+      .select({ kind: userActivity.kind, page: userActivity.page, platform: userActivity.platform, location: userActivity.location, detail: userActivity.detail, at: userActivity.createdAt })
+      .from(userActivity)
+      .where(eq(userActivity.userId, userId))
+      .orderBy(userActivity.createdAt, userActivity.id);
+
     const strip = <T extends { userId?: number | null }>(rows: T[]) => rows.map(({ userId: _omit, ...rest }) => rest);
     const exportData = {
       exportedAt: new Date().toISOString(),
-      profile: { ...toUserResponse(user), createdAt: user.createdAt },
+      profile: { ...toUserResponse(user), createdAt: user.createdAt, shareActivity: user.shareActivity },
+      activity,
       transactions: strip(txns),
       repeatingEntries: strip(rules),
       loans: strip(userLoans),

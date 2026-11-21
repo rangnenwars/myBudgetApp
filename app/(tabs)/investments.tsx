@@ -1,15 +1,16 @@
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   Pressable,
   Modal,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  Switch,
 } from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import { useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
@@ -20,10 +21,19 @@ import { apiErrorMessage } from '../../utils/api';
 import { AmountText } from '../../components/AmountText';
 import { withFeature } from '../../components/FeatureGate';
 import { parseAmount } from '../../utils/amount';
+import { DateInput } from '../../components/DateInput';
+import { EXPENSE_CATEGORIES } from '../../constants/categories';
+import { DEFAULT_SIP_CATEGORY, SIP_CATEGORIES, SipCategory, SipInput, ordinalDay } from '../../utils/sip';
+import { isValidIsoDate, todayLocalIso } from '../../utils/dates';
 
+import { t, dateLocale } from '../../utils/i18n';
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const INVESTMENT_TYPES = ['Mutual fund', 'Fixed deposit', 'Bonds', 'Gold', 'Chit fund (BC)', 'Other'];
+
+const categoryLabel = (key: string) => EXPENSE_CATEGORIES.find((c) => c.key === key)?.label ?? key;
+const longDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
+const shortDay = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 
 function InvestmentsScreen() {
   const { user } = useAuth();
@@ -36,6 +46,13 @@ function InvestmentsScreen() {
   const [currentValue, setCurrentValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // SIP: a fixed amount invested every month, added to Transactions on its day each month.
+  const [sipOn, setSipOn] = useState(false);
+  const [sipAmount, setSipAmount] = useState('');
+  const [sipDay, setSipDay] = useState('');
+  const [sipEnd, setSipEnd] = useState<'none' | 'date'>('none');
+  const [sipEndDate, setSipEndDate] = useState('');
+  const [sipCategory, setSipCategory] = useState<SipCategory>(DEFAULT_SIP_CATEGORY);
 
   const load = useCallback(async () => { if (user) setItems(await getInvestments()); }, [user]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -43,6 +60,7 @@ function InvestmentsScreen() {
   const resetForm = () => {
     setEditingId(null);
     setName(''); setType(INVESTMENT_TYPES[0]); setAmount(''); setCurrentValue(''); setError(null);
+    setSipOn(false); setSipAmount(''); setSipDay(''); setSipEnd('none'); setSipEndDate(''); setSipCategory(DEFAULT_SIP_CATEGORY);
   };
 
   const openAdd = () => {
@@ -57,6 +75,13 @@ function InvestmentsScreen() {
     setAmount(String(item.amount));
     setCurrentValue(item.current_value != null ? String(item.current_value) : '');
     setError(null);
+    const hasSip = item.sip_amount != null;
+    setSipOn(hasSip);
+    setSipAmount(hasSip ? String(item.sip_amount) : '');
+    setSipDay(hasSip && item.sip_day != null ? String(item.sip_day) : '');
+    setSipEnd(item.sip_ends_on ? 'date' : 'none');
+    setSipEndDate(item.sip_ends_on ?? '');
+    setSipCategory(item.sip_category && (SIP_CATEGORIES as readonly string[]).includes(item.sip_category) ? (item.sip_category as SipCategory) : DEFAULT_SIP_CATEGORY);
     setModalOpen(true);
   };
 
@@ -71,11 +96,24 @@ function InvestmentsScreen() {
     if (!name.trim()) { setError('Enter an investment name.'); return; }
     if (!amt || amt <= 0) { setError('Enter a valid invested amount.'); return; }
     if (Number.isNaN(cur)) { setError('Enter a valid current value.'); return; }
+    let sip: SipInput | null = null;
+    if (sipOn) {
+      const sipAmt = parseAmount(sipAmount);
+      const day = Number(sipDay);
+      if (!sipAmt || sipAmt <= 0) { setError('Enter the SIP amount.'); return; }
+      if (!Number.isInteger(day) || day < 1 || day > 31) { setError('Enter the SIP day as a number from 1 to 31.'); return; }
+      if (sipEnd === 'date') {
+        if (!isValidIsoDate(sipEndDate)) { setError('Enter the SIP end date as YYYY-MM-DD, or choose No end date.'); return; }
+        if (sipEndDate < todayLocalIso()) { setError("The SIP's end date can't be in the past."); return; }
+      }
+      sip = { amount: sipAmt, day, category: sipCategory, ...(sipEnd === 'date' ? { ends_on: sipEndDate } : { no_end: true }) };
+    }
     setSaving(true);
     setError(null);
     try {
       if (editingId != null) {
-        await updateInvestment(editingId, { name: name.trim(), type, amount: amt, current_value: cur });
+        // sip: null stops a SIP the investment had; an object starts or changes it.
+        await updateInvestment(editingId, { name: name.trim(), type, amount: amt, current_value: cur, sip });
       } else {
         await addInvestment({
           name: name.trim(),
@@ -86,7 +124,7 @@ function InvestmentsScreen() {
           maturity_date: null,
           returns_percent: null,
           note: null,
-        });
+        }, sip);
       }
       resetForm();
       setModalOpen(false);
@@ -146,6 +184,19 @@ function InvestmentsScreen() {
                 <View>
                   <Text style={styles.cardTitle}>{item.name}</Text>
                   <Text style={styles.cardMuted}>{item.type}</Text>
+                  {item.sip_amount != null && item.sip_day != null ? (
+                    <View style={styles.sipBadge}>
+                      <Text style={styles.sipBadgeText}>SIP {fmt(item.sip_amount)} on the {ordinalDay(item.sip_day)}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.noSip}>No SIP</Text>
+                  )}
+                  {item.sip_amount != null && (
+                    <Text style={styles.cardMuted}>
+                      {item.sip_next_date ? t('Next: {0}', { 0: shortDay(item.sip_next_date) }) : 'Ended'}
+                      {item.sip_ends_on ? t(' · Ends {0}', { 0: longDate(item.sip_ends_on) }) : item.sip_next_date ? ' · No end date' : ''}
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.cardHeaderRight}>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -173,7 +224,7 @@ function InvestmentsScreen() {
 
       <Modal visible={modalOpen} animationType={MODAL_ANIMATION} transparent onRequestClose={() => { setModalOpen(false); resetForm(); }}>
         <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalSheet}>
+          <ScrollView style={styles.modalSheet} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editingId != null ? 'Edit investment' : 'Add investment'}</Text>
               <Pressable onPress={() => { setModalOpen(false); resetForm(); }}>
@@ -199,12 +250,53 @@ function InvestmentsScreen() {
             <Text style={styles.label}>Current value (optional)</Text>
             <TextInput style={styles.input} value={currentValue} onChangeText={setCurrentValue} placeholder="Same as invested if unknown" placeholderTextColor={COLORS.textDim} keyboardType="numeric" />
 
+            <View style={styles.sipRow}>
+              <Text style={styles.sipTitle}>I invest here every month (SIP)</Text>
+              <Switch value={sipOn} onValueChange={setSipOn} trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }} accessibilityLabel="I invest here every month, SIP" />
+            </View>
+
+            {sipOn && (
+              <View style={styles.sipBox}>
+                <View style={styles.sipPair}>
+                  <View style={styles.sipHalf}>
+                    <Text style={styles.label}>SIP amount</Text>
+                    <TextInput style={styles.input} value={sipAmount} onChangeText={setSipAmount} placeholder="0" placeholderTextColor={COLORS.textDim} keyboardType="numeric" accessibilityLabel="SIP amount" />
+                  </View>
+                  <View style={styles.sipHalf}>
+                    <Text style={styles.label}>Day of month</Text>
+                    <TextInput style={styles.input} value={sipDay} onChangeText={setSipDay} placeholder="1 to 31" placeholderTextColor={COLORS.textDim} keyboardType="numeric" maxLength={2} accessibilityLabel="SIP day of month" />
+                  </View>
+                </View>
+
+                <Text style={styles.label}>Ends</Text>
+                <View style={styles.typeGrid}>
+                  <Pressable style={[styles.typeChip, sipEnd === 'date' && styles.typeChipActive]} onPress={() => setSipEnd('date')}>
+                    <Text style={[styles.typeChipText, sipEnd === 'date' && styles.typeChipTextActive]}>Pick a date</Text>
+                  </Pressable>
+                  <Pressable style={[styles.typeChip, sipEnd === 'none' && styles.typeChipActive]} onPress={() => setSipEnd('none')}>
+                    <Text style={[styles.typeChipText, sipEnd === 'none' && styles.typeChipTextActive]}>No end date</Text>
+                  </Pressable>
+                </View>
+                {sipEnd === 'date' && <DateInput value={sipEndDate} onChange={setSipEndDate} min={todayLocalIso()} inputStyle={styles.input} accessibilityLabel="SIP end date" />}
+
+                <Text style={styles.label}>Added to Transactions as</Text>
+                <View style={styles.typeGrid}>
+                  {SIP_CATEGORIES.map((c) => (
+                    <Pressable key={c} style={[styles.typeChip, sipCategory === c && styles.typeChipActive]} onPress={() => setSipCategory(c)}>
+                      <Text style={[styles.typeChipText, sipCategory === c && styles.typeChipTextActive]}>{categoryLabel(c)}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.sipHint}>Each month it is added to Transactions on that day and to the invested amount and current value. Already repeat this in Transactions? Remove that repeat so it isn't added twice.</Text>
+              </View>
+            )}
+
             {error && <Text style={styles.error}>{error}</Text>}
 
             <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Save investment'}</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -239,7 +331,17 @@ const styles = StyleSheet.create({
   cardMuted: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, flexShrink: 1 },
   gainText: { fontSize: 12, fontWeight: '700', marginTop: 2 },
   modalBackdrop: { flex: 1, backgroundColor: COLORS.backdrop, justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.sm },
+  modalSheet: { backgroundColor: COLORS.bg, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, maxHeight: '92%', flexGrow: 0 },
+  modalContent: { padding: SPACING.lg, gap: SPACING.sm },
+  sipRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.cardBorder, paddingTop: SPACING.sm, marginTop: SPACING.xs },
+  sipTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  sipBox: { gap: SPACING.xs },
+  sipPair: { flexDirection: 'row', gap: SPACING.sm },
+  sipHalf: { flex: 1 },
+  sipHint: { color: COLORS.textDim, fontSize: 12 },
+  sipBadge: { alignSelf: 'flex-start', backgroundColor: COLORS.accent + '22', borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 2, marginTop: 4 },
+  sipBadgeText: { color: COLORS.accent, fontSize: 12, fontWeight: '600' },
+  noSip: { color: COLORS.textDim, fontSize: 12, marginTop: 4 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
   modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
   label: { color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.xs },

@@ -1,18 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   Pressable,
   Modal,
   Switch,
   ScrollView,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
@@ -46,7 +45,8 @@ import { parseAmount } from '../../utils/amount';
 import { filterFromParams, monthBounds } from '../../utils/txnLink';
 import { DateRange, netOf } from '../../utils/dateRanges';
 
-const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+import { t, dateLocale } from '../../utils/i18n';
+const fmt = (n: number) => '₹' + n.toLocaleString(dateLocale(), { maximumFractionDigits: 0 });
 
 // 'once' logs the exact amount on the chosen date; the others convert a recurring bill to its monthly equivalent.
 type TxnPeriod = 'once' | EntryPeriod;
@@ -332,7 +332,7 @@ export default function TransactionsScreen() {
           type,
           category: category!,
           subcategory: null,
-          note: note.trim() || (spread ? `${period} entry — original ${fmt(value)}` : null),
+          note: note.trim() || (spread ? t('{0} entry — original {1}', { 0: period, 1: fmt(value) }) : null),
           date,
           ...monthYearOf(date),
           repeat_frequency: repeat ? frequency : undefined,
@@ -386,19 +386,19 @@ export default function TransactionsScreen() {
       </View>
 
       <View style={styles.periodRow}>
-        {PERIOD_TABS.map((t) => {
-          const active = tab === t.key;
-          const value = totals ? fmt(totals[t.key]) : '–';
+        {PERIOD_TABS.map((p) => {
+          const active = tab === p.key;
+          const value = totals ? fmt(totals[p.key]) : '–';
           return (
             <Pressable
-              key={t.key}
+              key={p.key}
               style={[styles.periodTab, active && styles.periodTabActive]}
-              onPress={() => onTab(t.key)}
+              onPress={() => onTab(p.key)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={`${t.label} expenses ${value}${active ? ', showing, tap to clear' : ''}`}
+              accessibilityLabel={t('{0} expenses {1}{2}', { 0: p.label, 1: value, 2: active ? ', showing, tap to clear' : '' })}
             >
-              <Text style={[styles.periodLabel, active && styles.periodLabelActive]}>{t.label}</Text>
+              <Text style={[styles.periodLabel, active && styles.periodLabelActive]}>{p.label}</Text>
               <Text style={[styles.periodAmount, active && styles.periodAmountActive]}>{value}</Text>
             </Pressable>
           );
@@ -424,7 +424,7 @@ export default function TransactionsScreen() {
           onPress={() => setDatesOpen(true)}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel={dateRange ? `Dates, ${dateRange.label}` : 'Filter by dates'}
+          accessibilityLabel={dateRange ? t('Dates, {0}', { 0: dateRange.label }) : 'Filter by dates'}
         >
           <Ionicons name="calendar-outline" size={15} color={dateRange ? COLORS.accent : COLORS.textMuted} />
           <Text style={[styles.datesText, dateRange && styles.datesTextActive]}>Dates</Text>
@@ -433,7 +433,7 @@ export default function TransactionsScreen() {
 
       {dateRange && (
         <View style={styles.linkBar}>
-          <Pressable style={styles.linkChip} onPress={() => setDateRange(null)} accessibilityRole="button" accessibilityLabel={`Remove the date filter, ${dateRange.label}`}>
+          <Pressable style={styles.linkChip} onPress={() => setDateRange(null)} accessibilityRole="button" accessibilityLabel={t('Remove the date filter, {0}', { 0: dateRange.label })}>
             <Text style={styles.linkChipText}>{dateRange.label} ✕</Text>
           </Pressable>
         </View>
@@ -446,12 +446,12 @@ export default function TransactionsScreen() {
             <Text style={styles.linkBackText}>Back</Text>
           </Pressable>
           {link.category && (
-            <Pressable style={styles.linkChip} onPress={() => setLink((l) => (l ? { ...l, category: undefined } : l))} accessibilityLabel={`Remove ${getCategory(link.category)?.label ?? link.category} filter`}>
+            <Pressable style={styles.linkChip} onPress={() => setLink((l) => (l ? { ...l, category: undefined } : l))} accessibilityLabel={t('Remove {0} filter', { 0: getCategory(link.category)?.label ?? link.category })}>
               <Text style={styles.linkChipText}>{getCategory(link.category)?.label ?? link.category} ✕</Text>
             </Pressable>
           )}
           {link.label && (
-            <Pressable style={styles.linkChip} onPress={() => setLink((l) => (l ? { ...l, from: undefined, to: undefined, label: undefined } : l))} accessibilityLabel={`Remove ${link.label} filter`}>
+            <Pressable style={styles.linkChip} onPress={() => setLink((l) => (l ? { ...l, from: undefined, to: undefined, label: undefined } : l))} accessibilityLabel={t('Remove {0} filter', { 0: link.label })}>
               <Text style={styles.linkChipText}>{link.label} ✕</Text>
             </Pressable>
           )}
@@ -463,10 +463,10 @@ export default function TransactionsScreen() {
 
       {summary && (link || query || tab || dateRange || typeFilter !== 'all') && (
         <Text style={styles.summaryText}>
-          {tab ? `Showing ${PERIOD_TABS.find((t) => t.key === tab)!.shown} · ` : ''}
+          {tab ? t('Showing {0} · ', { 0: PERIOD_TABS.find((x) => x.key === tab)!.shown }) : ''}
           {summary.count} {summary.count === 1 ? 'entry' : 'entries'}
           {typeFilter === 'expense' ? ` · ${fmt(summary.expense)}` : typeFilter === 'income' ? ` · ${fmt(summary.income)}` : ''}
-          {dateRange && typeFilter === 'all' ? ` · In ${fmt(summary.income)} · Out ${fmt(summary.expense)} · Net ${netOf(summary.income, summary.expense) < 0 ? '-' : ''}${fmt(Math.abs(netOf(summary.income, summary.expense)))}` : ''}
+          {dateRange && typeFilter === 'all' ? t(' · In {0} · Out {1} · Net {2}{3}', { 0: fmt(summary.income), 1: fmt(summary.expense), 2: netOf(summary.income, summary.expense) < 0 ? '-' : '', 3: fmt(Math.abs(netOf(summary.income, summary.expense))) }) : ''}
         </Text>
       )}
 
@@ -488,7 +488,7 @@ export default function TransactionsScreen() {
         ListEmptyComponent={
           listLoading ? null : (
             <Text style={styles.emptyText}>
-              {query || tab || dateRange || typeFilter !== 'all' ? `No transactions match${query ? ` "${query}"` : ' this filter'}` : 'No transactions yet. Tap + to add one.'}
+              {query || tab || dateRange || typeFilter !== 'all' ? t('No transactions match{0}', { 0: query ? ` "${query}"` : ' this filter' }) : 'No transactions yet. Tap + to add one.'}
             </Text>
           )
         }
@@ -598,7 +598,7 @@ export default function TransactionsScreen() {
                 <Text style={styles.repeatLabel}>Repeat</Text>
                 <Text style={styles.hint}>
                   {repeat
-                    ? `Added again on the ${ordinal(repeatDay)} ${frequency === 'monthly' ? 'of every month' : frequency === 'quarterly' ? 'every 3 months' : 'of this month every year'}, until the end date you choose below.`
+                    ? t('Added again on the {0} {1}, until the end date you choose below.', { 0: ordinal(repeatDay), 1: frequency === 'monthly' ? 'of every month' : frequency === 'quarterly' ? 'every 3 months' : 'of this month every year' })
                     : 'Turn on for salary, rent, insurance or any fixed amount that comes back.'}
                 </Text>
               </View>

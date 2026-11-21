@@ -190,6 +190,27 @@
       "when": 1794326603658,
       "tag": "0026_loan_payment_links",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795257939468,
+      "tag": "0027_investment_sip",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795258987097,
+      "tag": "0028_tour_outcomes",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795261177681,
+      "tag": "0029_user_activity",
+      "breakpoints": true
     }
   ]
 }

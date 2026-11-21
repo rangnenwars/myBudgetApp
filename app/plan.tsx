@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { Text } from '../components/i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../components/Card';
@@ -10,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { getMyPlan, MyClaim, MyPlan } from '../utils/plan';
 import { canRenew, planHeadline, priceText, shortDate } from '../utils/planState';
 
+import { t } from '../utils/i18n';
 const ALWAYS_FREE = 'Home, Transactions, Budgets, Accounts, People and the monthly and category reports are always free.';
 
 /** The line about the user's latest payment, in plain words. */
@@ -19,8 +21,8 @@ const claimMessage = (c: MyClaim): { text: string; tone: 'info' | 'warning' | 's
   if (c.status === 'rejected') {
     return {
       text: c.asked_to_resend
-        ? `We couldn't read or match your payment details${c.reason ? ` (${c.reason})` : ''}. Please send the screenshot and transaction ID again.`
-        : `We couldn't confirm your last payment${c.reason ? `: ${c.reason}` : ''}. If you paid, please contact support with your transaction ID.`,
+        ? t('We couldn\'t read or match your payment details{0}. Please send the screenshot and transaction ID again.', { 0: c.reason ? ` (${c.reason})` : '' })
+        : t('We couldn\'t confirm your last payment{0}. If you paid, please contact support with your transaction ID.', { 0: c.reason ? `: ${c.reason}` : '' }),
       tone: 'warning',
     };
   }
@@ -88,13 +90,13 @@ export default function PlanScreen() {
         {plan.state !== 'company' && (
           <Text style={kit.muted}>
             {plan.state === 'trial' && plan.until
-              ? `After ${shortDate(plan.until)}, keeping these is ${priceText(plan)}.`
-              : `Keeping these is ${priceText(plan)}.`}
+              ? t('After {0}, keeping these is {1}.', { 0: shortDate(plan.until), 1: priceText(plan) })
+              : t('Keeping these is {0}.', { 0: priceText(plan) })}
           </Text>
         )}
 
         {canRenew(plan) && !waiting && (
-          <Button label={plan.state === 'trial' || plan.state === 'paid' ? `Renew early · ${priceText(plan)}` : `Renew · ${priceText(plan)}`} onPress={() => router.push('/renew')} />
+          <Button label={plan.state === 'trial' || plan.state === 'paid' ? t('Renew early · {0}', { 0: priceText(plan) }) : t('Renew · {0}', { 0: priceText(plan) })} onPress={() => router.push('/renew')} />
         )}
         {waiting && <Button label="See my payment" variant="outline" onPress={() => router.push('/renew')} />}
         {!plan.enforced && <Text style={kit.dim}>Nothing is switched off yet. This is what will apply once the plan starts.</Text>}

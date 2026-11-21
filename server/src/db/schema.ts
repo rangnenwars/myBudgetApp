@@ -56,6 +56,9 @@ export const users = pgTable('users', {
   // Set on successful register/login (routes/auth.ts) — powers the
   // system-manager usage metrics; not updated on token refresh.
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  // "Share which pages I visit" in Settings. Off: page hits are not recorded for this person. Sign-ins and
+  // sign-outs are always recorded (they are also the security history shown in Settings).
+  shareActivity: boolean('share_activity').notNull().default(true),
   // Set when the user opens the link from their verification email
   // (routes/auth.ts). Unverified accounts still work — the app just nudges.
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
@@ -316,11 +319,25 @@ export const investments = pgTable('investments', {
   // 12 digits: a 100× gain is 9,900% — numeric(6,2) overflowed at 9,999.99%.
   returns_percent: numeric('returns_percent', { precision: 12, scale: 2, mode: 'number' }),
   note: text('note'),
+  // SIP: a fixed amount invested every month. The server adds it to transactions on sip_day each month
+  // (lib/sipPosting.ts) and raises the investment by the same amount. All four of the first group are set
+  // together or all null; a SIP says when it ends (a date, or sip_no_end). sip_posted_through is the
+  // first day of the last month settled.
+  sip_amount: numeric('sip_amount', { precision: 12, scale: 2, mode: 'number' }),
+  sip_day: smallint('sip_day'),
+  sip_category: text('sip_category').references(() => categories.key),
+  sip_ends_on: date('sip_ends_on'),
+  sip_no_end: boolean('sip_no_end').notNull().default(false),
+  sip_posted_through: date('sip_posted_through'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_investments_user').on(table.userId),
   check('investments_amount_check', sql`${table.amount} > 0`),
+  check('investments_sip_together_check', sql`(${table.sip_amount} IS NULL) = (${table.sip_day} IS NULL) AND (${table.sip_amount} IS NULL) = (${table.sip_category} IS NULL)`),
+  check('investments_sip_amount_check', sql`${table.sip_amount} IS NULL OR ${table.sip_amount} > 0`),
+  check('investments_sip_day_check', sql`${table.sip_day} IS NULL OR ${table.sip_day} BETWEEN 1 AND 31`),
+  check('investments_sip_end_check', sql`${table.sip_amount} IS NULL OR ((${table.sip_ends_on} IS NOT NULL) <> ${table.sip_no_end})`),
 ]);
 
 // ============================================================
@@ -702,4 +719,60 @@ export const accessNotices = pgTable('access_notices', {
 }, (table) => [
   primaryKey({ columns: [table.userId, table.kind, table.accessEnd] }),
   check('access_notices_kind_check', sql`${table.kind} IN ('welcome', 'existing', 'd30', 'd7', 'd1', 'ended')`),
+]);
+
+// ============================================================
+// tour_outcomes — how the first-time tour ended for each person, once: 'finished' or 'skipped' (and on
+// which card). Used only for counts on System metrics, to see whether the tour helps. One row per user,
+// the first outcome wins; replaying the tour from Settings records nothing.
+// ============================================================
+export const tourOutcomes = pgTable('tour_outcomes', {
+  userId: bigint('user_id', { mode: 'number' }).primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  outcome: text('outcome', { enum: ['finished', 'skipped'] }).notNull(),
+  step: smallint('step').notNull(),
+  language: text('language', { enum: ['en', 'hi'] }).notNull().default('en'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check('tour_outcomes_outcome_check', sql`${table.outcome} IN ('finished', 'skipped')`),
+  check('tour_outcomes_step_check', sql`${table.step} BETWEEN 1 AND 20`),
+  check('tour_outcomes_language_check', sql`${table.language} IN ('en', 'hi')`),
+]);
+
+// ============================================================
+// user_activity: sign-ins, sign-outs and page hits, for understanding how the app is used (lib/activity.ts).
+// A page hit stores one of a fixed list of page patterns (utils/pagePatterns.ts), never an address, id,
+// amount or name. A login keeps a coarse location (first part of the address). Raw rows are kept 90 days,
+// then rolled up into activity_daily and deleted (lib/activityRetention.ts). Removed with the account.
+// ============================================================
+export const userActivity = pgTable('user_activity', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['login', 'logout', 'page'] }).notNull(),
+  page: text('page'),
+  sessionId: text('session_id'),
+  platform: text('platform', { enum: ['web', 'android', 'ios'] }),
+  appVersion: text('app_version'),
+  location: text('location'),
+  detail: text('detail'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_user_activity_user_time').on(table.userId, table.createdAt),
+  index('idx_user_activity_time').on(table.createdAt),
+  index('idx_user_activity_kind_time').on(table.kind, table.createdAt),
+  check('user_activity_kind_check', sql`${table.kind} IN ('login', 'logout', 'page')`),
+  check('user_activity_page_check', sql`(${table.kind} = 'page') = (${table.page} IS NOT NULL)`),
+  check('user_activity_platform_check', sql`${table.platform} IS NULL OR ${table.platform} IN ('web', 'android', 'ios')`),
+  check('user_activity_lengths_check', sql`length(coalesce(${table.page}, '')) <= 80 AND length(coalesce(${table.location}, '')) <= 60 AND length(coalesce(${table.appVersion}, '')) <= 20 AND length(coalesce(${table.sessionId}, '')) <= 40`),
+]);
+
+// Anonymous daily counts kept after the raw rows are gone: per day, kind, page and platform (customers only).
+export const activityDaily = pgTable('activity_daily', {
+  day: date('day').notNull(),
+  kind: text('kind').notNull(),
+  page: text('page').notNull().default(''),
+  platform: text('platform').notNull().default(''),
+  events: integer('events').notNull(),
+  people: integer('people').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.day, table.kind, table.page, table.platform] }),
 ]);

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { COLORS, SPACING } from '../constants/theme';
@@ -8,7 +9,9 @@ import { useAuth } from '../context/AuthContext';
 import { getMyFeatures, requestFeature } from '../utils/database';
 import { apiErrorMessage } from '../utils/api';
 import { Button, ErrorText, ScreenHeader, kit } from './ScreenKit';
+import { dateLocale } from '../utils/i18n';
 
+import { t } from '../utils/i18n';
 // Shown in place of Goals / Loans / Investments when staff haven't switched
 // that feature on for the user (their tab is hidden too, so this is only
 // reached from an old link). The user can't switch it on themselves — only
@@ -65,7 +68,9 @@ const NotOn: React.FC<{ feature: FeatureKey }> = ({ feature }) => {
           <>
             <Text style={styles.title}>{label} needs Pro</Text>
             <Text style={[kit.muted, styles.center]}>
-              Your free access ended{user?.plan?.ended_on ? ` on ${new Date(user.plan.ended_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}. Your {label.toLowerCase()} and everything you saved are safe, and nothing was deleted.
+              {user?.plan?.ended_on
+                ? t('Your free access ended on {0}. Your {1} and everything you saved are safe, and nothing was deleted.', { 0: new Date(user.plan.ended_on).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' }), 1: t(label).toLowerCase() })
+                : t('Your free access ended. Your {1} and everything you saved are safe, and nothing was deleted.', { 1: t(label).toLowerCase() })}
             </Text>
             <Button label="Renew to turn it back on" onPress={() => router.replace('/renew')} style={styles.btn} />
             <Button label="See what is included" variant="outline" onPress={() => router.replace('/plan')} style={styles.btn} />

@@ -23,6 +23,9 @@ import planRoutes from './routes/plan';
 import adminPlanRoutes from './routes/adminPlan';
 import adminAuditLogRoutes from './routes/adminAuditLog';
 import systemRoutes from './routes/system';
+import tourRoutes from './routes/tour';
+import activityRoutes from './routes/activity';
+import adminActivityRoutes from './routes/adminActivity';
 import issuesRoutes from './routes/issues';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { pool } from './db/client';
@@ -84,11 +87,14 @@ export const createApp = () => {
   app.use('/api/v1/features', featuresRoutes);
   app.use('/api/v1/plan', planRoutes);
   // Ahead of the users router: it serves /admin/users/:id/features too.
+  app.use('/api/v1/admin/activity', adminActivityRoutes);
   app.use('/api/v1/admin', adminFeaturesRoutes);
   app.use('/api/v1/admin', adminPlanRoutes);
   app.use('/api/v1/admin/users', adminUsersRoutes);
   app.use('/api/v1/admin/audit-log', adminAuditLogRoutes);
   app.use('/api/v1/system', systemRoutes);
+  app.use('/api/v1/tour', tourRoutes);
+  app.use('/api/v1/activity', activityRoutes);
   app.use('/api/v1/issues', issuesRoutes);
 
   app.use(notFoundHandler);

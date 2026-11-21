@@ -1,15 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   Pressable,
   Modal,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import { useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
@@ -35,6 +34,7 @@ import { DateInput } from '../../components/DateInput';
 import { todayLocalIso } from '../../utils/dates';
 import { parseAmount } from '../../utils/amount';
 
+import { t, dateLocale } from '../../utils/i18n';
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 function GoalsScreen() {
@@ -136,7 +136,7 @@ function GoalsScreen() {
     const amt = parseAmount(contributeAmount);
     if (!amt || amt <= 0) { setContributeError('Enter a valid amount.'); return; }
     if (contributeMode === 'remove' && amt > contributeFor.saved_amount) {
-      setContributeError(`You can remove at most ${fmt(contributeFor.saved_amount)}.`);
+      setContributeError(t('You can remove at most {0}.', { 0: fmt(contributeFor.saved_amount) }));
       return;
     }
     setContributeSaving(true);
@@ -195,7 +195,7 @@ function GoalsScreen() {
                       ? 'Not projectable yet (no positive savings trend)'
                       : eta.monthsRemaining === 0
                         ? 'Already reached'
-                        : `${eta.monthsRemaining} mo · ${eta.etaDate}`;
+                        : t('{0} mo · {1}', { 0: eta.monthsRemaining, 1: eta.etaDate ?? '' });
                     return (
                       <View key={g.id} style={[styles.etaRow, idx !== 0 && styles.catRowBorder]}>
                         <Text style={styles.cardLabel}>{g.name}</Text>
@@ -234,7 +234,7 @@ function GoalsScreen() {
                 <View style={styles.metaRow}>
                   <Text style={styles.cardMuted}>
                     {item.deadline
-                      ? `Target date: ${new Date(item.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                      ? t('Target date: {0}', { 0: new Date(item.deadline).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) })
                       : ''}
                   </Text>
                   {achieved && (
@@ -324,8 +324,8 @@ function GoalsScreen() {
 
             <Text style={styles.cardMuted}>
               {contributeMode === 'add'
-                ? `Currently saved: ${fmt(contributeFor?.saved_amount ?? 0)}`
-                : `You can remove up to ${fmt(contributeFor?.saved_amount ?? 0)}`}
+                ? t('Currently saved: {0}', { 0: fmt(contributeFor?.saved_amount ?? 0) })
+                : t('You can remove up to {0}', { 0: fmt(contributeFor?.saved_amount ?? 0) })}
             </Text>
 
             <TextInput
@@ -369,7 +369,7 @@ function GoalsScreen() {
                     />
                     <Text style={styles.cardLabel}>{h.type === 'add' ? '+' : '−'}{fmt(h.amount)}</Text>
                     <Text style={styles.cardMuted}>
-                      {new Date(h.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {new Date(h.created_at).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' })}
                     </Text>
                   </View>
                 )}

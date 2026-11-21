@@ -1,11 +1,13 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, RefreshControl, Switch, Pressable } from 'react-native';
+import { ScrollView, View, StyleSheet, RefreshControl, Switch, Pressable } from 'react-native';
+import { Text } from '../../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { ScreenHeader, SectionTitle, Notice, Button, ErrorText, kit } from '../../components/ScreenKit';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, RADIUS, SPACING } from '../../constants/theme';
-import { FEATURES, FeatureKey, featureLabel, featurePrice, priceLabel } from '../../constants/features';
+import { FEATURES, FeatureKey, featureLabel, featurePrice } from '../../constants/features';
+import { priceText } from '../../utils/priceText';
 import { apiErrorMessage } from '../../utils/api';
 import {
   getFeatureOverview,
@@ -16,6 +18,7 @@ import {
   FeatureUser,
 } from '../../utils/database';
 
+import { t, dateLocale } from '../../utils/i18n';
 type Period = 'month' | 'year' | 'none';
 const PERIODS: { key: Period; label: string }[] = [
   { key: 'month', label: '1 month' },
@@ -23,7 +26,7 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: 'none', label: 'No end' },
 ];
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 // Staff view of optional-feature access: what new accounts get, who is asking
 // for a feature, and how many users have each one. Admin and system manager
@@ -134,7 +137,7 @@ export default function AdminFeaturesScreen() {
                     onValueChange={(v) => onDefault(f.key, v)}
                     disabled={busy || !canManage}
                     trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
-                    accessibilityLabel={`New users get ${f.label}`}
+                    accessibilityLabel={t('New users get {0}', { 0: f.label })}
                   />
                 </View>
               ))}
@@ -154,7 +157,7 @@ export default function AdminFeaturesScreen() {
                         {r.email} · asked {fmtDate(r.requestedAt)}
                       </Text>
                       {r.paid ? (
-                        <Text style={[kit.dim, styles.paid]}>Says they paid {priceLabel(featurePrice(r.feature).price, featurePrice(r.feature).period)}. Check the payment first.</Text>
+                        <Text style={[kit.dim, styles.paid]}>Says they paid {priceText(featurePrice(r.feature).price, featurePrice(r.feature).period)}. Check the payment first.</Text>
                       ) : null}
                       {canManage && (
                         <>
@@ -166,7 +169,7 @@ export default function AdminFeaturesScreen() {
                                 onPress={() => setPeriods((prev) => ({ ...prev, [`${r.userId}-${r.feature}`]: p.key }))}
                                 style={[styles.period, periodFor(r.userId, r.feature) === p.key && styles.periodActive]}
                                 accessibilityRole="button"
-                                accessibilityLabel={`Switch on for ${p.label}`}
+                                accessibilityLabel={t('Switch on for {0}', { 0: p.label })}
                               >
                                 <Text style={[styles.periodText, periodFor(r.userId, r.feature) === p.key && styles.periodTextActive]}>{p.label}</Text>
                               </Pressable>

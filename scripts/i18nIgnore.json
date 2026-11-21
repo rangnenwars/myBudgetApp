@@ -1,0 +1,12 @@
+[
+ "(prefers-reduced-motion: reduce)",
+ "0 0 40px rgba(0,0,0,0.12)",
+ "YYYY-MM-DD",
+ "name@bank",
+ "useAuth must be used within AuthProvider",
+ "useCategories must be used within CategoriesProvider",
+ "you@example.com",
+ "{0} MB",
+ "{0} KB",
+ "{0}₹{1} Cr"
+]

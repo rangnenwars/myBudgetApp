@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text } from './i18n';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { DateInput } from './DateInput';
 import { END_PRESET_MONTHS, RepeatEndChoice, endsOnFor, formatEndDate, repeatEndError, repeatPreview } from '../utils/repeatEnd';
 import { RepeatFrequency } from '../utils/types';
 
+import { t } from '../utils/i18n';
 interface Props {
   /** Earliest allowed end date, and what "3 months" etc. count from: the entry's date, or today when editing a rule. */
   base: string;
@@ -34,7 +36,7 @@ export const RepeatEndField: React.FC<Props> = ({ base, firstDue, frequency, day
     <View style={styles.wrap}>
       <Text style={styles.label}>Ends on (required)</Text>
       <View style={styles.chipRow}>
-        {END_PRESET_MONTHS.map((n) => chip(`${n} months`, value?.kind === 'months' && value.months === n, () => onChange({ kind: 'months', months: n })))}
+        {END_PRESET_MONTHS.map((n) => chip(t('{0} months', { 0: n }), value?.kind === 'months' && value.months === n, () => onChange({ kind: 'months', months: n })))}
         {chip('Pick a date', value?.kind === 'date', () => onChange({ kind: 'date', date: value?.kind === 'date' ? value.date : '' }))}
         {chip('No end date', value?.kind === 'none', () => onChange({ kind: 'none' }))}
       </View>
@@ -53,8 +55,8 @@ export const RepeatEndField: React.FC<Props> = ({ base, firstDue, frequency, day
             {preview.count === 0
               ? 'No entry falls before this date, so nothing would be added.'
               : preview.count === 1
-                ? `1 entry, on ${formatEndDate(preview.first!)}.`
-                : `${preview.count} entries: first ${formatEndDate(preview.first!)}, last ${formatEndDate(preview.last!)}.`}
+                ? t('1 entry, on {0}.', { 0: formatEndDate(preview.first!) })
+                : t('{0} entries: first {1}, last {2}.', { 0: preview.count, 1: formatEndDate(preview.first!), 2: formatEndDate(preview.last!) })}
           </Text>
         </>
       ) : (

@@ -23,6 +23,7 @@ import { applySignupDefaults } from '../lib/features';
 import { addMonths, createTrialGrant } from '../lib/access';
 import { getPlan } from '../lib/plan';
 import { buildSessionUser } from '../lib/sessionUser';
+import { recordLogin, recordLogout } from '../lib/activity';
 import { welcomeMail } from '../lib/accessMail';
 import { sendAccountMail } from '../lib/accountMail';
 import { accessNotices } from '../db/schema';
@@ -105,6 +106,7 @@ router.post(
     await sendVerificationEmail(user).catch((err) => console.error('Verification email failed:', err));
 
     const tokens = await issueTokenPair(user.id);
+    await recordLogin(user.id, req, 'register');
     res.status(201).json({ user: await buildSessionUser(user), ...sendTokens(req, res, tokens) });
   })
 );
@@ -129,6 +131,7 @@ router.post(
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
     const tokens = await issueTokenPair(user.id);
+    await recordLogin(user.id, req, 'password');
     res.json({ user: await buildSessionUser(user), ...sendTokens(req, res, tokens) });
   })
 );
@@ -178,10 +181,13 @@ router.post(
     const refreshToken = incomingRefreshToken(req, body.refreshToken);
     if (!refreshToken && !wantsCookie(req)) throw badRequest('refreshToken is required.');
     if (refreshToken) {
-      await db
+      const [ended] = await db
         .update(refreshTokens)
         .set({ revokedAt: new Date() })
-        .where(and(eq(refreshTokens.tokenHash, hashToken(refreshToken)), isNull(refreshTokens.revokedAt)));
+        .where(and(eq(refreshTokens.tokenHash, hashToken(refreshToken)), isNull(refreshTokens.revokedAt)))
+        .returning({ userId: refreshTokens.userId });
+      // Only a session that was really open counts: signing out twice records one sign-out.
+      if (ended) await recordLogout(ended.userId, req, 'single');
     }
     clearRefreshCookie(req, res);
     res.status(204).send();

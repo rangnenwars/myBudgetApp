@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text } from './i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
 import { COLORS, SPACING } from '../constants/theme';
@@ -8,6 +9,7 @@ import { useCategories } from '../context/CategoriesContext';
 import { getTransactionsPage, Transaction } from '../utils/database';
 import { recentDateLabel, todayLocalIso } from '../utils/dates';
 
+import { t } from '../utils/i18n';
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 const ROWS = 3;
 
@@ -37,29 +39,29 @@ export const RecentTransactions: React.FC<{ refreshKey?: number }> = ({ refreshK
     <>
       <Text style={styles.sectionTitle}>Recent transactions</Text>
       <Card>
-        {items.map((t, i) => {
-          const cat = getCategory(t.category);
+        {items.map((txn, i) => {
+          const cat = getCategory(txn.category);
           return (
             <Pressable
-              key={t.id}
+              key={txn.id}
               style={[styles.row, i !== 0 && styles.rowBorder]}
               onPress={() => router.push('/(tabs)/transactions')}
               accessibilityRole="link"
-              accessibilityLabel={`${cat?.label ?? t.category} ${fmt(t.amount)}, open transactions`}
+              accessibilityLabel={t('{0} {1}, open transactions', { 0: cat?.label ?? txn.category, 1: fmt(txn.amount) })}
             >
               <Text style={styles.icon}>{cat?.icon ?? '💰'}</Text>
               <View style={styles.mid}>
                 <Text style={styles.label} numberOfLines={1}>
-                  {cat?.label ?? t.category}
+                  {cat?.label ?? txn.category}
                 </Text>
                 <Text style={styles.sub} numberOfLines={1}>
-                  {recentDateLabel(t.date, today)}
-                  {t.note ? ` · ${t.note}` : ''}
+                  {recentDateLabel(txn.date, today)}
+                  {txn.note ? ` · ${txn.note}` : ''}
                 </Text>
               </View>
-              <Text style={[styles.amount, { color: t.type === 'income' ? COLORS.accent : COLORS.red }]}>
-                {t.type === 'income' ? '+' : '-'}
-                {fmt(t.amount)}
+              <Text style={[styles.amount, { color: txn.type === 'income' ? COLORS.accent : COLORS.red }]}>
+                {txn.type === 'income' ? '+' : '-'}
+                {fmt(txn.amount)}
               </Text>
             </Pressable>
           );

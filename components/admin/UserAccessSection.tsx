@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text } from '../i18n';
 import { router } from 'expo-router';
 import { Button, ErrorText, Field, Segmented } from '../ScreenKit';
 import { ExceptionEditor } from './ExceptionEditor';
@@ -7,7 +8,8 @@ import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 import { apiErrorMessage } from '../../utils/api';
 import { getAdminPlan, getUserAccess, markPaymentReceived, setAccountKind, UserAccess } from '../../utils/plan';
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+import { t, dateLocale } from '../../utils/i18n';
+const fmt = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 const STATE_TEXT: Record<UserAccess['access']['state'], string> = {
   company: 'Company account: always has access',
@@ -73,7 +75,7 @@ export const UserAccessSection: React.FC<Props> = ({ userId, isAdmin, isSelf }) 
   const onPayment = async () => {
     setError(null);
     const value = Number(amount);
-    if (!(value >= price)) return setError(`The amount can't be below the plan price of ₹${price}.`);
+    if (!(value >= price)) return setError(t('The amount can\'t be below the plan price of ₹{0}.', { 0: price }));
     if (txn.replace(/[\s-]/g, '').length < 8) return setError('Enter the transaction ID or a reference, at least 8 letters or digits.');
     setBusy(true);
     try {
@@ -117,9 +119,9 @@ export const UserAccessSection: React.FC<Props> = ({ userId, isAdmin, isSelf }) 
         <Text style={styles.stateTitle}>{STATE_TEXT[a.state]}</Text>
         <Text style={styles.dim}>
           {a.state === 'none' && a.ended_on
-            ? `Ended ${fmt(a.ended_on)}`
+            ? t('Ended {0}', { 0: fmt(a.ended_on) })
             : a.until
-              ? `Until ${fmt(a.until)}${a.days_left != null ? ` · ${a.days_left} days left` : ''}`
+              ? t('Until {0}{1}', { 0: fmt(a.until), 1: a.days_left != null ? t(' · {0} days left', { 0: a.days_left }) : '' })
               : company || a.state === 'exception'
                 ? 'No end date'
                 : ''}
@@ -153,9 +155,9 @@ export const UserAccessSection: React.FC<Props> = ({ userId, isAdmin, isSelf }) 
       <Text style={styles.label}>History</Text>
       {data.grants.map((g) => (
         <Text key={g.id} style={[styles.dim, g.revokedAt ? styles.struck : null]}>
-          {g.kind === 'trial' ? 'Free trial' : g.kind === 'paid' ? `Paid ₹${g.amountInr ?? ''}` : `Exception${g.reason ? `: ${g.reason}` : ''}`} · {fmt(g.startsAt)} to {g.endsAt ? fmt(g.endsAt) : 'no end'}
+          {g.kind === 'trial' ? 'Free trial' : g.kind === 'paid' ? t('Paid ₹{0}', { 0: g.amountInr ?? '' }) : t('Exception{0}', { 0: g.reason ? `: ${g.reason}` : '' })} · {fmt(g.startsAt)} to {g.endsAt ? fmt(g.endsAt) : 'no end'}
           {g.revokedAt ? ' · removed' : ''}
-          {g.by ? ` · by ${g.by}` : ''}
+          {g.by ? t(' · by {0}', { 0: g.by }) : ''}
         </Text>
       ))}
     </View>

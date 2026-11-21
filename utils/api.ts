@@ -1,4 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { Platform } from 'react-native';
+import { getSessionId } from './activity';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens, REFRESH_VIA_COOKIE } from './tokenStorage';
 
 // Falls back to localhost for local dev if EXPO_PUBLIC_API_URL isn't set —
@@ -22,7 +24,12 @@ export const registerSessionExpiredHandler = (handler: () => void): void => {
   onSessionExpired = handler;
 };
 
+// Tells the server which kind of device and which visit a request belongs to (sign-in history, activity).
+const CLIENT_HEADERS = { 'X-App-Platform': Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android', 'X-App-Version': '1.0.0' };
+
 api.interceptors.request.use(async (config) => {
+  config.headers.set(CLIENT_HEADERS);
+  config.headers.set('X-Session-Id', getSessionId());
   const token = await getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

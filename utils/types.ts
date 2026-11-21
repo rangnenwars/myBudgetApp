@@ -75,6 +75,14 @@ export interface Investment {
   maturity_date: string | null;
   returns_percent: number | null;
   note: string | null;
+  /** SIP: a fixed amount added every month. All null/absent when the investment has none. */
+  sip_amount?: number | null;
+  sip_day?: number | null;
+  sip_category?: string | null;
+  sip_ends_on?: string | null;
+  sip_no_end?: boolean;
+  /** The date of the next SIP not yet added; null when there is no SIP or it has ended. */
+  sip_next_date?: string | null;
 }
 
 export type AccountType = 'bank' | 'cash' | 'wallet' | 'credit_card';

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, SectionList, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Modal, SectionList, Pressable, ActivityIndicator } from 'react-native';
+import { Text, TextInput } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { useCategories } from '../context/CategoriesContext';
 import { confirmAction, showAlert } from '../utils/alert';
 import { apiErrorMessage } from '../utils/api';
 
+import { t } from '../utils/i18n';
 interface Props {
   type: 'income' | 'expense';
   value: string | null;
@@ -54,7 +56,7 @@ export const CategoryPicker: React.FC<Props> = ({ type, value, onChange }) => {
       (c) => c.type === type && c.label.trim().toLowerCase() === trimmed.toLowerCase()
     );
     if (isDuplicate) {
-      setAddError(`"${trimmed}" already exists.`);
+      setAddError(t('"{0}" already exists.', { 0: trimmed }));
       return;
     }
     setAddError(null);
@@ -95,7 +97,7 @@ export const CategoryPicker: React.FC<Props> = ({ type, value, onChange }) => {
   };
 
   const onDelete = (key: string, label: string) => {
-    confirmAction('Delete category', `Remove "${label}"? This can't be undone.`, 'Delete', async () => {
+    confirmAction('Delete category', t('Remove "{0}"? This can\'t be undone.', { 0: label }), 'Delete', async () => {
       setDeletingKey(key);
       try {
         await deleteCategory(key);

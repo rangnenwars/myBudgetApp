@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';

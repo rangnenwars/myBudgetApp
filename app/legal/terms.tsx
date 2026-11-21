@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from '../../components/i18n';
 import { ScreenHeader, Notice, kit } from '../../components/ScreenKit';
 
 // Placeholder: the spec says policy text must be reviewed by a lawyer

@@ -1,11 +1,13 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, View, Text, StyleSheet } from 'react-native';
+import { FlatList, View, StyleSheet } from 'react-native';
+import { Text } from '../../components/i18n';
 import { useFocusEffect } from 'expo-router';
 import { ScreenHeader, Notice, Button, kit } from '../../components/ScreenKit';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 import { apiErrorMessage } from '../../utils/api';
 import { getAuditLog, AuditLogEntry } from '../../utils/database';
+import { dateLocale } from '../../utils/i18n';
 
 const PAGE = 50;
 
@@ -24,10 +26,11 @@ const ACTION_LABEL: Record<string, string> = {
   exception_set: 'Set an exception',
   exception_cleared: 'Turned off an exception',
   account_kind_changed: 'Changed account type',
+  viewed_activity: 'Viewed a person’s activity',
 };
 
 const fmtWhen = (iso: string) =>
-  new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  new Date(iso).toLocaleString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 // Admin-only record of what staff changed, newest first, 50 at a time.
 export default function AuditLogScreen() {

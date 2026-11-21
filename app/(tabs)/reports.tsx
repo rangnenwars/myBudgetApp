@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, LayoutChangeEvent } from 'react-native';
+import { Text } from '../../components/i18n';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MonthlyExpensesView } from '../../components/MonthlyExpensesView';
 import { CategoriesView } from '../../components/CategoriesView';
@@ -32,7 +33,8 @@ import { shareCsv } from '../../utils/exportFile';
 import { useCategories } from '../../context/CategoriesContext';
 import { showAlert } from '../../utils/alert';
 
-const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+import { t, dateLocale } from '../../utils/i18n';
+const fmt = (n: number) => '₹' + n.toLocaleString(dateLocale(), { maximumFractionDigits: 0 });
 
 type RangePreset = 'month' | '3m' | '6m' | 'year' | 'all';
 type TrendMetric = 'income' | 'expense' | 'net';
@@ -335,7 +337,7 @@ export default function ReportsScreen() {
                     style={[styles.catRow, idx !== 0 && styles.catRowBorder]}
                     onPress={() => router.push(txnLink({ type: 'expense', category: c.category, ...rangeBounds(b.startMonth, b.startYear, b.endMonth, b.endYear) }))}
                     accessibilityRole="link"
-                    accessibilityLabel={`${cat?.label ?? c.category} ${fmt(c.total)}, see the entries`}
+                    accessibilityLabel={t('{0} {1}, see the entries', { 0: cat?.label ?? c.category, 1: fmt(c.total) })}
                   >
                     <View style={styles.catHeader}>
                       <Text style={styles.catLabel}>{cat?.icon ?? '💰'} {cat?.label ?? c.category}</Text>
@@ -444,7 +446,7 @@ export default function ReportsScreen() {
 // "2041-03" -> "Mar 2041"
 const monthYearLabel = (ym: string): string => {
   const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  return new Date(y, m - 1, 1).toLocaleDateString(dateLocale(), { month: 'short', year: 'numeric' });
 };
 // The YYYY-MM that is `months` from now.
 const monthsFromNow = (months: number): string => {
@@ -455,7 +457,7 @@ const monthsFromNow = (months: number): string => {
 const durationLabel = (months: number): string => {
   if (months < 12) return `${months} ${months === 1 ? 'month' : 'months'}`;
   const years = Math.round((months / 12) * 10) / 10;
-  return `about ${years} ${years === 1 ? 'year' : 'years'}`;
+  return t('about {0} {1}', { 0: years, 1: years === 1 ? 'year' : 'years' });
 };
 
 const styles = StyleSheet.create({

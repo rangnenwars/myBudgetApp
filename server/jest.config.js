@@ -14,6 +14,9 @@ module.exports = {
   // of a test run. forceExit is the standard fix rather than adding
   // teardown plumbing to close a pool that's supposed to stay open.
   forceExit: true,
+  // Each worker holds its own connection pool (up to 10). Jest starts one worker per core, which on a big
+  // machine passes Postgres's 100-connection limit ("too many clients"), so cap them.
+  maxWorkers: 6,
   // jobs/ counts too (the nightly digest and retention); its run-*.ts files are
   // thin CLI wrappers around runIssueDigest/analyzeIssues, exercised by hand.
   collectCoverageFrom: ['src/routes/**/*.ts', 'src/middleware/**/*.ts', 'src/lib/**/*.ts', 'src/jobs/**/*.ts', '!src/jobs/run-*.ts'],

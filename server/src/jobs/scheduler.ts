@@ -2,6 +2,7 @@ import { runIssueDigestExclusive } from './issueDigest';
 import { purgeExpiredScreenshots } from '../lib/issuePrivacy';
 import { runAccessNotices } from '../lib/accessNotices';
 import { purgeClaimScreenshots } from '../lib/payments';
+import { purgeActivity } from '../lib/activityRetention';
 
 // In-process nightly jobs — no cron daemon or extra container needed. Fires
 // daily at ISSUE_DIGEST_TIME (HH:MM, server-local time — set TZ, e.g.
@@ -32,6 +33,12 @@ export const runNightlyJobs = async (now: Date = new Date()): Promise<void> => {
   if (purged > 0) console.log(`[retention] removed ${purged} expired issue-report screenshot(s)`);
   const claimShots = await purgeClaimScreenshots(now);
   if (claimShots > 0) console.log(`[retention] removed ${claimShots} payment screenshot(s)`);
+  // Activity older than 90 days: added up into daily counts, then deleted (lib/activityRetention.ts).
+  const activity = await purgeActivity(now).catch((err) => {
+    console.error('[activity] retention failed:', err);
+    return { rolledUp: 0, removed: 0 };
+  });
+  if (activity.removed > 0) console.log(`[retention] removed ${activity.removed} old activity row(s), kept ${activity.rolledUp} daily count(s)`);
   // Plan reminders: only once the plan is enforced, each sent once (lib/accessNotices.ts).
   const reminders = await runAccessNotices(now).catch((err) => {
     console.error('[access] reminders failed:', err);

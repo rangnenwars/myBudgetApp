@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Text } from '../../components/i18n';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
@@ -11,6 +12,7 @@ import { getCategoryBreakdown, CategoryTotal } from '../../utils/database';
 import { OTHERS_KEY, categoryRows } from '../../utils/expenseReports';
 import { monthFilter, txnLink } from '../../utils/txnLink';
 
+import { t, dateLocale } from '../../utils/i18n';
 // Month detail for Reports > Monthly: where that month's money went.
 const KEEP = 3;
 
@@ -35,7 +37,7 @@ export default function MonthlyExpenseDetailScreen() {
     }, [user?.id, year, month])
   );
 
-  const title = year && month ? new Date(year, month - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) : 'Month';
+  const title = year && month ? new Date(year, month - 1, 1).toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' }) : 'Month';
   const { total, rows } = categoryRows(breakdown ?? [], null, KEEP, (c) => !!getCategory(c));
 
   return (
@@ -74,7 +76,7 @@ export default function MonthlyExpenseDetailScreen() {
                   style={[styles.row, i !== 0 && styles.rowBorder]}
                   onPress={() => router.push(txnLink({ type: 'expense', category: r.category, ...monthFilter(year, month) }))}
                   accessibilityRole="link"
-                  accessibilityLabel={`${cat?.label ?? r.category} ${fmtInr(r.total)}, see the entries`}
+                  accessibilityLabel={t('{0} {1}, see the entries', { 0: cat?.label ?? r.category, 1: fmtInr(r.total) })}
                 >
                   {body}
                 </Pressable>

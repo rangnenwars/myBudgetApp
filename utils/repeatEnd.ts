@@ -1,6 +1,7 @@
 import { isValidIsoDate } from './dates';
 import { RepeatFrequency } from './types';
 
+import { t, dateLocale } from './i18n';
 // "Ends on" for a repeating entry. Mirrors server/src/lib/recurringTransactions.ts:
 // an entry posts on the rule's day (29–31 fall back to the month's last day) and
 // only while that date is on or before the end date.
@@ -93,14 +94,14 @@ const daysBetween = (from: string, to: string): number => {
   return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000);
 };
 
-export const formatEndDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+export const formatEndDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** How a rule's end shows in the list: the text, and whether it needs the user's attention. */
 export const endStatus = (rule: { ends_on?: string | null; no_end?: boolean }, today: string): { text: string; warn: boolean } => {
   if (rule.ends_on) {
     const days = daysBetween(today, rule.ends_on);
-    if (days >= 0 && days <= 31) return { text: days === 0 ? 'ends today' : `ends in ${days} ${days === 1 ? 'day' : 'days'}`, warn: true };
-    return { text: `ends ${formatEndDate(rule.ends_on)}`, warn: false };
+    if (days >= 0 && days <= 31) return { text: days === 0 ? 'ends today' : t('ends in {0} {1}', { 0: days, 1: days === 1 ? 'day' : 'days' }), warn: true };
+    return { text: t('ends {0}', { 0: formatEndDate(rule.ends_on) }), warn: false };
   }
   if (rule.no_end) return { text: 'no end date', warn: false };
   return { text: 'needs an end date', warn: true };

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Modal, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
@@ -15,6 +16,7 @@ import { addPersonEntry, deletePerson, deletePersonEntry, getPerson, updatePerso
 import { fmtAmount, KIND_LABEL, shortDate } from '../../utils/people';
 import { parseAmount } from '../../utils/amount';
 
+import { t } from '../../utils/i18n';
 type Sheet = 'none' | 'payment' | 'lend' | 'due';
 
 export default function PersonScreen() {
@@ -93,14 +95,14 @@ export default function PersonScreen() {
 
   const writeOff = () => {
     if (!person) return;
-    confirmAction('Write off', `Clear the ${fmtAmount(person.balance)} ${person.name} owes you? You won't be chasing it any more. It stays in the history.`, 'Write off', async () => {
+    confirmAction('Write off', t('Clear the {0} {1} owes you? You won\'t be chasing it any more. It stays in the history.', { 0: fmtAmount(person.balance), 1: person.name }), 'Write off', async () => {
       await addPersonEntry(id, { kind: 'written_off' });
       await load();
     });
   };
 
   const removeEntry = (e: LedgerEntry) => {
-    confirmAction('Remove this entry', `${KIND_LABEL[e.kind]} ${fmtAmount(e.amount)} on ${shortDate(e.date)} will be removed and the balance recalculated.`, 'Remove', async () => {
+    confirmAction('Remove this entry', t('{0} {1} on {2} will be removed and the balance recalculated.', { 0: KIND_LABEL[e.kind], 1: fmtAmount(e.amount), 2: shortDate(e.date) }), 'Remove', async () => {
       await deletePersonEntry(id, e.id);
       await load();
     });
@@ -108,7 +110,7 @@ export default function PersonScreen() {
 
   const removePerson = () => {
     if (!person) return;
-    confirmAction('Delete person', `Delete ${person.name} and their whole history? This can't be undone.`, 'Delete', async () => {
+    confirmAction('Delete person', t('Delete {0} and their whole history? This can\'t be undone.', { 0: person.name }), 'Delete', async () => {
       await deletePerson(id);
       router.back();
     });
@@ -123,7 +125,7 @@ export default function PersonScreen() {
     );
   }
 
-  const headline = owed ? `${person.name} owes you` : owing ? `You owe ${person.name}` : 'All settled';
+  const headline = owed ? t('{0} owes you', { 0: person.name }) : owing ? t('You owe {0}', { 0: person.name }) : 'All settled';
 
   return (
     <View style={kit.screen}>
@@ -144,7 +146,7 @@ export default function PersonScreen() {
           )}
         </Card>
 
-        {(owed || owing) && <Button label={owed ? `They paid ${fmtAmount(person.balance)}` : `I paid ${fmtAmount(person.balance)}`} onPress={openPayment} />}
+        {(owed || owing) && <Button label={owed ? t('They paid {0}', { 0: fmtAmount(person.balance) }) : t('I paid {0}', { 0: fmtAmount(person.balance) })} onPress={openPayment} />}
         <View style={styles.actions}>
           <Button label="Lend or borrow" variant="outline" style={styles.action} onPress={() => setSheet('lend')} />
           {(owed || owing) && <Button label="Due date" variant="outline" style={styles.action} onPress={openDue} />}
@@ -169,7 +171,7 @@ export default function PersonScreen() {
                   {e.amount > 0 ? '+' : '−'}
                   {fmtAmount(e.amount)}
                 </Text>
-                <Pressable onPress={() => removeEntry(e)} hitSlop={8} accessibilityLabel={`Remove entry from ${shortDate(e.date)}`}>
+                <Pressable onPress={() => removeEntry(e)} hitSlop={8} accessibilityLabel={t('Remove entry from {0}', { 0: shortDate(e.date) })}>
                   <Ionicons name="trash-outline" size={16} color={COLORS.textDim} />
                 </Pressable>
               </View>
@@ -184,7 +186,7 @@ export default function PersonScreen() {
         <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{sheet === 'due' ? 'Pay back by' : owed ? `${person.name} paid you` : `You paid ${person.name}`}</Text>
+              <Text style={styles.sheetTitle}>{sheet === 'due' ? 'Pay back by' : owed ? t('{0} paid you', { 0: person.name }) : t('You paid {0}', { 0: person.name })}</Text>
               <Pressable onPress={() => setSheet('none')} hitSlop={8} accessibilityLabel="Close">
                 <Ionicons name="close" size={22} color={COLORS.text} />
               </Pressable>
