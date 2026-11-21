@@ -49,6 +49,20 @@ const weekBefore = (iso: string): string => {
  * 3. otherwise what they have logged this month so far, so a brand-new account
  *    with a salary entered today still gets an answer.
  */
+/**
+ * The monthly income Plan ahead falls back on when there is no repeating income. The
+ * average of the last full months, plus this month once it has any income, so money in
+ * that was just added or edited counts straight away instead of next month.
+ */
+export const forecastIncome = async (userId: number, today: { year: number; month: number }) => {
+  const thisMonth = await getTotalsInRange(userId, today.month, today.year, today.month, today.year);
+  const hasIncomeNow = thisMonth.some((r) => r.type === 'income' && r.amount > 0);
+  if (!hasIncomeNow) return monthlyIncome(userId, 0, today);
+  // monthlyIncome looks at the months before the one it is given, so give it next month.
+  const next = addMonths(today.year, today.month, 1);
+  return monthlyIncome(userId, 0, next);
+};
+
 export const monthlyIncome = async (userId: number, repeating: number, today: { year: number; month: number }) => {
   const start = addMonths(today.year, today.month, -INCOME_MONTHS);
   const end = addMonths(today.year, today.month, -1);

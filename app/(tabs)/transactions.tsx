@@ -19,6 +19,8 @@ import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme'
 import { CategoryPicker } from '../../components/CategoryPicker';
 import { DateField } from '../../components/DateField';
 import { RepeatingEntries } from '../../components/RepeatingEntries';
+import { DateFilterSheet } from '../../components/DateFilterSheet';
+import { RepeatChangeSheet } from '../../components/RepeatChangeSheet';
 import { RepeatEndField } from '../../components/RepeatEndField';
 import { RepeatEndChoice, endPayload, firstRepeatDate, repeatEndError } from '../../utils/repeatEnd';
 import { useAuth } from '../../context/AuthContext';
@@ -42,6 +44,7 @@ import { todayLocalIso, entryDateError, monthYearOf } from '../../utils/dates';
 import { useCategories } from '../../context/CategoriesContext';
 import { parseAmount } from '../../utils/amount';
 import { filterFromParams, monthBounds } from '../../utils/txnLink';
+import { DateRange, netOf } from '../../utils/dateRanges';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -100,6 +103,11 @@ export default function TransactionsScreen() {
   const [link, setLink] = useState<{ category?: string; from?: string; to?: string; label?: string } | null>(null);
   const [summary, setSummary] = useState<TransactionPageSummary | null>(null);
   const [tab, setTab] = useState<PeriodTab | null>(null);
+  // The Dates filter: this week, month, year or a custom From and To. Replaces the tab and any range from a link.
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  const [datesOpen, setDatesOpen] = useState(false);
+  // Set when the amount of an entry that repeats is changed, until the user chooses what to do.
+  const [repeatPrompt, setRepeatPrompt] = useState<{ from: number; to: number; frequency: 'monthly' | 'quarterly' | 'yearly' } | null>(null);
   // Expense totals for the tabs, whatever the list below is showing.
   const [totals, setTotals] = useState<{ today: number; month: number } | null>(null);
   const params = useLocalSearchParams();
@@ -132,7 +140,7 @@ export default function TransactionsScreen() {
     setListLoading(true);
     try {
       // Transactions first: the server posts any due repeating entries while serving this request.
-      const range = tab ? periodRange(tab) : { from: link?.from, to: link?.to };
+      const range = dateRange ?? (tab ? periodRange(tab) : { from: link?.from, to: link?.to });
       const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: range.from, to: range.to, limit: PAGE_SIZE });
       if (id !== requestId.current) return;
       setItems(page.items);
@@ -142,7 +150,7 @@ export default function TransactionsScreen() {
     } finally {
       if (id === requestId.current) setListLoading(false);
     }
-  }, [user, search, typeFilter, link, tab]);
+  }, [user, search, typeFilter, link, tab, dateRange]);
 
   // The two tab totals: expenses only, one cheap query each. Refreshed after the list loads (so
   // repeating entries that just came due are included), and after every add, edit or delete.
@@ -170,7 +178,7 @@ export default function TransactionsScreen() {
     const id = requestId.current;
     setListLoading(true);
     try {
-      const range = tab ? periodRange(tab) : { from: link?.from, to: link?.to };
+      const range = dateRange ?? (tab ? periodRange(tab) : { from: link?.from, to: link?.to });
       const page = await getTransactionsPage({ q: search.trim(), type: typeFilter === 'all' ? undefined : typeFilter, category: link?.category, from: range.from, to: range.to, limit: PAGE_SIZE, cursor: nextCursor });
       if (id !== requestId.current) return;
       setItems((prev) => [...prev, ...page.items]);
@@ -190,12 +198,13 @@ export default function TransactionsScreen() {
       loadRef.current().catch(() => {});
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, typeFilter, link, tab]);
+  }, [search, typeFilter, link, tab, dateRange]);
 
   // A tapped figure arrives as route params: apply its filters (a new `n` re-applies even the same ones).
   useEffect(() => {
     if (!fromLink) return;
     setTab(null);
+    setDateRange(null);
     setLink({ category: fromLink.category, from: fromLink.from, to: fromLink.to, label: fromLink.label });
     setTypeFilter(fromLink.type ?? 'all');
     setSearch('');
@@ -218,7 +227,15 @@ export default function TransactionsScreen() {
   // that came in from Home or Reports is replaced by the tab.
   const onTab = (next: PeriodTab) => {
     setLink((l) => (l?.category ? { ...l, from: undefined, to: undefined, label: undefined } : null));
+    setDateRange(null);
     setTab((current) => (current === next ? null : next));
+  };
+
+  // A range from the Dates sheet replaces the tab and any range that came in from Home or Reports.
+  const onDateRange = (range: DateRange | null) => {
+    setLink((l) => (l?.category ? { ...l, from: undefined, to: undefined, label: undefined } : null));
+    setTab(null);
+    setDateRange(range);
   };
 
   const resetForm = () => {
@@ -256,7 +273,7 @@ export default function TransactionsScreen() {
     setModalOpen(true);
   };
 
-  const onSave = async () => {
+  const onSave = async (changeRepeat?: boolean) => {
     if (!user) return;
     const value = parseAmount(amount);
     if (!value || value <= 0) {
@@ -280,6 +297,15 @@ export default function TransactionsScreen() {
         return;
       }
     }
+    // Changing the amount of an entry that repeats: ask whether the repeat should follow.
+    if (editingId != null && typeof changeRepeat !== 'boolean' && !repeat) {
+      const original = items.find((i) => i.id === editingId);
+      const rule = original ? rules.find((r) => r.type === original.type && r.category === original.category && r.amount === original.amount) : undefined;
+      if (original && rule && value !== original.amount) {
+        setRepeatPrompt({ from: original.amount, to: value, frequency: rule.frequency });
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
@@ -293,7 +319,7 @@ export default function TransactionsScreen() {
           category: category!,
           note: note.trim() || null,
           date,
-        });
+        }, changeRepeat === true);
         if (repeat) await repeatTransactionMonthly(editingId, frequency, endPayload(date, repeatEnd!));
       } else {
         // A one-off Quarterly/Yearly bill is stored as its monthly equivalent (÷3 / ÷12) with the
@@ -393,7 +419,25 @@ export default function TransactionsScreen() {
             <Ionicons name="close-circle" size={16} color={COLORS.textDim} />
           </Pressable>
         )}
+        <Pressable
+          style={[styles.datesBtn, dateRange && styles.datesBtnActive]}
+          onPress={() => setDatesOpen(true)}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={dateRange ? `Dates, ${dateRange.label}` : 'Filter by dates'}
+        >
+          <Ionicons name="calendar-outline" size={15} color={dateRange ? COLORS.accent : COLORS.textMuted} />
+          <Text style={[styles.datesText, dateRange && styles.datesTextActive]}>Dates</Text>
+        </Pressable>
       </View>
+
+      {dateRange && (
+        <View style={styles.linkBar}>
+          <Pressable style={styles.linkChip} onPress={() => setDateRange(null)} accessibilityRole="button" accessibilityLabel={`Remove the date filter, ${dateRange.label}`}>
+            <Text style={styles.linkChipText}>{dateRange.label} ✕</Text>
+          </Pressable>
+        </View>
+      )}
 
       {link && (
         <View style={styles.linkBar}>
@@ -417,11 +461,12 @@ export default function TransactionsScreen() {
         </View>
       )}
 
-      {summary && (link || query || tab || typeFilter !== 'all') && (
+      {summary && (link || query || tab || dateRange || typeFilter !== 'all') && (
         <Text style={styles.summaryText}>
           {tab ? `Showing ${PERIOD_TABS.find((t) => t.key === tab)!.shown} · ` : ''}
           {summary.count} {summary.count === 1 ? 'entry' : 'entries'}
           {typeFilter === 'expense' ? ` · ${fmt(summary.expense)}` : typeFilter === 'income' ? ` · ${fmt(summary.income)}` : ''}
+          {dateRange && typeFilter === 'all' ? ` · In ${fmt(summary.income)} · Out ${fmt(summary.expense)} · Net ${netOf(summary.income, summary.expense) < 0 ? '-' : ''}${fmt(Math.abs(netOf(summary.income, summary.expense)))}` : ''}
         </Text>
       )}
 
@@ -443,7 +488,7 @@ export default function TransactionsScreen() {
         ListEmptyComponent={
           listLoading ? null : (
             <Text style={styles.emptyText}>
-              {query || tab || typeFilter !== 'all' ? `No transactions match${query ? ` "${query}"` : ' this filter'}` : 'No transactions yet. Tap + to add one.'}
+              {query || tab || dateRange || typeFilter !== 'all' ? `No transactions match${query ? ` "${query}"` : ' this filter'}` : 'No transactions yet. Tap + to add one.'}
             </Text>
           )
         }
@@ -598,12 +643,26 @@ export default function TransactionsScreen() {
 
             {error && <Text style={styles.error}>{error}</Text>}
 
-            <Pressable style={styles.saveBtn} onPress={onSave} disabled={saving}>
+            <Pressable style={styles.saveBtn} onPress={() => onSave()} disabled={saving}>
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Save transaction'}</Text>
             </Pressable>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      <DateFilterSheet visible={datesOpen} active={dateRange} onApply={onDateRange} onClose={() => setDatesOpen(false)} />
+
+      <RepeatChangeSheet
+        visible={repeatPrompt != null}
+        from={repeatPrompt ? fmt(repeatPrompt.from) : ''}
+        to={repeatPrompt ? fmt(repeatPrompt.to) : ''}
+        frequency={repeatPrompt?.frequency ?? 'monthly'}
+        onClose={() => setRepeatPrompt(null)}
+        onChoose={(changeRepeat) => {
+          setRepeatPrompt(null);
+          onSave(changeRepeat);
+        }}
+      />
 
       <RepeatingEntries
         visible={repeatingOpen}
@@ -658,6 +717,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
   },
   searchInput: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 9 },
+  datesBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderLeftWidth: 1, borderLeftColor: COLORS.cardBorder, paddingLeft: SPACING.sm, paddingVertical: 9 },
+  datesBtnActive: { borderLeftColor: COLORS.accent },
+  datesText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
+  datesTextActive: { color: COLORS.accent },
   // Slim on purpose: one line each, since each is only a label and a number.
   periodRow: { flexDirection: 'row', gap: SPACING.xs, marginHorizontal: SPACING.lg, marginBottom: SPACING.xs },
   periodTab: {

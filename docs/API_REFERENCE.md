@@ -183,6 +183,7 @@ Errors: 400 duplicate person, custom shares missing or more than the total, a sh
 ### `PATCH /transactions/:id` 🔒
 Body: any non-empty subset of the `POST` body above (all fields optional, but provide at least one)
 → **200** `Transaction` — recomputes `budgetClass` again, same as `POST`, since an edit can shift which month/amount counts
+Optional `update_repeat: boolean` (default false): when true and `amount` changes, the repeating entry this transaction belongs to (same type, category and old amount, the match `DELETE ?stop_repeat=true` uses) is moved onto the new amount, so Plan ahead and the next posting follow the edit. The response then also carries `repeat_updated: boolean`; it is `false` when no repeat matches, more than one matches (the server does not guess), or `amount` is unchanged. Only the amount is passed on. A non-boolean value is a 400.
 Errors: 400 empty body, invalid field, or `category_key` isn't valid/yours · 404 not found, or belongs to another user
 
 ### `DELETE /transactions/:id` 🔒

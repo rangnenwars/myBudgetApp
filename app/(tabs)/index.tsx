@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,6 +20,8 @@ import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 import { getMonthSummary, getCategoryBreakdown, getBudgets, BudgetStatus, CategoryTotal } from '../../utils/database';
 import { computeCategoryDeltas, computeSavingsRate, CategoryDelta } from '../../utils/calculations';
 import { shiftMonth } from '../../utils/dates';
+import { barPercent, categoryBlockTitle, CategoryOrder, pickCategories } from '../../utils/categoryOrder';
+import { loadCategoryOrder, saveCategoryOrder } from '../../utils/homePrefs';
 import { monthFilter, txnLink } from '../../utils/txnLink';
 
 
@@ -36,7 +38,17 @@ export default function DashboardScreen() {
   const isCurrentMonth = view.month === currentMonth.month && view.year === currentMonth.year;
   const viewLabel = new Date(view.year, view.month - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, netSavings: 0 });
-  const [topCategories, setTopCategories] = useState<{ category: string; total: number }[]>([]);
+  // Every expense category of the month; Home shows the five biggest or the five smallest of them.
+  const [monthCategories, setMonthCategories] = useState<{ category: string; total: number }[]>([]);
+  const [categoryOrder, setCategoryOrder] = useState<CategoryOrder>('highest');
+  useEffect(() => {
+    loadCategoryOrder().then(setCategoryOrder);
+  }, []);
+  const chooseOrder = (next: CategoryOrder) => {
+    setCategoryOrder(next);
+    saveCategoryOrder(next);
+  };
+  const topCategories = useMemo(() => pickCategories(monthCategories, categoryOrder), [monthCategories, categoryOrder]);
   const [deltas, setDeltas] = useState<CategoryDelta[]>([]);
   const [prevExpense, setPrevExpense] = useState(0);
   // Budgets at 80% or more of their limit in the viewed month.
@@ -68,7 +80,7 @@ export default function DashboardScreen() {
 
         setSummary(monthSummary);
         setPrevExpense(prevCategories.reduce((sum, c) => sum + c.total, 0));
-        setTopCategories(monthCategories.slice(0, 5));
+        setMonthCategories(monthCategories);
 
         const asTotals = (rows: CategoryTotal[], m: number, y: number) => rows.map((c) => ({ type: 'expense' as const, amount: c.total, category: c.category, month: m, year: y }));
         setDeltas(
@@ -90,7 +102,8 @@ export default function DashboardScreen() {
     }, [user?.id, categories.length, view.month, view.year, refreshKey])
   );
 
-  const maxCategoryTotal = topCategories[0]?.total ?? 1;
+  // Bars are measured against the month's biggest category, so a small one looks small in either order.
+  const maxCategoryTotal = Math.max(0, ...monthCategories.map((c) => c.total));
   // One line for the top strip: the worst budgets first, e.g. "Food over by ₹300 · Travel 85% used".
   const alertText = (() => {
     const sorted = [...budgetAlerts].sort((a, b) => b.ratio - a.ratio);
@@ -206,7 +219,25 @@ export default function DashboardScreen() {
         </View>
       </Card>
 
-      <Text style={styles.sectionTitle}>Top expense categories</Text>
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitleInline}>{categoryBlockTitle(categoryOrder)}</Text>
+        {monthCategories.length > 1 && (
+          <View style={styles.orderToggle} accessibilityRole="radiogroup">
+            {(['highest', 'lowest'] as const).map((o) => (
+              <Pressable
+                key={o}
+                style={[styles.orderOption, categoryOrder === o && styles.orderOptionActive]}
+                onPress={() => chooseOrder(o)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: categoryOrder === o }}
+                accessibilityLabel={o === 'highest' ? 'Show the highest categories' : 'Show the lowest categories'}
+              >
+                <Text style={[styles.orderText, categoryOrder === o && styles.orderTextActive]}>{o === 'highest' ? 'Highest' : 'Lowest'}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
       <Card>
         {topCategories.length === 0 ? (
           <Text style={styles.emptyText}>No expenses logged this month yet.</Text>
@@ -227,7 +258,7 @@ export default function DashboardScreen() {
                   </Text>
                   <Text style={styles.catValue}>{fmt(c.total)} ›</Text>
                 </View>
-                <MiniBar percent={(c.total / maxCategoryTotal) * 100} color={cat?.color} />
+                <MiniBar percent={barPercent(c.total, maxCategoryTotal)} color={cat?.color} />
               </Pressable>
             );
           })
@@ -357,6 +388,13 @@ const styles = StyleSheet.create({
   savingsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   savingsValue: { fontSize: 18, fontWeight: '700' },
   sectionTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700', marginTop: SPACING.sm },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.sm },
+  sectionTitleInline: { color: COLORS.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  orderToggle: { flexDirection: 'row', borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: RADIUS.full, overflow: 'hidden' },
+  orderOption: { paddingHorizontal: SPACING.sm, paddingVertical: 5 },
+  orderOptionActive: { backgroundColor: COLORS.accent },
+  orderText: { color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
+  orderTextActive: { color: COLORS.onAccent },
   emptyText: { color: COLORS.textDim, fontSize: 13, textAlign: 'center', paddingVertical: SPACING.md },
   catRow: { paddingVertical: SPACING.sm },
   catRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
