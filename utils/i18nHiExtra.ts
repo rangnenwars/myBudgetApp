@@ -66,4 +66,8 @@ export const HI_EXTRA: Record<string, string> = {
   'A person': 'एक व्यक्ति',
   'Plan ahead, one month': 'आगे की योजना, एक महीना',
   'Forgot password': 'पासवर्ड भूल गए',
+  'No income in {0}.': '{0} में कोई आय नहीं।',
+  'No expenses in {0}.': '{0} में कोई खर्च नहीं।',
+  'Total earned': 'कुल कमाई',
+  '{0} is your top income{1}': 'आपकी सबसे बड़ी आय {0} है{1}',
 };
