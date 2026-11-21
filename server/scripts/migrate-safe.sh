@@ -7,7 +7,8 @@
 #   server/scripts/migrate-safe.sh --dry-run  only show what is pending; changes nothing, no backup
 #
 # On the production Droplet, from /opt/mybudget, name the compose command (the runbook's `dc` alias):
-#   COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env" \n#     bash server/scripts/migrate-safe.sh
+#   COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env --env-file release.env" \
+#     bash server/scripts/migrate-safe.sh
 # (Run it after the new image is up: the old image does not have the db:plan command.)
 # The backup then comes from `pg_dump` inside that stack's postgres, into ./backups/.
 #
