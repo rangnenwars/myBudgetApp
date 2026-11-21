@@ -12,6 +12,7 @@
 
 import type { FeatureKey } from '../constants/features';
 import { api } from './api';
+import { SipInput } from './sip';
 import {
   TxnType,
   Transaction,
@@ -318,19 +319,21 @@ export const getLoanPayments = async (id: number): Promise<LoanPayment[]> => {
 
 // ---------- Investments ----------
 
-export const addInvestment = async (i: Omit<Investment, 'id'>): Promise<Investment> => {
+export const addInvestment = async (i: Omit<Investment, 'id'>, sip?: SipInput | null): Promise<Investment> => {
   const { data } = await api.post('/investments', {
     name: i.name,
     type: i.type,
     amount: i.amount,
     current_value: i.current_value,
+    ...(sip ? { sip } : {}),
   });
   return data;
 };
 
+/** `sip`: an object starts or changes the SIP, null stops it, left out leaves it as it is. */
 export const updateInvestment = async (
   id: number,
-  patch: Partial<{ name: string; type: string; amount: number; current_value: number | null }>
+  patch: Partial<{ name: string; type: string; amount: number; current_value: number | null; sip: SipInput | null }>
 ): Promise<Investment> => {
   const { data } = await api.patch(`/investments/${id}`, patch);
   return data;

@@ -316,11 +316,25 @@ export const investments = pgTable('investments', {
   // 12 digits: a 100× gain is 9,900% — numeric(6,2) overflowed at 9,999.99%.
   returns_percent: numeric('returns_percent', { precision: 12, scale: 2, mode: 'number' }),
   note: text('note'),
+  // SIP: a fixed amount invested every month. The server adds it to transactions on sip_day each month
+  // (lib/sipPosting.ts) and raises the investment by the same amount. All four of the first group are set
+  // together or all null; a SIP says when it ends (a date, or sip_no_end). sip_posted_through is the
+  // first day of the last month settled.
+  sip_amount: numeric('sip_amount', { precision: 12, scale: 2, mode: 'number' }),
+  sip_day: smallint('sip_day'),
+  sip_category: text('sip_category').references(() => categories.key),
+  sip_ends_on: date('sip_ends_on'),
+  sip_no_end: boolean('sip_no_end').notNull().default(false),
+  sip_posted_through: date('sip_posted_through'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('idx_investments_user').on(table.userId),
   check('investments_amount_check', sql`${table.amount} > 0`),
+  check('investments_sip_together_check', sql`(${table.sip_amount} IS NULL) = (${table.sip_day} IS NULL) AND (${table.sip_amount} IS NULL) = (${table.sip_category} IS NULL)`),
+  check('investments_sip_amount_check', sql`${table.sip_amount} IS NULL OR ${table.sip_amount} > 0`),
+  check('investments_sip_day_check', sql`${table.sip_day} IS NULL OR ${table.sip_day} BETWEEN 1 AND 31`),
+  check('investments_sip_end_check', sql`${table.sip_amount} IS NULL OR ((${table.sip_ends_on} IS NOT NULL) <> ${table.sip_no_end})`),
 ]);
 
 // ============================================================

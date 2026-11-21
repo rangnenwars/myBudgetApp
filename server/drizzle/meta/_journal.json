@@ -190,6 +190,13 @@
       "when": 1794326603658,
       "tag": "0026_loan_payment_links",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795257939468,
+      "tag": "0027_investment_sip",
+      "breakpoints": true
     }
   ]
 }

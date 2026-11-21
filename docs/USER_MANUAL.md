@@ -117,6 +117,10 @@ Investments tab → **+**: name, type, amount invested, current value and a note
 
 ---
 
+**SIP (a fixed amount every month).** In an investment's form, switch on **I invest here every month (SIP)**, then enter the **amount**, the **day of the month**, when it **ends** (pick a date, or *No end date*) and which category it is **added to Transactions as** (Mutual funds, Fixed deposit, Bonds or Gold). From then on, on or after that day each month the app adds the SIP to **Transactions** as an expense, and adds it to the investment's **invested amount** and **current value**, so you don't have to. The card shows *SIP ₹5,000 on the 5th* and when the next one is due. The first time, only the expense is added and the amount you entered stays as it is. Nothing is added for earlier months, and nothing is dated ahead of time. Days 29 to 31 use the last day of a shorter month. Switch the SIP off to stop it; what was already added stays. If you already repeat the same payment in Transactions, remove that repeat so it isn't added twice.
+
+---
+
 ## 7. Goals
 
 Goals tab → **+**: name, target amount, optional deadline, colour and icon.

@@ -330,10 +330,18 @@ Deleting a custom category also removes its limit (in the same transaction, so n
 ### `GET /investments` 🔒
 → **200** `Investment[]`, newest first
 
+### SIP on an investment
+An investment can have a **SIP**: a fixed amount invested every month. Send `sip` on `POST` or `PATCH`:
+`{ amount: number (>0), day: 1–31, category: 'mutual_funds'|'fixed_deposit'|'bonds'|'gold', ends_on?: 'YYYY-MM-DD', no_end?: true }`. It must say when it ends: **exactly one** of `ends_on` (today or later) or `no_end`. On `PATCH`, `sip: null` stops it and leaving `sip` out leaves it unchanged.
+
+Every investment row then also carries `sip_amount`, `sip_day`, `sip_category`, `sip_ends_on`, `sip_no_end`, `sip_posted_through` and `sip_next_date` (the date of the next instalment not yet added, or `null` when there is no SIP or it has ended).
+
+**Automatic posting** (`lib/sipPosting.ts`, run before every investments, transactions, reports and budgets read, like loan EMIs): on or after the SIP day each month it adds an **expense** transaction (category = `sip_category`, note `SIP - <name>`, dated the SIP day, the 29th to 31st falling back to the month's last day) and raises `amount` **and** `current_value` by the SIP amount, recomputing `returns_percent`. Rules: the **first** posting records the expense only and leaves `amount` as entered; a month is added only once its day has arrived, so nothing is ever future-dated; a SIP never backfills history from before it was set up; missed months are caught up (up to 24); months after `ends_on` add nothing; posting is idempotent and row-locked, so a month is never added twice. Switching it off keeps the transactions already added; switching it back on after a gap starts from the current month.
+
 ### `POST /investments` 🔒
-Body: `{ name: string, type: string, amount: number (>0), current_value?: number|null }`
+Body: `{ name: string, type: string, amount: number (>0), current_value?: number|null, sip?: {…} }`
 → **201** `Investment` — `returns_percent` is computed server-side from `amount`/`current_value`, **never** accepted from the client; `current_value` defaults to `amount` if omitted
-Errors: 400 invalid body
+Errors: 400 invalid body, or an invalid `sip` (amount ≤ 0, day outside 1–31, a category that is not an investment category, no end or both, an end date in the past)
 
 ### `PATCH /investments/:id` 🔒
 Body: any non-empty subset of `{ name, type, amount, current_value }`

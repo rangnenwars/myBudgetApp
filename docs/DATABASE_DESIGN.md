@@ -319,6 +319,12 @@ CREATE TABLE investments (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_investments_user ON investments(user_id);
+-- Migration 0027 adds the SIP columns (all optional; an investment without a SIP leaves them empty):
+--   sip_amount NUMERIC(12,2), sip_day SMALLINT (1-31), sip_category TEXT REFERENCES categories(key),
+--   sip_ends_on DATE, sip_no_end BOOLEAN NOT NULL DEFAULT false,
+--   sip_posted_through DATE   -- first day of the last month settled; null = never posted
+-- Checks: amount, day and category are set together or all empty; amount > 0; day 1-31;
+-- a SIP has exactly one of sip_ends_on / sip_no_end.
 
 -- ============================================================
 -- savings_goals
