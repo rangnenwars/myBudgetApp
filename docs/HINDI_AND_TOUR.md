@@ -40,6 +40,14 @@ Text that is code and not words goes in `scripts/i18nIgnore.json`.
 
 The Hindi was written by Claude and has not been read by a native speaker. Money words in particular have more than one reasonable choice, and some people prefer more English words ("budget", "report") than the current text uses. Send corrections as a list of English text and the Hindi you want, or edit the files above directly.
 
+## Who sees the tour
+
+`GET /tour/status` returns `{ pending }`: true for a **customer** account created in the **last 7 days** with **no outcome** yet. The app opens the tour when it is true, so it shows at sign-in on any device. If the server cannot be reached, the flag saved on the device at sign-up is used. Replaying from Settings goes to Home first and records nothing.
+
+## Changing the tour
+
+Steps and wording are in `utils/tour.ts`. A step points at a Home item by name: mark the item with `TourTarget` (or `useTourTarget`) from `context/TourTargetsContext.tsx`; a step without a target is a centred card; `optional: true` leaves the step out when the item is not on screen. Placement maths (the dimmed area, the bubble and its arrow) is in `utils/tourSpotlight.ts`. Add Hindi for any new text, or the translation test fails. The server accepts step numbers 1 to 20, so keep the tour within 20 steps (a test checks it). Skipped-on-step counts from before the walkthrough are numbered against the old five cards and are not comparable.
+
 ## Counting the tour
 
 `POST /tour/outcome` records, once per person, whether the tour **finished** or was **skipped**, on which card, and the language. The first outcome wins, and replaying records nothing. **System metrics** shows the counts (finished, skipped, skipped by card, chose Hindi) for customer accounts only; staff are left out. Counts only: nothing about what anyone did in the app. Table `tour_outcomes` (migration 0028).

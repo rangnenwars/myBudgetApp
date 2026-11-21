@@ -27,7 +27,8 @@ Prapanji (formerly "My Budget") is a personal money app for everyone — student
 | [DB_ADMIN_QUERIES.md](DB_ADMIN_QUERIES.md) | SQL cookbook: make a user admin, grant Pro, deactivate, reset a password, delete test accounts, audit log, usage and issue-report queries |
 | [CONFIGURATION_STATE.md](CONFIGURATION_STATE.md) | Dated change log (2026-10-03), configuration matrix of what is in the repo vs what must be confirmed in external accounts, known gaps |
 | [USER_MANUAL.md](USER_MANUAL.md) | End-user guide to every screen, plus a section for staff accounts |
-| [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | One flow diagram per screen (25 total, Mermaid) — almost no prose; renders on GitHub |
+| [USER_WORKFLOWS.md](USER_WORKFLOWS.md) | Flow diagrams for the main screens and the newer flows (Mermaid) — almost no prose; renders on GitHub |
+| [TEST_CASES.md](TEST_CASES.md) | Every automated test by name, grouped by file, with its result. **Generated** from Jest by `scripts/genTestCases.js`; do not edit by hand |
 | [USER_ACTIVITY.md](USER_ACTIVITY.md) | What sign-in and page-hit activity is recorded, what never is, who can see it and how long it is kept |
 | [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md) | The Hindi language layer (how it works, how to add text, the review request) and the first-time tour with its finished and skipped counts |
 | [MIGRATION_STEPS.md](MIGRATION_STEPS.md) | Migrations 0025 to 0029: the one-command backup, apply and verify (`server/scripts/migrate-safe.sh`), the rollback command, and the same steps by hand |
@@ -116,9 +117,15 @@ Postgres runs in Docker, mapped to **host port 5433, not 5432** — this dev mac
 - **Free-money day** (Dashboard card → `/free-money-day`) — the day of the month by which income has covered every EMI and repeating bill, with a week-on-week change and a "what if I prepay a loan" preview (`GET /reports/free-money-day`)
 - **Custom categories** — add, rename, and delete your own category (name + income/expense) from any category picker, with a search box to find items once the list grows — see §3a
 - **Loans** — add/edit/delete, track principal/outstanding/EMI/interest rate plus optional loan type, lender, tenure, start date and note. A per-loan "Add monthly EMI to expenses" toggle (on by default) posts the EMI to expenses every month as a `Loan EMI` transaction **and pays the balance down by that month's principal** (interest worked out from the rate), so the balance stays right without any tapping; each card shows the next EMI's interest/principal split and the months left at the current rate — see API_REFERENCE "Automatic monthly EMI expenses and pay-down". Loans not counted as expenses (e.g. family loans) keep a "Mark EMI paid" button instead. Either way the outstanding debt shows under Reports → Liabilities and in net worth. "Part payment" button (prepayment): lowers the outstanding balance and scales the EMI down proportionally so the remaining tenure is unchanged, with a live before/after preview — tap a card to edit any field, trash icon to delete
-- **Investments** — add/edit/delete, invested vs. current value, auto-computed gain % (recomputed server-side on every edit), portfolio summary — tap a card to edit, trash icon to delete
+- **Investments** — add/edit/delete, invested vs. current value, auto-computed gain % (recomputed server-side on every edit), portfolio summary — tap a card to edit, trash icon to delete. An investment can have a **SIP** (amount, day of the month, end date or no end, category): each month it is added to Transactions as an expense and to the investment's invested amount (migration 0027)
 - **Goals** — add/edit/delete, contribute funds, progress bar toward target — tap a card to edit name/target, trash icon to delete
 - **Report issue** (bug icon on the Dashboard, every signed-in user) — category, where it happened, severity, title, description, steps, expected behaviour, optional screenshot (PNG/JPEG/WebP, max 2 MB); app version and device are attached automatically; earlier reports and their status are listed underneath — see "Report issue & nightly digest" below
+- **Hindi on every page** — Settings, then Language, switches the whole app between English (default) and हिन्दी in place; the server's messages are translated too. A test fails when new text has no Hindi. See [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md)
+- **First-time tour** — a guided walk on the real Home screen: the screen is dimmed and each item is outlined with an arrow and a short message (all of Home, then each tab-bar page). Shown to a new customer account at sign-in on any device for its first 7 days until finished or skipped; Skip on every step; Replay in Settings. Counts of finished and skipped are on System metrics (migration 0028)
+- **Reports > Categories** — Expenses | Income and Highest | Lowest switches; Highest lists the categories that cover about 85% of the total (3 to 8), the rest in Others; Home's All categories link opens it in the same order and month
+- **Dates filter on Transactions** — a Dates button beside Search: This week, This month, This year or a custom range
+- **User activity** — sign-ins, sign-outs and page names (never amounts, names or what is typed) are recorded for 90 days, then kept only as anonymous daily counts; Settings has a sharing switch and My sign-in history; admins see counts and one person's timeline (every view audit-logged). See [USER_ACTIVITY.md](USER_ACTIVITY.md) (migration 0029)
+- **Paid plan** — six months free, then ₹200 a year, off until an admin switches it on; see [PAID_PLAN.md](PAID_PLAN.md)
 - **Legal pages** — Terms (`app/legal/terms.tsx`) and Privacy policy (`app/legal/privacy.tsx`), linked from sign-up. Both are **draft placeholders** until reviewed before launch — see [SECURITY_REVIEW.md](SECURITY_REVIEW.md)
 
 **Pro features (on for every account — see "Known deviations")**
@@ -235,7 +242,7 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 
 ---
 
-## 5. Pages / screens (25 total)
+## 5. Pages / screens (41 total)
 
 | # | Screen | File | Notes |
 |---|---|---|---|
@@ -264,6 +271,22 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 | 23 | People | `app/people/index.tsx` | From the Dashboard's People button; the list with filters, and two buttons: Split a bill, Lent or borrowed |
 | 24 | Person | `app/people/[id].tsx` | One person's balance, history and actions (They paid, Lend or borrow, Due date, Write off) |
 | 25 | Split a bill | `app/people/split.tsx` | From People; four plain questions and one Save button |
+| 26 | Loan payments | `app/loan-payments.tsx` | From a loan's Payments button; part payments and EMIs, a bin icon on a part payment |
+| 27 | More features | `app/more-features.tsx` | Home line or Settings row; Goals, Loans, Investments and Plan ahead with Request access |
+| 28 | Plan ahead | `app/plan-ahead/index.tsx` | The next 12 months from repeating entries and EMIs |
+| 29 | Plan ahead, one month | `app/plan-ahead/[ym].tsx` | One future month in detail |
+| 30 | Monthly expenses, one month | `app/monthly-expenses/[ym].tsx` | From Reports > Monthly; that month's biggest categories |
+| 31 | Category trend | `app/category-trend/[category].tsx` | From Reports > Categories in Year view; one category (expense or income) month by month |
+| 32 | Your plan | `app/plan.tsx` | Settings > Your plan; access end date and days left |
+| 33 | Renew | `app/renew.tsx` | Pay by QR or UPI ID and submit a payment claim |
+| 34 | My sign-in history | `app/sign-in-history.tsx` | Settings > Privacy; your own sign-ins and sign-outs for 90 days |
+| 35 | Admin — Feature access | `app/admin/features.tsx` | Admin and system manager; switch Goals, Loans, Investments and Plan ahead per user |
+| 36 | Admin — Plan and pricing | `app/admin/plan.tsx` | Admin only; price, free months, notice, enforcement switch |
+| 37 | Admin — Payments | `app/admin/payments.tsx` | Admin only; confirm or reject payment claims |
+| 38 | Admin — Payment details | `app/admin/payment-details.tsx` | Admin only; the UPI ID and QR shown to customers |
+| 39 | Admin — Exceptions | `app/admin/exceptions.tsx` | Admin only; give an account free access, with an optional end date |
+| 40 | Admin — User activity | `app/admin/activity.tsx` | Admin and system manager; counts of sign-ins, people, page views and top pages; admins can open one person |
+| 41 | Admin — One person's activity | `app/admin/activity-user.tsx` | Admin only; one person's visits as a timeline; every view is audit-logged |
 
 `app/index.tsx` is a redirect (session check → `/login` or `/(tabs)`), not a user-facing page, so it's not counted above.
 
@@ -273,30 +296,32 @@ POST /transactions (server) → pull last 3 months' expense totals via Drizzle �
 
 **Client** (repo root):
 ```bash
-npm test              # run once — 142 tests (utils/calculations.ts, dates, issues, repeatEnd, calendar, people, theme)
+npm test              # run once — 448 tests in 21 files (money maths, dates, amounts, categories and reports, people, Hindi coverage, tour, page patterns, activity buffer …)
 npm run test:watch    # watch mode
 npm run test:coverage # with coverage report
 npm run typecheck     # tsc --noEmit
 npm run quality       # typecheck + coverage — the single gate to run before any build
 ```
 
-Coverage is measured over `utils/calculations.ts`, `utils/dates.ts` and `utils/issues.ts` (100% of lines in all three, 97% of branches overall) and enforced per file by thresholds in `package.json` — `npm run quality` fails if one drops. The root Jest config excludes `server/` (`testPathIgnorePatterns`), since the server has its own Jest config and needs a live Postgres connection.
+Coverage is measured over the pure logic in `utils/` and enforced per file by thresholds in `package.json` (as of 2026-11-21: 99.6% of statements, 97.1% of branches, 100% of functions and lines) — `npm run quality` fails if one drops. The root Jest config excludes `server/` (`testPathIgnorePatterns`), since the server has its own Jest config and needs a live Postgres connection.
 
 **Server** (`server/`):
 ```bash
 npm run typecheck     # tsc --noEmit
-npm test               # 456 tests in 35 files — one per resource (auth, account,
+npm test               # 1289 tests in 54 files — one per resource (auth, account,
                         # categories, transactions, recurring, loans, goals,
                         # investments, budgets/accounts, reports, net worth,
-                        # admin, issues …), security, DB-integrity, mail and
+                        # admin, issues, paid plan, activity, tour, migration plan …), security, DB-integrity, mail and
                         # middleware units, and one full e2e lifecycle test
 npm run test:coverage  # same, plus a coverage report + enforced floor (see below)
 npm run quality        # typecheck && tests with the coverage floors
 ```
 
+`server/jest.config.js` caps Jest at 6 workers: each worker holds its own connection pool, and on a many-core machine one worker per core passed Postgres's 100-connection limit ("too many clients") and failed tests at random. `server/src/__tests__/migrationPlan.test.ts` applies every migration to a throwaway database, undoes them newest first and applies them again.
+
 The server suite runs against a **real Postgres instance** via Supertest (no mocking) — `docker compose up -d postgres` (or the existing native/Docker Postgres on `DATABASE_URL`) must be reachable first, and migrations/seed data applied (`npm run db:migrate && npm run db:seed`). Every resource file checks cross-user data isolation (a second account can never read/modify/delete the first account's rows) and unauthenticated access (401 without a token); `e2e.test.ts` walks a full lifecycle (register → add data across all resource types → verify server-computed budget class → verify reports/debt-payoff/net-worth/CSV export → tier toggle → logout invalidates the refresh token but not the still-live access token).
 
-**Every route documented in [API_REFERENCE.md](API_REFERENCE.md) has direct test coverage.** `server/jest.config.js` collects coverage over `src/routes/`, `src/middleware/`, `src/lib/` and `src/jobs/` (except the `run-*.ts` CLI wrappers) with a floor of 80% branches and 90% functions/lines/statements; as of 2026-10-06 it measures 88% branches, 98% statements. `npm run test:coverage` fails if the floor isn't met. **Note:** the server's `npm run quality` — what CI and the pre-commit hook run — currently calls `npm test`, not `test:coverage`, so the server floor is *not* enforced automatically yet (see [SECURITY_REVIEW.md](SECURITY_REVIEW.md) open items). The handful of intentionally-uncovered lines are defensive fallbacks that zod validation already makes unreachable (documented inline in the route files) — not gaps.
+**Every route documented in [API_REFERENCE.md](API_REFERENCE.md) has direct test coverage.** `server/jest.config.js` collects coverage over `src/routes/`, `src/middleware/`, `src/lib/` and `src/jobs/` (except the `run-*.ts` CLI wrappers) with a floor of 80% branches and 90% functions/lines/statements; as of 2026-11-21 it measures 87.4% branches, 97.4% statements, 96.8% functions, 98.6% lines. `npm run test:coverage` fails if the floor isn't met. **Note:** the server's `npm run quality` — what CI and the pre-commit hook run — currently calls `npm test`, not `test:coverage`, so the server floor is *not* enforced automatically yet (see [SECURITY_REVIEW.md](SECURITY_REVIEW.md) open items). The handful of intentionally-uncovered lines are defensive fallbacks that zod validation already makes unreachable (documented inline in the route files) — not gaps.
 
 **Not covered by automated tests:** screen components and `AuthContext` — verified instead by a real click-through in the browser against the live Docker stack (register, login, bulk "Input expenses" entry, add/delete across every tab, Reports charts, CSV export, admin user management). See [architecture-flows.html](architecture-flows.html) for the coverage map and debt-payoff simulation flowchart (client-side testing architecture, still accurate).
 

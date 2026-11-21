@@ -211,7 +211,7 @@ SELECT 'dba@manual', email, id, 'account_updated', 'role: user -> admin (manual 
 FROM users WHERE lower(email) = lower('you@example.com');
 ```
 
-Actions the app writes today: `account_updated` (details list the changed fields) and `account_deleted`.
+Actions the app writes today: `account_updated` (details list the changed fields), `account_deleted`, `account_kind_changed`, `feature_changed`, `signup_features_changed`, `plan_changed`, `plan_enforcement`, `plan_notice_sent`, `payment_details_changed`, `payment_confirmed`, `payment_rejected`, `payment_marked`, `exception_set`, `exception_cleared` and `viewed_activity` (an admin opened a person's activity timeline).
 
 ---
 
@@ -294,3 +294,38 @@ SELECT pg_cancel_backend(<pid>);
 ```
 
 Do **not** run `DROP`, `TRUNCATE` or schema changes by hand — schema changes go through Drizzle migrations (`server/drizzle/`), applied automatically on deploy, so every environment stays identical.
+
+---
+
+## 11. Sign-in activity and the first-time tour
+
+Rules and retention: [USER_ACTIVITY.md](USER_ACTIVITY.md), [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md). Page hits are page patterns only, never addresses or amounts.
+
+```sql
+-- one person's last sign-ins and sign-outs (coarse location only)
+SELECT a.created_at, a.kind, a.detail, a.platform, a.location
+FROM user_activity a JOIN users u ON u.id = a.user_id
+WHERE lower(u.email) = lower('someone@example.com') AND a.kind IN ('login', 'logout')
+ORDER BY a.created_at DESC LIMIT 50;
+
+-- who looked at someone's activity timeline, and when
+SELECT created_at, actor_email, target_email, details
+FROM admin_audit_log WHERE action = 'viewed_activity' ORDER BY created_at DESC LIMIT 50;
+
+-- most visited pages in the last 7 days (customer accounts only)
+SELECT a.page, count(*) AS views
+FROM user_activity a JOIN users u ON u.id = a.user_id
+WHERE a.kind = 'page' AND u.account_kind = 'customer' AND a.created_at >= now() - interval '7 days'
+GROUP BY a.page ORDER BY views DESC LIMIT 10;
+
+-- how many people switched page tracking off
+SELECT share_activity, count(*) FROM users GROUP BY 1;
+
+-- how the first-time tour ended (finished or skipped, and on which step)
+SELECT outcome, step, language, count(*) FROM tour_outcomes GROUP BY 1, 2, 3 ORDER BY 1, 2;
+
+-- rows older than the 90 days that the nightly job should already have removed (expect 0)
+SELECT count(*) FROM user_activity WHERE created_at < now() - interval '91 days';
+```
+
+Do not delete from `user_activity` by hand to "clean up": the nightly job first adds old rows up into `activity_daily`, and deleting first loses those counts.

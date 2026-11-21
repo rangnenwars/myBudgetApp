@@ -15,7 +15,7 @@ The deck is [Prapanji_Investor_Pitch.pptx](Prapanji_Investor_Pitch.pptx): 12 sli
 | 3 | The idea | Split, track, see. One app for the month. |
 | 4 | How it works | Four steps: add a spend, split, repeat fixed bills (each with an end date), see your month. |
 | 5 | Free-money day | The day by which income has paid every fixed bill. Worked example: ₹50,000 income, ₹26,000 fixed, so 17 Oct. |
-| 6 | Built and tested | What exists today, and that 598 automated tests pass (456 server, 142 app). |
+| 6 | Built and tested | What exists today, and that 1,737 automated tests pass (1,289 server, 448 app). |
 | 7 | Who and why different | Students first. Splitting and budgeting in one app, built for India, private by design. |
 | 8 | How it earns | Free core, optional paid plan, a promise of no ads and no data selling. |
 | 9 | How people will find it | WhatsApp groups, leaflets and QR posters, YouTube ads, campus ambassadors. |
@@ -27,7 +27,7 @@ The deck is [Prapanji_Investor_Pitch.pptx](Prapanji_Investor_Pitch.pptx): 12 sli
 
 Say only what the product does. These are the lines to be careful with:
 
-- **Built:** Split a bill, lent or borrowed ledger, quick add, free-money day, one monthly budget, repeating entries with end dates, calendar on every date field, goals, loans, investments, reports, admin tools. It runs as a web app.
+- **Built:** Split a bill, lent or borrowed ledger, quick add, free-money day, one monthly budget, repeating entries with end dates, calendar on every date field, goals, loans, investments (with a monthly SIP), reports (expenses and income by category), a Dates filter, a first-time guided tour, Hindi on every page, sign-in history, admin tools. It runs as a web app.
 - **Not built yet:** friend invites by link, remind-and-pay (UPI) link, weekly look-back, goal streaks, mobile number (OTP) login, store apps for Android and iPhone. The deck lists these as "next" or "later", not as done.
 - **Built, not yet proven:** the paid plan (6 months free from sign-up, then ₹200 a year, paid by UPI QR and confirmed by an admin) is built and switched off in shadow mode. No one has paid yet, so there is no revenue to quote. Older slides that say ₹100 a year are a planning estimate and should be changed to ₹200 before presenting. See [PAID_PLAN.md](PAID_PLAN.md).
 - **No user or revenue numbers** are in the deck because there are none to report yet. Add them once the pilot gives real ones.

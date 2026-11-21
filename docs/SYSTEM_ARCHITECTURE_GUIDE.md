@@ -88,7 +88,9 @@ Tier (`standard` / `pro`) gates the Reports tab, debt-payoff planner, goal ETA, 
 * **Recurring entries and loan EMIs** are posted lazily — a "due" check runs before transactions/reports requests (`server/src/lib/autoPost.ts`, `recurringTransactions.ts`, `loanEmiExpenses.ts`), not by a cron. Which calendar day counts as "today" follows `APP_TIMEZONE` (default `Asia/Kolkata`).
 * **Nightly issue digest** — `server/src/jobs/scheduler.ts` (in-process timer) runs `jobs/issueDigest.ts` when `ISSUE_DIGEST_ENABLED=true`: analyse the `issue_reports`, suggest fixes, e-mail admins. A Postgres advisory lock prevents double sends.
 * **Nightly access job** - the same scheduler runs `lib/accessNotices.ts` (reminder emails at 30, 7 and 1 day and when access ends, each once, only when the plan is enforced) and `purgeClaimScreenshots` (payment screenshots 30 days after a decision).
-* **Server start** (`server/docker-entrypoint.sh`): migrate → seed categories → (demo accounts, local only) → start API.
+* **Nightly activity retention** - the same scheduler runs `lib/activityRetention.ts`: activity older than 90 days is added up into `activity_daily` (anonymous counts, customers only) and deleted. See [USER_ACTIVITY.md](USER_ACTIVITY.md).
+* **SIPs** are posted lazily with the other automatic entries (`lib/sipPosting.ts` runs in the same "due" check as EMIs and repeating entries).
+* **Server start** (`server/docker-entrypoint.sh`): migrate → seed categories → (demo accounts, local only) → start API. The migration plan (`server/src/db/migrationPlan.ts`, `npm run db:plan`) can check and undo migrations; `server/scripts/migrate-safe.sh` backs up, applies and verifies.
 
 ---
 
@@ -98,34 +100,36 @@ Tier (`standard` / `pro`) gates the Reports tab, debt-payoff planner, goal ETA, 
 app/                  screens (expo-router)             ← client UI
   (tabs)/             Dashboard, Transactions, Loans, Investments, Goals, Reports
   people/             People list, one person, Split a bill
-  admin/              Users, Audit log, System metrics  ← staff screens
+  admin/              Users, Audit log, System metrics, Feature access, Plan and pricing, Payments, Payment details, Exceptions, User activity (+ one person)  ← staff screens
+  plan · renew · more-features · loan-payments · plan-ahead/ · monthly-expenses/ · category-trend/ · sign-in-history
   login · register · forgot-password · reset-password · verify-email
   settings · budgets · accounts · input-expenses · free-money-day · report-issue
 components/           shared UI (Card, CategoryPicker, ProGate, FeatureGate, BudgetClassBadge, MiniBar, ResponsiveContainer,
                       FreeMoneyCard, BudgetCard, QuickAddSheet, IouSheet, RepeatingEntries, RepeatEndField,
                       CalendarSheet + DateInput + DateField + DueDateField for dates)
 constants/            categories.ts (system categories), theme.ts (colours/spacing), issues.ts (report-issue options)
-context/              AuthContext (session + role), CategoriesContext
+context/              AuthContext (session + role), CategoriesContext, LanguageContext (English / Hindi), TourContext (when the tour shows) and TourTargetsContext (the real Home items the tour points at)
 utils/                api.ts · database.ts · calculations.ts · dates.ts · calendar.ts · repeatEnd.ts · types.ts · alert* · exportFile* · tokenStorage*
+                      i18n*.ts (Hindi) · tour.ts + tourSpotlight.ts (tour steps and placement maths) · activity.ts + pagePatterns.ts (page-hit buffer and the allowed page names, shared with the server) · expenseReports.ts · categoryOrder.ts
 server/
   src/app.ts          Express app: middleware order, route mounting, /health
   src/index.ts        process start; production safety checks
   src/routes/         one file per resource (auth, account, admin, adminAuditLog, system, transactions, recurring,
                       loans, investments, goals, accounts, budgets, categories, netWorth, reports, issues,
-                      people, features, adminFeatures)
+                      people, features, adminFeatures, plan, adminPlan, forecast, activity, adminActivity, tour)
   src/middleware/     auth, rateLimit, requireAdmin, requireStaff, requireSystemManager, errorHandler
   src/lib/            queries, tokens, session, cookies, errors, auditLog, accountMail + mailer, autoPost / recurringTransactions / loanEmiExpenses, issueAnalysis + issueSuggestions
-  src/jobs/           scheduler + nightly issue digest
+  src/jobs/           scheduler + nightly issue digest, access notices and activity retention
   src/db/             schema.ts, client.ts, migrate.ts, seed-categories.ts, seed-accounts.ts, create-admin.ts
-  drizzle/            generated SQL migrations (0000 … 0011)
-  scripts/            backup-db.sh / .bat
+  drizzle/            generated SQL migrations (0000 … 0029)
+  scripts/            backup-db.sh / .bat, migrate-safe.sh (backup, apply, verify), docker-quality.sh
   docker-entrypoint.sh, Dockerfile, .env.example
 deploy/               docker-compose.prod.yml, Caddyfile, remote-deploy.sh   ← production stack
 .github/workflows/    ci.yml, deploy.yml ; dependabot.yml
 Dockerfile · nginx.conf · docker-compose.yml   ← web image + nginx + LOCAL stack
 app.json · eas.json                              ← Expo app identity and EAS build profiles
 docs/                 all documentation
-scripts/              verify.sh, docker-verify.sh, get-token.sh
+scripts/              check.sh (npm run check), verify.sh, docker-verify.sh, get-token.sh, genTestCases.js (regenerates docs/TEST_CASES.md), i18n extract scripts
 ```
 
 ---
@@ -149,6 +153,11 @@ scripts/              verify.sh, docker-verify.sh, get-token.sh
 | Nightly digest behaviour | `server/src/jobs/issueDigest.ts`, `server/src/lib/issueAnalysis.ts`, `server/src/lib/issueSuggestions.ts`; enable via env vars | |
 | Recurring entries / loan EMI auto-posting | `server/src/lib/recurringTransactions.ts`, `server/src/lib/loanEmiExpenses.ts`, `server/src/lib/autoPost.ts` | |
 | Audit-log entries | `server/src/lib/auditLog.ts` | |
+| **Hindi** text (new or changed) | the English text in the screen as usual, then its Hindi in `utils/i18nHiExtra.ts` (screens) or `utils/i18nServer.ts` (server messages) | `npm run i18n:missing` lists what is untranslated; a test fails otherwise. See [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md) |
+| The **first-time tour** (steps, wording) | `utils/tour.ts`; mark an item as a target with `TourTarget` / `useTourTarget` (`context/TourTargetsContext.tsx`); placement maths in `utils/tourSpotlight.ts`; who sees it in `server/src/routes/tour.ts` (`GET /tour/status`) | add Hindi for new text |
+| What **activity** is recorded | `server/src/lib/activity.ts`, the allowed page names in `utils/pagePatterns.ts` (add a new screen there or its page hits are dropped), retention in `server/src/lib/activityRetention.ts` | update [USER_ACTIVITY.md](USER_ACTIVITY.md) and the Privacy Policy text |
+| A **migration** (apply, check, undo) | `server/src/db/schema.ts` → `npm run db:generate`; add the migration's check and undo to `server/src/db/migrationPlan.ts` (a test fails without it) | `server/scripts/migrate-safe.sh`; [MIGRATION_STEPS.md](MIGRATION_STEPS.md) |
+| Reports > Categories (rows, order, income) | `components/CategoriesView.tsx`, `utils/expenseReports.ts` | tests in `utils/__tests__/expenseReports.test.ts` |
 
 ### Access and roles
 
