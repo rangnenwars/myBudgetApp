@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, TextInput } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { useCategories } from '../context/CategoriesContext';
@@ -11,8 +12,9 @@ import { RepeatEndField } from './RepeatEndField';
 import { RepeatEndChoice, endPayload, endStatus, repeatEndError } from '../utils/repeatEnd';
 import { todayLocalIso } from '../utils/dates';
 import { parseAmount } from '../utils/amount';
+import { dateLocale } from '../utils/i18n';
 
-const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const fmt = (n: number) => '₹' + n.toLocaleString(dateLocale(), { maximumFractionDigits: 0 });
 
 const FREQUENCY_OPTIONS: { key: RepeatFrequency; label: string }[] = [
   { key: 'monthly', label: 'Monthly' },
@@ -20,7 +22,7 @@ const FREQUENCY_OPTIONS: { key: RepeatFrequency; label: string }[] = [
   { key: 'yearly', label: 'Yearly' },
 ];
 const PER: Record<RepeatFrequency, string> = { monthly: '/mo', quarterly: '/qtr', yearly: '/yr' };
-const fmtDue = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDue = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 interface Props {
   visible: boolean;

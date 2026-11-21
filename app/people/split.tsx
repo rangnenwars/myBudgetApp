@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { CategoryPicker } from '../../components/CategoryPicker';
@@ -12,6 +13,7 @@ import { todayLocalIso } from '../../utils/dates';
 import { emptyPeopleSplit, fmtAmount, NEW_PERSON, PeopleSplitState, peopleSplitProblem, planPeopleSplit } from '../../utils/people';
 import { parseAmount } from '../../utils/amount';
 
+import { t } from '../../utils/i18n';
 /** Split a bill you paid with friends: how much, what for, who shared it. Only your own share counts as spending. */
 export default function SplitBillScreen() {
   const { user } = useAuth();
@@ -183,7 +185,7 @@ export default function SplitBillScreen() {
                       placeholder="0"
                       placeholderTextColor={COLORS.textDim}
                       keyboardType="numeric"
-                      accessibilityLabel={`Amount for ${nameOf(k)}`}
+                      accessibilityLabel={t('Amount for {0}', { 0: nameOf(k) })}
                     />
                   </View>
                 ))}

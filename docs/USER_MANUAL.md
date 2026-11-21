@@ -164,6 +164,12 @@ Your friends don't need Prapanji, and nothing is sent to them. Your bank balance
 
 ---
 
+### Language and the tour
+
+**Settings, then Language** switches the whole app between **English** and **हिन्दी**, on the page you are on. English is the default, and your choice is remembered on that device. New accounts can also choose on the first card of the tour.
+
+**The tour.** Right after you sign up, a short tour shows the five things you will use most. Tap **Skip tour** on any card if you already know the app. You can open it again any time from **Settings, then How to use Prapanji, then Replay the tour**.
+
 ### Your plan
 
 **Settings, then Your plan** shows where you stand. New accounts get **free full access for 6 months**, counted from the day you signed up, to Goals, Loans, Investments, Plan ahead and Pro insights. After that, keeping them is **₹200 a year**. Home, Transactions, Budgets, Accounts, People and the Monthly and Categories reports are always free.

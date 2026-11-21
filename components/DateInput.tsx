@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, TextInput, StyleProp, TextStyle } from 'react-native';
+import { View, StyleSheet, Pressable, StyleProp, TextStyle } from 'react-native';
+import { TextInput } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { CalendarSheet } from './CalendarSheet';

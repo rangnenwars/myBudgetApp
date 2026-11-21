@@ -23,6 +23,7 @@ import planRoutes from './routes/plan';
 import adminPlanRoutes from './routes/adminPlan';
 import adminAuditLogRoutes from './routes/adminAuditLog';
 import systemRoutes from './routes/system';
+import tourRoutes from './routes/tour';
 import issuesRoutes from './routes/issues';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { pool } from './db/client';
@@ -89,6 +90,7 @@ export const createApp = () => {
   app.use('/api/v1/admin/users', adminUsersRoutes);
   app.use('/api/v1/admin/audit-log', adminAuditLogRoutes);
   app.use('/api/v1/system', systemRoutes);
+  app.use('/api/v1/tour', tourRoutes);
   app.use('/api/v1/issues', issuesRoutes);
 
   app.use(notFoundHandler);

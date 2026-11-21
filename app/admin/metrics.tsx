@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { ScrollView, View, StyleSheet, RefreshControl } from 'react-native';
+import { Text } from '../../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { ScreenHeader, SectionTitle, Notice, Button, fmtInr, kit } from '../../components/ScreenKit';
@@ -81,6 +82,18 @@ export default function MetricsScreen() {
               <Stat label="Active, 7 days" value={m.engagement.loggedInLast7Days} />
               <Stat label="Active, 30 days" value={m.engagement.loggedInLast30Days} />
             </Card>
+
+            <SectionTitle>First-time tour</SectionTitle>
+            <Card style={styles.grid}>
+              <Stat label="Finished" value={m.tour.finished} tone={COLORS.accent} />
+              <Stat label="Skipped" value={m.tour.skipped} />
+              <Stat label="Chose Hindi" value={m.tour.hindi} />
+            </Card>
+            {m.tour.skipped > 0 && (
+              <Text style={kit.dim}>
+                Skipped on card: {Object.entries(m.tour.skippedByStep).sort(([a], [b]) => Number(a) - Number(b)).map(([step, n]) => `${step} (${n})`).join(', ')}. Counts only; customer accounts.
+              </Text>
+            )}
 
             <SectionTitle>Usage</SectionTitle>
             <Card style={styles.grid}>

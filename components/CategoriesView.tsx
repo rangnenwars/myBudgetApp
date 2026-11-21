@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
@@ -14,8 +15,9 @@ import { getCategoryBreakdownForRange, CategoryTotal } from '../utils/database';
 import { shiftMonth } from '../utils/dates';
 import { OTHERS_KEY, categoryPeriod, categoryRows, changeText, topSpendInsight } from '../utils/expenseReports';
 import { monthFilter, rangeBounds, txnLink } from '../utils/txnLink';
+import { dateLocale } from '../utils/i18n';
 
-const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const fmt = (n: number) => '₹' + n.toLocaleString(dateLocale(), { maximumFractionDigits: 0 });
 const KEEP = 5;
 
 type Mode = 'month' | 'year';
@@ -37,7 +39,7 @@ export const CategoriesView: React.FC = () => {
 
   const { current, previous } = categoryPeriod(mode, anchor, today);
   const isLatest = mode === 'month' ? anchor.year === today.year && anchor.month === today.month : anchor.year === today.year;
-  const periodLabel = mode === 'month' ? new Date(anchor.year, anchor.month - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) : String(anchor.year);
+  const periodLabel = mode === 'month' ? new Date(anchor.year, anchor.month - 1, 1).toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' }) : String(anchor.year);
 
   useFocusEffect(
     useCallback(() => {

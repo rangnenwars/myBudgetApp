@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Text, TextInput } from '../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../components/Card';
 import { FreeMoneyBar, dayLabel, weekChange } from '../components/FreeMoneyCard';
@@ -10,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useOpenBill } from '../components/useOpenBill';
 import { getFreeMoneyDay, FreeMoneyDayInfo, computeFreeMoneyDay, computePartPayment } from '../utils/database';
 
+import { t } from '../utils/i18n';
 export default function FreeMoneyDayScreen() {
   const { user, hasFeature } = useAuth();
   const [info, setInfo] = useState<FreeMoneyDayInfo | null>(null);
@@ -44,7 +46,7 @@ export default function FreeMoneyDayScreen() {
     // Indian grouping ("1,00,000") must not stop parseFloat at the first comma.
     const value = parseFloat(prepay.replace(/,/g, ''));
     if (!loan || !(value > 0)) return null;
-    if (value > loan.outstanding) return { error: `That is more than the ${fmtInr(loan.outstanding)} still owed on this loan.` } as const;
+    if (value > loan.outstanding) return { error: t('That is more than the {0} still owed on this loan.', { 0: fmtInr(loan.outstanding) }) } as const;
     const after = computePartPayment(loan, value);
     const oldEmi = Math.min(loan.emi, loan.outstanding);
     const newEmi = after.outstanding <= 0 ? 0 : Math.min(after.emi, after.outstanding);
@@ -119,7 +121,7 @@ export default function FreeMoneyDayScreen() {
                       disabled={!tappable}
                       onPress={() => bills.open(it.kind, it.id)}
                       accessibilityRole={tappable ? 'button' : undefined}
-                      accessibilityLabel={tappable ? `${it.label}, ${fmtInr(it.amount)}, open` : undefined}
+                      accessibilityLabel={tappable ? t('{0}, {1}, open', { 0: it.label, 1: fmtInr(it.amount) }) : undefined}
                     >
                       <View style={styles.rowBetween}>
                         <Text style={styles.itemLabel} numberOfLines={1}>
@@ -183,7 +185,7 @@ export default function FreeMoneyDayScreen() {
                           <Text style={[styles.bold, { color: COLORS.positive }]}>
                             {preview.result.day === 0 ? 'every day free' : dayLabel(info.year, info.month, preview.result.day)}
                           </Text>
-                          {info.day - preview.result.day > 0 ? ` (${info.day - preview.result.day} ${info.day - preview.result.day === 1 ? 'day' : 'days'} earlier)` : ''}
+                          {info.day - preview.result.day > 0 ? t(' ({0} {1} earlier)', { 0: info.day - preview.result.day, 1: info.day - preview.result.day === 1 ? 'day' : 'days' }) : ''}
                         </Text>
                       )}
                       <Text style={styles.small}>Preview only. Nothing is paid until you record the part payment on the loan.</Text>

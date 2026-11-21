@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Image, Pressable, RefreshControl } from 'react-native';
+import { ScrollView, View, StyleSheet, Image, Pressable, RefreshControl } from 'react-native';
+import { Text } from '../../components/i18n';
 import { useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button, ErrorText, Field, Notice, ScreenHeader, Segmented, kit } from '../../components/ScreenKit';
@@ -9,6 +10,7 @@ import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 import { AdminClaim, ClaimStatus, confirmPayment, getAdminPayments, getPaymentScreenshot, rejectPayment } from '../../utils/plan';
 
+import { t, dateLocale } from '../../utils/i18n';
 type Tab = 'pending' | 'confirmed' | 'rejected';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'pending', label: 'To confirm' },
@@ -16,7 +18,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'rejected', label: 'Rejected' },
 ];
 
-const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+const when = (iso: string) => new Date(iso).toLocaleString(dateLocale(), { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const spaced = (id: string) => id.replace(/(.{4})/g, '$1 ').trim();
 
 // An admin checks the money really arrived (bank or UPI app), then confirms here. Confirming
@@ -112,8 +114,8 @@ const ClaimCard: React.FC<{ claim: AdminClaim; price: number; isAdmin: boolean; 
   const onConfirm = () => {
     setError(null);
     const value = Number(amount);
-    if (!(value >= price)) return setError(`The amount can't be below the plan price of ₹${price}.`);
-    confirmAction('Confirm payment received', `You have checked that ₹${value} with transaction ${spaced(claim.txnId)} reached the account. This adds a year for ${claim.email}.`, 'Confirm received', async () => {
+    if (!(value >= price)) return setError(t('The amount can\'t be below the plan price of ₹{0}.', { 0: price }));
+    confirmAction('Confirm payment received', t('You have checked that ₹{0} with transaction {1} reached the account. This adds a year for {2}.', { 0: value, 1: spaced(claim.txnId), 2: claim.email }), 'Confirm received', async () => {
       setBusy(true);
       try {
         await confirmPayment(claim.id, value);
@@ -154,7 +156,7 @@ const ClaimCard: React.FC<{ claim: AdminClaim; price: number; isAdmin: boolean; 
       <Row label="Transaction ID" value={spaced(claim.txnId)} />
       <Row label="Expected amount" value={`₹${price}`} />
       {claim.amountInr != null && <Row label="Amount received" value={`₹${claim.amountInr}`} />}
-      <Row label="Used before" value={claim.usedBefore === 0 ? 'Never' : `${claim.usedBefore} earlier payment${claim.usedBefore === 1 ? '' : 's'} used this ID`} warn={claim.usedBefore > 0} />
+      <Row label="Used before" value={claim.usedBefore === 0 ? 'Never' : t('{0} earlier payment{1} used this ID', { 0: claim.usedBefore, 1: claim.usedBefore === 1 ? '' : 's' })} warn={claim.usedBefore > 0} />
       {claim.note ? <Text style={kit.dim}>Their note: {claim.note}</Text> : null}
       {claim.reason ? <Text style={kit.dim}>Note: {claim.reason}</Text> : null}
       {pending && claim.graceUntil && <Text style={kit.dim}>Holding their access until {when(claim.graceUntil)}.</Text>}

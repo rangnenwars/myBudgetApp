@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { ScrollView, View, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { Text } from '../../components/i18n';
 import { useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { ExceptionEditor } from '../../components/admin/ExceptionEditor';
@@ -8,7 +9,9 @@ import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { apiErrorMessage } from '../../utils/api';
 import { ExceptionRow, getExceptions } from '../../utils/plan';
+import { dateLocale } from '../../utils/i18n';
 
+import { t } from '../../utils/i18n';
 type Filter = 'all' | 'ending_soon' | 'no_end';
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -16,7 +19,7 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'no_end', label: 'No end date' },
 ];
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmt = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 // Everyone with an exception, so none are forgotten: the reason, who set it, and when it ends.
 // Ones with no end date are flagged. Only an admin can change them; support can look.
@@ -100,7 +103,7 @@ export default function ExceptionsScreen() {
               <Text style={kit.muted}>{r.reason}</Text>
               <Text style={kit.dim}>
                 Set {fmt(r.since)}
-                {r.by ? ` by ${r.by}` : ''}
+                {r.by ? t(' by {0}', { 0: r.by }) : ''}
               </Text>
             </Pressable>
             {open === r.id && <ExceptionEditor userId={r.userId} current={{ reason: r.reason, ends_at: r.endsAt }} canEdit={isAdmin} onChanged={() => { setOpen(null); load(); }} />}

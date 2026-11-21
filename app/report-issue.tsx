@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Image, Platform, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Image, Platform, ActivityIndicator } from 'react-native';
+import { Text, TextInput } from '../components/i18n';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +21,7 @@ import { submitIssueReport, getMyIssueReports, base64ByteLength, IssueReportSumm
 import { showAlert } from '../utils/alert';
 import { apiErrorMessage } from '../utils/api';
 
+import { t, dateLocale } from '../utils/i18n';
 interface Screenshot {
   uri: string;
   data: string;
@@ -34,7 +36,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   wont_fix: { label: 'Closed', color: COLORS.textMuted },
 };
 
-const formatBytes = (n: number) => (n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const formatBytes = (n: number) => (n >= 1024 * 1024 ? t('{0} MB', { 0: (n / (1024 * 1024)).toFixed(1) }) : t('{0} KB', { 0: Math.max(1, Math.round(n / 1024)) }));
 
 const mimeFromAsset = (asset: ImagePicker.ImagePickerAsset): string | undefined => {
   if (asset.mimeType) return asset.mimeType;
@@ -114,7 +116,7 @@ export default function ReportIssueScreen() {
       }
       const bytes = base64ByteLength(data);
       if (bytes > MAX_SCREENSHOT_BYTES) {
-        setError(`That image is ${formatBytes(bytes)} — screenshots can be at most 2 MB. Crop it or pick a smaller one.`);
+        setError(t('That image is {0} — screenshots can be at most 2 MB. Crop it or pick a smaller one.', { 0: formatBytes(bytes) }));
         return;
       }
       setScreenshot({ uri: asset.uri, data, mimeType: mimeType as ScreenshotMimeType, bytes });
@@ -258,7 +260,7 @@ export default function ReportIssueScreen() {
                 <View key={r.id} style={styles.mineRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.mineTitle} numberOfLines={1}>{r.title}</Text>
-                    <Text style={styles.mineMeta}>#{r.id} · {new Date(r.created_at).toLocaleDateString('en-IN')}</Text>
+                    <Text style={styles.mineMeta}>#{r.id} · {new Date(r.created_at).toLocaleDateString(dateLocale())}</Text>
                   </View>
                   <View style={[styles.statusChip, { borderColor: st.color }]}>
                     <Text style={[styles.statusText, { color: st.color }]}>{st.label}</Text>

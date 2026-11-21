@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
+import { View, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
-import { priceLabel } from '../constants/features';
+import { priceText } from '../utils/priceText';
 import { apiErrorMessage } from '../utils/api';
 import { MyFeature, requestFeature } from '../utils/database';
 import { ErrorText } from './ScreenKit';
@@ -50,7 +51,7 @@ export const FeatureRequestSheet: React.FC<Props> = ({ feature, onClose, onSent 
       <View style={styles.backdrop}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>{priced ? `${feature.label} · ${priceLabel(feature.price, feature.period)}` : feature.label}</Text>
+            <Text style={styles.title}>{priced ? `${feature.label} · ${priceText(feature.price, feature.period)}` : feature.label}</Text>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close">
               <Ionicons name="close" size={22} color={COLORS.textMuted} />
             </Pressable>

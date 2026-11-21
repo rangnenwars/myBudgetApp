@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text, TextInput } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { CalendarSheet } from './CalendarSheet';
 import { entryDateError, isValidIsoDate, shiftIsoDate, todayLocalIso } from '../utils/dates';
+import { dateLocale } from '../utils/i18n';
 
 interface Props {
   /** 'YYYY-MM-DD'. May be mid-edit/invalid while the user types in the custom field. */
@@ -26,7 +28,7 @@ export const DateField: React.FC<Props> = ({ value, onChange }) => {
   };
   const canStepForward = isValidIsoDate(value) && value < today;
   const label = isValidIsoDate(value)
-    ? new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    ? new Date(`${value}T00:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
     : null;
 
   const chip = (text: string, active: boolean, onPress: () => void) => (

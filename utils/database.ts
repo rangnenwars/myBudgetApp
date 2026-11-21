@@ -553,6 +553,8 @@ export interface SystemMetrics {
   users: { total: number; active: number; inactive: number; byRole: Record<AdminRole, number>; byTier: Record<'standard' | 'pro', number> };
   signups: { last30Days: number };
   engagement: { loggedInLast30Days: number; loggedInLast7Days: number };
+  /** How the first-time tour ended for customers: finished, skipped (and on which card), and how many chose Hindi. */
+  tour: { finished: number; skipped: number; skippedByStep: Record<string, number>; hindi: number };
   usage: { transactions: number; loans: number; investments: number; goals: number; customCategories: number };
   finance: {
     costPerUserPerYearInr: number;
@@ -563,6 +565,11 @@ export interface SystemMetrics {
     revenueNote: string;
   };
 }
+
+/** Records how the first-time tour ended. The first outcome per person is kept; the server ignores the rest. */
+export const recordTourOutcome = async (outcome: 'finished' | 'skipped', step: number, language: 'en' | 'hi'): Promise<void> => {
+  await api.post('/tour/outcome', { outcome, step, language });
+};
 
 export const getSystemMetrics = async (): Promise<SystemMetrics> => {
   const { data } = await api.get('/system/metrics');

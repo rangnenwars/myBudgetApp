@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
+import { View, StyleSheet, Modal, Pressable } from 'react-native';
+import { Text } from './i18n';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 
 interface Props {

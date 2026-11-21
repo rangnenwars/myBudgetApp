@@ -1,5 +1,6 @@
 import type { FeatureKey } from '../constants/features';
 
+import { t, dateLocale } from './i18n';
 // How the app shows the plan. The server decides who has access
 // (server/src/lib/access.ts); this only turns what it says into words.
 
@@ -32,11 +33,11 @@ const OWN_EXCEPTION_WARN_DAYS = 14;
 export const shortDate = (iso: string, now: Date = new Date()): string => {
   const d = new Date(iso);
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+  return d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
 };
 
 /** "ends today", "ends tomorrow" or "ends in 12 days". */
-export const endsIn = (daysLeft: number): string => (daysLeft <= 0 ? 'ends today' : daysLeft === 1 ? 'ends tomorrow' : `ends in ${daysLeft} days`);
+export const endsIn = (daysLeft: number): string => (daysLeft <= 0 ? 'ends today' : daysLeft === 1 ? 'ends tomorrow' : t('ends in {0} days', { 0: daysLeft }));
 
 /** "₹200 a year". */
 export const priceText = (plan: Pick<PlanInfo, 'price_inr' | 'period'>): string =>
@@ -57,7 +58,9 @@ export const planBanner = (plan: PlanInfo | undefined | null, payingNow = false,
         kind: payingNow ? 'hold' : 'ended',
         text: payingNow
           ? "We're checking your payment. Everything keeps working while we check."
-          : `Your full access ended${plan.ended_on ? ` on ${shortDate(plan.ended_on, now)}` : ''}. Your data is safe. Renew to turn it back on.`,
+          : plan.ended_on
+            ? t('Your full access ended on {0}. Your data is safe. Renew to turn it back on.', { 0: shortDate(plan.ended_on, now) })
+            : t('Your full access ended. Your data is safe. Renew to turn it back on.'),
       };
     case 'grace':
       return { kind: 'hold', text: "We're checking your payment. Everything keeps working while we check." };
@@ -65,14 +68,14 @@ export const planBanner = (plan: PlanInfo | undefined | null, payingNow = false,
       if (left == null || left > WARN_DAYS) return payingNow ? { kind: 'hold', text: "We're checking your payment." } : null;
       return payingNow
         ? { kind: 'hold', text: "We're checking your payment." }
-        : { kind: 'ending', text: `Full access ${endsIn(left)}${plan.until ? ` (${shortDate(plan.until, now)})` : ''}. Renew for ${priceText(plan)}.` };
+        : { kind: 'ending', text: t('Full access {0}{1}. Renew for {2}.', { 0: endsIn(left), 1: plan.until ? ` (${shortDate(plan.until, now)})` : '', 2: priceText(plan) }) };
     case 'paid':
       if (payingNow) return { kind: 'hold', text: "We're checking your payment." };
       if (left == null || left > WARN_DAYS) return null;
-      return { kind: 'ending', text: `Your plan ${endsIn(left)}${plan.until ? ` (${shortDate(plan.until, now)})` : ''}. Renew early, and no time is lost.` };
+      return { kind: 'ending', text: t('Your plan {0}{1}. Renew early, and no time is lost.', { 0: endsIn(left), 1: plan.until ? ` (${shortDate(plan.until, now)})` : '' }) };
     case 'exception':
       if (left == null || left > OWN_EXCEPTION_WARN_DAYS) return null;
-      return { kind: 'ending', text: `Your extra access ${endsIn(left)}${plan.until ? ` (${shortDate(plan.until, now)})` : ''}.` };
+      return { kind: 'ending', text: t('Your extra access {0}{1}.', { 0: endsIn(left), 1: plan.until ? ` (${shortDate(plan.until, now)})` : '' }) };
     default:
       return null;
   }
@@ -85,15 +88,15 @@ export const planHeadline = (plan: PlanInfo): { title: string; detail: string } 
     case 'company':
       return { title: 'Company account', detail: 'Full access, always. Nothing to pay.' };
     case 'exception':
-      return { title: 'Full access', detail: until ? `Extra access until ${until}.` : 'Extra access, with no end date.' };
+      return { title: 'Full access', detail: until ? t('Extra access until {0}.', { 0: until }) : 'Extra access, with no end date.' };
     case 'paid':
-      return { title: 'Plan active', detail: until ? `Paid until ${until}${plan.days_left != null ? ` · ${plan.days_left} days left` : ''}.` : 'Paid.' };
+      return { title: 'Plan active', detail: until ? t('Paid until {0}{1}.', { 0: until, 1: plan.days_left != null ? t(' · {0} days left', { 0: plan.days_left }) : '' }) : 'Paid.' };
     case 'trial':
-      return { title: 'Free full access', detail: until ? `Until ${until}${plan.days_left != null ? ` · ${plan.days_left} days left` : ''}.` : 'Free for now.' };
+      return { title: 'Free full access', detail: until ? t('Until {0}{1}.', { 0: until, 1: plan.days_left != null ? t(' · {0} days left', { 0: plan.days_left }) : '' }) : 'Free for now.' };
     case 'grace':
       return { title: "Checking your payment", detail: 'Everything keeps working while we check.' };
     default:
-      return { title: 'Full access ended', detail: plan.ended_on ? `Ended on ${shortDate(plan.ended_on)}. Your data is safe.` : 'Your data is safe.' };
+      return { title: 'Full access ended', detail: plan.ended_on ? t('Ended on {0}. Your data is safe.', { 0: shortDate(plan.ended_on) }) : 'Your data is safe.' };
   }
 };
 

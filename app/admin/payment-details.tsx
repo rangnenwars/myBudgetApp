@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Image, Pressable } from 'react-native';
+import { ScrollView, View, StyleSheet, Image, Pressable } from 'react-native';
+import { Text } from '../../components/i18n';
 import { useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button, ErrorText, Field, Notice, ScreenHeader, SectionTitle, kit } from '../../components/ScreenKit';
@@ -8,7 +9,9 @@ import { useAuth } from '../../context/AuthContext';
 import { apiErrorMessage } from '../../utils/api';
 import { AdminPaymentDetails, getAdminPaymentDetails, saveAdminPaymentDetails } from '../../utils/plan';
 import { PickedImage, formatBytes, pickImage } from '../../utils/pickImage';
+import { dateLocale } from '../../utils/i18n';
 
+import { t } from '../../utils/i18n';
 const UPI_RE = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z][a-zA-Z0-9.-]{1,40}$/;
 
 // The QR code and UPI ID every user sees on the Renew screen. The server reads the QR and
@@ -110,8 +113,8 @@ export default function PaymentDetailsScreen() {
               {current.qr_verified === false && <Text style={styles.warn}>This QR could not be read, so it was confirmed by hand.</Text>}
               {current.updated_at && (
                 <Text style={kit.dim}>
-                  Last changed {new Date(current.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  {current.updated_by ? ` by ${current.updated_by}` : ''}
+                  Last changed {new Date(current.updated_at).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {current.updated_by ? t(' by {0}', { 0: current.updated_by }) : ''}
                 </Text>
               )}
             </>

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
@@ -9,13 +10,14 @@ import { getFreeMoneyDay, FreeMoneyDayInfo } from '../utils/database';
 import { useAuth } from '../context/AuthContext';
 import { fmtInr } from './ScreenKit';
 
+import { t, dateLocale } from '../utils/i18n';
 /** "19 Oct" for a day of the given month. */
 export const dayLabel = (year: number, month: number, day: number): string =>
-  new Date(year, month - 1, day).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  new Date(year, month - 1, day).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 
 /** Month bar: the days paying for fixed commitments, then the days left to spend. */
 export const FreeMoneyBar: React.FC<{ day: number; daysInMonth: number }> = ({ day, daysInMonth }) => (
-  <View style={styles.bar} accessibilityLabel={`${day} of ${daysInMonth} days go to fixed commitments`}>
+  <View style={styles.bar} accessibilityLabel={t('{0} of {1} days go to fixed commitments', { 0: day, 1: daysInMonth })}>
     <View style={{ flex: day, backgroundColor: COLORS.accent }} />
     <View style={{ flex: Math.max(daysInMonth - day, 0), backgroundColor: COLORS.positive, opacity: 0.55 }} />
   </View>
@@ -27,7 +29,7 @@ export const weekChange = (daysEarlier: number | null): { text: string; color: s
   if (daysEarlier === 0) return { text: 'Same as last week', color: COLORS.textMuted };
   const n = Math.abs(daysEarlier);
   const unit = n === 1 ? 'day' : 'days';
-  return daysEarlier > 0 ? { text: `${n} ${unit} earlier than last week`, color: COLORS.positive } : { text: `${n} ${unit} later than last week`, color: COLORS.red };
+  return daysEarlier > 0 ? { text: t('{0} {1} earlier than last week', { 0: n, 1: unit }), color: COLORS.positive } : { text: t('{0} {1} later than last week', { 0: n, 1: unit }), color: COLORS.red };
 };
 
 interface Props {
@@ -70,7 +72,7 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
           <Text style={styles.detail}>Add your income as a transaction, or set it to repeat, and this shows how much is yours to spend.</Text>
         ) : info.status === 'over' ? (
           <>
-            <AmountText style={[styles.headline, { color: COLORS.red }]}>{`${fmtInr(short)} short`}</AmountText>
+            <AmountText style={[styles.headline, { color: COLORS.red }]}>{t('{0} short', { 0: fmtInr(short) })}</AmountText>
             <View style={styles.bar}>
               <View style={{ flex: 1, backgroundColor: COLORS.red }} />
             </View>
@@ -84,7 +86,7 @@ export const FreeMoneyCard: React.FC<Props> = ({ refreshKey = 0 }) => {
             <Text style={styles.detail}>
               yours to spend this month, about {fmtInr(perDay)} a day
             </Text>
-            <View style={styles.bar} accessibilityLabel={`${Math.round(sharePct)}% of income goes to fixed bills`}>
+            <View style={styles.bar} accessibilityLabel={t('{0}% of income goes to fixed bills', { 0: Math.round(sharePct) })}>
               <View style={{ flex: sharePct, backgroundColor: COLORS.accent }} />
               <View style={{ flex: 100 - sharePct, backgroundColor: COLORS.positive, opacity: 0.55 }} />
             </View>

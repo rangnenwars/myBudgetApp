@@ -1,3 +1,4 @@
+import { markTourPending } from '../utils/tourPrefs';
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api, apiErrorMessage, registerSessionExpiredHandler } from '../utils/api';
 import type { FeatureKey } from '../constants/features';
@@ -106,6 +107,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data } = await api.post('/auth/register', { name: name.trim(), email, phone, password });
       await setTokens(data.accessToken, data.refreshToken);
+      // Before the user is set, so the tour is waiting for them the moment they land.
+      await markTourPending(data.user.id);
       setUser(data.user);
       return { ok: true };
     } catch (err) {

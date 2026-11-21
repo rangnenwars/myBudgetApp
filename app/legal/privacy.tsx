@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../../components/i18n';
 import { ScreenHeader, Notice, kit } from '../../components/ScreenKit';
 import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 

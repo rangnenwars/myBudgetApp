@@ -1,17 +1,16 @@
 import React, { useCallback, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   Pressable,
   Modal,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Switch,
 } from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import { useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
@@ -27,13 +26,14 @@ import { EXPENSE_CATEGORIES } from '../../constants/categories';
 import { DEFAULT_SIP_CATEGORY, SIP_CATEGORIES, SipCategory, SipInput, ordinalDay } from '../../utils/sip';
 import { isValidIsoDate, todayLocalIso } from '../../utils/dates';
 
+import { t, dateLocale } from '../../utils/i18n';
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const INVESTMENT_TYPES = ['Mutual fund', 'Fixed deposit', 'Bonds', 'Gold', 'Chit fund (BC)', 'Other'];
 
 const categoryLabel = (key: string) => EXPENSE_CATEGORIES.find((c) => c.key === key)?.label ?? key;
-const longDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-const shortDay = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+const longDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
+const shortDay = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 
 function InvestmentsScreen() {
   const { user } = useAuth();
@@ -193,8 +193,8 @@ function InvestmentsScreen() {
                   )}
                   {item.sip_amount != null && (
                     <Text style={styles.cardMuted}>
-                      {item.sip_next_date ? `Next: ${shortDay(item.sip_next_date)}` : 'Ended'}
-                      {item.sip_ends_on ? ` · Ends ${longDate(item.sip_ends_on)}` : item.sip_next_date ? ' · No end date' : ''}
+                      {item.sip_next_date ? t('Next: {0}', { 0: shortDay(item.sip_next_date) }) : 'Ended'}
+                      {item.sip_ends_on ? t(' · Ends {0}', { 0: longDate(item.sip_ends_on) }) : item.sip_next_date ? ' · No end date' : ''}
                     </Text>
                   )}
                 </View>

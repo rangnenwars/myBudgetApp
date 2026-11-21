@@ -1,0 +1,25 @@
+// Hindi for text added after the first full pass, and for the small words a sentence takes as a value
+// ('days', 'at sign-up'). Same rules as utils/i18nHiScreens.ts.
+export const HI_EXTRA: Record<string, string> = {
+  'by {0}': '{0} द्वारा',
+  'On · {0}': 'चालू · {0}',
+  '. Note: {0}': '। नोट: {0}',
+  '· {0} days left': '· {0} दिन बाकी',
+  '· by {0}': '· {0} द्वारा',
+  '{0} to {1}': '{0} से {1}',
+  '{0} mo · {1}': '{0} माह · {1}',
+  '{0}/mo': '{0}/माह',
+  ', up {0}%': ', {0}% ज़्यादा',
+  '₹{0} / {1}': '₹{0} / {1}',
+  staff: 'स्टाफ़',
+  day: 'दिन',
+  days: 'दिन',
+  month: 'महीना',
+  months: 'महीने',
+  year: 'साल',
+  years: 'साल',
+  'Your full access ended on {0}. Your data is safe. Renew to turn it back on.': 'आपकी पूरी पहुँच {0} को खत्म हो गई। आपका डेटा सुरक्षित है। वापस चालू करने के लिए रिन्यू करें।',
+  'Your full access ended. Your data is safe. Renew to turn it back on.': 'आपकी पूरी पहुँच खत्म हो गई। आपका डेटा सुरक्षित है। वापस चालू करने के लिए रिन्यू करें।',
+  'Your free access ended on {0}. Your {1} and everything you saved are safe, and nothing was deleted.': 'आपकी मुफ़्त पहुँच {0} को खत्म हो गई। आपका {1} और आपका सेव किया सब कुछ सुरक्षित है, और कुछ भी हटाया नहीं गया।',
+  'Your free access ended. Your {1} and everything you saved are safe, and nothing was deleted.': 'आपकी मुफ़्त पहुँच खत्म हो गई। आपका {1} और आपका सेव किया सब कुछ सुरक्षित है, और कुछ भी हटाया नहीं गया।',
+};

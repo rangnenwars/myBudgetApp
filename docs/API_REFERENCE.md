@@ -556,6 +556,17 @@ All changes are audit-logged.
 
 ---
 
+## First-time tour — `/api/v1/tour` 🔒
+
+### `POST /tour/outcome` 🔒
+Body: `{ outcome: 'finished' | 'skipped', step: 1–20, language?: 'en' | 'hi' }` (language defaults to `en`). Records how the tour ended for the caller, **once**: the first outcome is kept and a later call changes nothing.
+→ **201** `{ recorded: true }`, or **200** `{ recorded: false }` when one was already saved
+Errors: 400 invalid body · 401 not signed in
+
+`GET /system/metrics` now carries `tour: { finished, skipped, skippedByStep: { "<card>": n }, hindi }`: counts only, over customer accounts (company accounts are left out). See [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md).
+
+---
+
 ## Admin audit log — `/api/v1/admin/audit-log` 🔒🛡️
 
 Admin-only (`requireAdmin` — not `support`, since this is a record of what staff did, not an account-management action itself).

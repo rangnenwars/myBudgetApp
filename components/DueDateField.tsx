@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text } from './i18n';
 import { DateInput } from './DateInput';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 import { isValidIsoDate, shiftIsoDate, todayLocalIso } from '../utils/dates';

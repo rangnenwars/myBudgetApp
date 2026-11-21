@@ -5,6 +5,7 @@
 
 import { CategoryTotal } from './types';
 
+import { t } from './i18n';
 /** Key of the combined "Others" row. */
 export const OTHERS_KEY = '__others';
 
@@ -121,8 +122,8 @@ export const categoryRows = (
 export const topSpendInsight = (rows: CategoryRow[], labelOf: (category: string) => string): string | null => {
   const top = rows.find((r) => r.category !== OTHERS_KEY);
   if (!top || top.total <= 0) return null;
-  const change = top.changePct == null || top.changePct === 0 ? '' : top.changePct > 0 ? `, up ${top.changePct}%` : `, down ${Math.abs(top.changePct)}%`;
-  return `${labelOf(top.category)} is your top spend${change}`;
+  const change = top.changePct == null || top.changePct === 0 ? '' : top.changePct > 0 ? t(', up {0}%', { 0: top.changePct }) : t(', down {0}%', { 0: Math.abs(top.changePct) });
+  return t('{0} is your top spend{1}', { 0: labelOf(top.category), 1: change });
 };
 
 export interface MonthTotal {

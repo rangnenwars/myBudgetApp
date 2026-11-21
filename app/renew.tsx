@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Pressable, ActivityIndicator, Linking, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, Pressable, ActivityIndicator, Linking, Platform } from 'react-native';
+import { Text } from '../components/i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from 'expo-router';
@@ -12,6 +13,7 @@ import { cancelClaim, getMyPlan, getPaymentDetails, submitClaim, MyPlan, Payment
 import { PickedImage, formatBytes, pickImage } from '../utils/pickImage';
 import { canRenew, priceText, shortDate } from '../utils/planState';
 
+import { t, dateLocale } from '../utils/i18n';
 const MAX_SHOT = 2 * 1024 * 1024;
 
 // Pay by QR or UPI ID, then tell us. Step 1 shows the details an admin set; step 2
@@ -144,7 +146,7 @@ export default function RenewScreen() {
             <Card style={styles.pendingCard}>
               <Row label="Amount" value={priceText(plan.plan).replace(/ a (year|month)$/, '')} />
               <Row label="Transaction ID" value={pending.txn_id} />
-              <Row label="Sent" value={new Date(pending.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })} />
+              <Row label="Sent" value={new Date(pending.created_at).toLocaleString(dateLocale(), { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })} />
             </Card>
             <Text style={kit.dim}>Sent the wrong ID or screenshot? Cancel this and send it again.</Text>
             <ErrorText message={error} />
@@ -157,14 +159,14 @@ export default function RenewScreen() {
             {plan.claims[0]?.status === 'rejected' && (
               <Notice tone="warning">
                 {plan.claims[0].asked_to_resend
-                  ? `Please send your payment details again${plan.claims[0].reason ? `. Note: ${plan.claims[0].reason}` : ''}.`
-                  : `Your last payment couldn't be confirmed${plan.claims[0].reason ? `: ${plan.claims[0].reason}` : ''}. If you paid, contact support with your transaction ID.`}
+                  ? t('Please send your payment details again{0}.', { 0: plan.claims[0].reason ? t('. Note: {0}', { 0: plan.claims[0].reason }) : '' })
+                  : t('Your last payment couldn\'t be confirmed{0}. If you paid, contact support with your transaction ID.', { 0: plan.claims[0].reason ? `: ${plan.claims[0].reason}` : '' })}
               </Notice>
             )}
 
             <SectionTitle>Step 1: pay</SectionTitle>
             <Card style={styles.payCard}>
-              <Image source={{ uri: details.qr }} style={styles.qr} resizeMode="contain" accessibilityLabel={`QR code to pay ${details.payee_name}`} />
+              <Image source={{ uri: details.qr }} style={styles.qr} resizeMode="contain" accessibilityLabel={t('QR code to pay {0}', { 0: details.payee_name })} />
               <Text style={styles.payee}>{details.payee_name}</Text>
               <View style={styles.upiRow}>
                 <Text style={styles.upi} selectable>
@@ -175,7 +177,7 @@ export default function RenewScreen() {
                   <Text style={styles.copyText}>{copied ? 'Copied' : 'Copy'}</Text>
                 </Pressable>
               </View>
-              <Button label={`Open my UPI app (₹${details.amount_inr.toLocaleString('en-IN')})`} onPress={() => onOpenUpi(details.upi_link)} />
+              <Button label={t('Open my UPI app (₹{0})', { 0: details.amount_inr.toLocaleString('en-IN') })} onPress={() => onOpenUpi(details.upi_link)} />
               {openHint && <Text style={kit.dim}>Can't open a UPI app here? Scan the QR from your phone, or pay to the UPI ID above.</Text>}
               <Text style={kit.dim}>Pay exactly ₹{details.amount_inr.toLocaleString('en-IN')}, and put your account email ({user?.email}) in the note.</Text>
             </Card>

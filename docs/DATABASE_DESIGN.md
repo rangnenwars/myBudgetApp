@@ -432,6 +432,10 @@ CREATE INDEX idx_user_features_requested ON user_features(requested_at) WHERE re
 --   screenshot_hash, status pending|confirmed|rejected|cancelled, amount_inr, grace_until,
 --   decided_by, decided_at, source user|admin. Screenshots purged 30 days after decision.
 -- access_notices: one row per user, notice stage and access_end, so each email is sent once.
+-- tour_outcomes (migration 0028): how the first-time tour ended for each person, once.
+--   user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+--   outcome TEXT ('finished' | 'skipped'), step SMALLINT (1-20), language TEXT ('en' | 'hi'), created_at.
+--   Counts only, shown on System metrics. No other data about the person.
 -- app_settings key 'plan' = price, trial months, notice days, features, enforced flags.
 -- ============================================================
 

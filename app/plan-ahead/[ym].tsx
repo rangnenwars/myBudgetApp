@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
+import { Text } from '../../components/i18n';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
 import { withFeature } from '../../components/FeatureGate';
@@ -10,8 +11,9 @@ import { useAuth } from '../../context/AuthContext';
 import { getForecast, Forecast, ForecastItem } from '../../utils/database';
 import { useOpenBill } from '../../components/useOpenBill';
 
+import { t, dateLocale } from '../../utils/i18n';
 /** "15 Mar" for a YYYY-MM-DD date. */
-const dayText = (iso: string): string => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+const dayText = (iso: string): string => new Date(`${iso}T00:00:00`).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 
 const itemText = (it: ForecastItem): string => {
   const when = it.date ? ` · ${dayText(it.date)}` : '';
@@ -96,7 +98,7 @@ function PlanAheadMonthScreen() {
 }
 
 const Line: React.FC<{ text: string; amount: string; first: boolean; hot?: boolean; onOpen?: () => void }> = ({ text, amount, first, hot, onOpen }) => (
-  <Pressable style={[styles.line, !first && styles.lineBorder]} disabled={!onOpen} onPress={onOpen} accessibilityRole={onOpen ? 'button' : undefined} accessibilityLabel={onOpen ? `${text}, ${amount}, open` : undefined}>
+  <Pressable style={[styles.line, !first && styles.lineBorder]} disabled={!onOpen} onPress={onOpen} accessibilityRole={onOpen ? 'button' : undefined} accessibilityLabel={onOpen ? t('{0}, {1}, open', { 0: text, 1: amount }) : undefined}>
     <Text style={[styles.lineText, hot && { color: COLORS.red }]} numberOfLines={2}>
       {text}
     </Text>

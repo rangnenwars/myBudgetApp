@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Text, TextInput } from '../components/i18n';
 import { router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
@@ -13,6 +14,7 @@ import { showAlert } from '../utils/alert';
 import { apiErrorMessage } from '../utils/api';
 import { parseAmount } from '../utils/amount';
 
+import { t } from '../utils/i18n';
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 interface Row {
@@ -76,12 +78,12 @@ export default function InputExpensesScreen() {
             type: 'expense' as const,
             category: row.category!,
             subcategory: null,
-            note: period === 'monthly' ? null : `${period} entry — original ${fmt(original)}`,
+            note: period === 'monthly' ? null : t('{0} entry — original {1}', { 0: period, 1: fmt(original) }),
             date,
           };
         })
       );
-      showAlert('Saved', `Logged ${valid.length} expense${valid.length === 1 ? '' : 's'} for this month.`, () => router.back());
+      showAlert('Saved', t('Logged {0} expense{1} for this month.', { 0: valid.length, 1: valid.length === 1 ? '' : 's' }), () => router.back());
     } catch (err) {
       setError(apiErrorMessage(err, 'Could not save these expenses.'));
     } finally {

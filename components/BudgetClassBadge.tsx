@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from './i18n';
 import { CLASS_COLORS, CLASS_LABELS, COLORS, RADIUS, SPACING } from '../constants/theme';
 
 interface Props {

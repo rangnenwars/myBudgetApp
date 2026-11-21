@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Modal, Switch, KeyboardAvoidingView, Platform, TextInput, ScrollView } from 'react-native';
+import { View, StyleSheet, FlatList, Pressable, Modal, Switch, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import { router, useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
@@ -19,7 +20,8 @@ import { UserAccessSection } from '../../components/admin/UserAccessSection';
 import { confirmAction } from '../../utils/alert';
 import { apiErrorMessage } from '../../utils/api';
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+import { t, dateLocale } from '../../utils/i18n';
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { year: 'numeric', month: 'short', day: 'numeric' });
 
 // Order matters here — rendered left-to-right/top-to-bottom in the role
 // picker, low to high privilege, so promote/demote reads as moving along the row.
@@ -114,7 +116,7 @@ export default function AdminUsersScreen() {
   };
 
   const onDelete = (target: AdminUser) => {
-    confirmAction('Delete account', `Permanently delete ${target.name} (${target.email})? All of their data is deleted too.`, 'Delete', async () => {
+    confirmAction('Delete account', t('Permanently delete {0} ({1})? All of their data is deleted too.', { 0: target.name, 1: target.email }), 'Delete', async () => {
       try {
         await deleteAdminUser(target.id);
         setSelected(null);
@@ -296,11 +298,11 @@ export default function AdminUsersScreen() {
                       {f.on
                         ? f.viaPlan
                           ? 'On · included in their plan'
-                          : `On · ${f.source === 'admin' ? `by ${f.changedByEmail ?? 'staff'}` : f.source === 'existing_data' ? 'had data before this change' : 'at sign-up'}`
+                          : t('On · {0}', { 0: f.source === 'admin' ? t('by {0}', { 0: f.changedByEmail ?? t('staff') }) : f.source === 'existing_data' ? 'had data before this change' : 'at sign-up' })
                         : f.denied
                           ? 'Off · switched off by staff, even if their plan includes it'
                           : f.requestedAt
-                            ? `Off · asked for it ${fmtDate(f.requestedAt)}`
+                            ? t('Off · asked for it {0}', { 0: fmtDate(f.requestedAt) })
                             : 'Off'}
                     </Text>
                   </View>
@@ -309,7 +311,7 @@ export default function AdminUsersScreen() {
                     onValueChange={(v) => onFeature(f.key, v)}
                     disabled={saving || !canManageFeatures}
                     trackColor={{ false: COLORS.cardBorder, true: COLORS.accent }}
-                    accessibilityLabel={`${f.label} for this user`}
+                    accessibilityLabel={t('{0} for this user', { 0: f.label })}
                   />
                 </View>
               ))

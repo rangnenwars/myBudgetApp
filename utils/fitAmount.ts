@@ -1,4 +1,5 @@
-// Sizing for money figures that must stay on one line (components/AmountText.tsx).
+
+import { t } from './i18n';// Sizing for money figures that must stay on one line (components/AmountText.tsx).
 // Pure, so the maths is unit-tested without rendering anything.
 
 /** Average width of a bold digit/comma/₹ glyph, as a fraction of the font size. Browser fonts measure about 0.5; the phone's Roboto is a little wider, so this stays generous enough that a figure never gets cut off. */
@@ -19,7 +20,7 @@ export const compactInr = (n: number): string => {
   const sign = n < 0 ? '-' : '';
   const abs = Math.abs(n);
   const trim = (x: number) => String(Math.round(x * 10) / 10);
-  if (abs >= 1e7) return `${sign}₹${trim(abs / 1e7)} Cr`;
+  if (abs >= 1e7) return t('{0}₹{1} Cr', { 0: sign, 1: trim(abs / 1e7) });
   if (abs >= 1e5) return `${sign}₹${trim(abs / 1e5)} L`;
   if (abs >= 1e4) return `${sign}₹${trim(abs / 1e3)} K`;
   return `${sign}₹${Math.round(abs).toLocaleString('en-IN')}`;

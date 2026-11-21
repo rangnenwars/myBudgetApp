@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text } from '../components/i18n';
 import { Redirect, router } from 'expo-router';
 import { Card } from '../components/Card';
 import { MoreFeaturesRow } from '../components/MoreFeaturesLink';
 import { PlanRow } from '../components/PlanRow';
-import { ScreenHeader, SectionTitle, Field, Button, ErrorText, Notice, kit } from '../components/ScreenKit';
+import { useLanguage } from '../context/LanguageContext';
+import { useTour } from '../context/TourContext';
+import { LANGUAGES, Language } from '../utils/i18n';
+import { ScreenHeader, SectionTitle, Field, Button, ErrorText, Notice, Segmented, kit } from '../components/ScreenKit';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, SPACING } from '../constants/theme';
 import { apiErrorMessage } from '../utils/api';
@@ -12,10 +16,13 @@ import { confirmAction, showAlert } from '../utils/alert';
 import { exportMyData, resendVerificationEmail } from '../utils/database';
 import { shareTextFile } from '../utils/exportFile';
 
+import { t } from '../utils/i18n';
 const ROLE_LABEL: Record<string, string> = { user: 'Member', admin: 'Admin', support: 'Support', system_manager: 'System manager' };
 
 export default function SettingsScreen() {
   const { user, isLoading, changePassword, logoutEverywhere, deleteMyAccount, reloadUser } = useAuth();
+  const { lang, setLang } = useLanguage();
+  const { start: startTour } = useTour();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -55,7 +62,7 @@ export default function SettingsScreen() {
     setVerifyMessage(null);
     try {
       await resendVerificationEmail();
-      setVerifyMessage(`We sent a new link to ${user.email}. Open it on any device.`);
+      setVerifyMessage(t('We sent a new link to {0}. Open it on any device.', { 0: user.email }));
     } catch (err) {
       setVerifyMessage(apiErrorMessage(err, 'Could not send the email. Try again later.'));
       // Already confirmed in another tab/device — pick that up.
@@ -129,6 +136,12 @@ export default function SettingsScreen() {
         <PlanRow />
 
         <MoreFeaturesRow />
+
+        <SectionTitle>Language</SectionTitle>
+        <Segmented<Language> options={LANGUAGES.map((l) => ({ key: l.key, label: l.label }))} value={lang} onChange={setLang} />
+
+        <SectionTitle>How to use Prapanji</SectionTitle>
+        <Button label="Replay the tour" variant="outline" onPress={startTour} />
 
         <SectionTitle>Change password</SectionTitle>
         <Card style={styles.formCard}>

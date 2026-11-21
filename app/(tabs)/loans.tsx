@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   Pressable,
   Modal,
   Switch,
-  TextInput,
   KeyboardAvoidingView,
-  Platform, ScrollView } from 'react-native';
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { Text, TextInput } from '../../components/i18n';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../../constants/theme';
@@ -25,6 +26,7 @@ import { apiErrorMessage } from '../../utils/api';
 import { withFeature } from '../../components/FeatureGate';
 import { parseAmount } from '../../utils/amount';
 
+import { t } from '../../utils/i18n';
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 const LOAN_TYPES = ['home', 'car', 'personal', 'education', 'gold', 'other'] as const;
@@ -141,7 +143,7 @@ function LoansScreen() {
     const payment = Math.min(loan.emi, loan.outstanding);
     confirmAction(
       'Mark EMI paid',
-      `Record ${fmt(payment)} for ${loan.name}? This lowers the outstanding balance only — this loan is not counted in your expenses.`,
+      t('Record {0} for {1}? This lowers the outstanding balance only — this loan is not counted in your expenses.', { 0: fmt(payment), 1: loan.name }),
       'Record payment',
       async () => {
         setPayingId(loan.id);
@@ -173,7 +175,7 @@ function LoansScreen() {
     if (!partLoan) return;
     const amount = parseAmount(partAmount);
     if (!amount || amount <= 0) { setPartError('Enter the amount you are paying.'); return; }
-    if (amount > partLoan.outstanding) { setPartError(`Amount can't exceed the outstanding balance (${fmt(partLoan.outstanding)}).`); return; }
+    if (amount > partLoan.outstanding) { setPartError(t('Amount can\'t exceed the outstanding balance ({0}).', { 0: fmt(partLoan.outstanding) })); return; }
     setPartSaving(true);
     setPartError(null);
     try {
@@ -289,7 +291,7 @@ function LoansScreen() {
               <MiniBar percent={percentPaid} color={COLORS.blue} />
               <View style={styles.cardFooter}>
                 <Text style={styles.cardMuted}>Outstanding {fmt(item.outstanding)} of {fmt(item.principal)}</Text>
-                {item.outstanding > 0 && <Text style={styles.cardMuted}>{monthsLeft == null ? "EMI doesn't cover interest" : `${monthsLeft} mo left`}</Text>}
+                {item.outstanding > 0 && <Text style={styles.cardMuted}>{monthsLeft == null ? "EMI doesn't cover interest" : t('{0} mo left', { 0: monthsLeft })}</Text>}
               </View>
               {(item.part_paid ?? 0) > 0 && <Text style={styles.cardMuted}>Paid so far: {fmt(item.part_paid ?? 0)} in part payments</Text>}
               {nextSplit && item.outstanding > 0 && (
@@ -330,7 +332,7 @@ function LoansScreen() {
               <Pressable
                 style={styles.historyBtn}
                 accessibilityRole="button"
-                accessibilityLabel={`Payments on ${item.name}`}
+                accessibilityLabel={t('Payments on {0}', { 0: item.name })}
                 onPress={(e) => {
                   e.stopPropagation();
                   router.push({ pathname: '/loan-payments', params: { id: String(item.id), name: item.name } });
@@ -463,7 +465,7 @@ function LoansScreen() {
                       </View>
                       <View style={styles.cardFooter}>
                         <Text style={styles.cardMuted}>New EMI</Text>
-                        <Text style={styles.previewValue}>{next.monthsLeft == null ? 'Loan closed' : `${fmt(next.emi)}/mo`}</Text>
+                        <Text style={styles.previewValue}>{next.monthsLeft == null ? 'Loan closed' : t('{0}/mo', { 0: fmt(next.emi) })}</Text>
                       </View>
                       {next.monthsLeft != null && (
                         <View style={styles.cardFooter}>

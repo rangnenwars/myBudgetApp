@@ -1,4 +1,5 @@
-// Tap-through to Transactions: a figure on Home or Reports opens the entries
+
+import { t } from './i18n';// Tap-through to Transactions: a figure on Home or Reports opens the entries
 // behind it. The target is the Transactions tab with the filters as route params.
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -26,7 +27,7 @@ export const monthText = (year: number, month: number): string => `${MONTHS[mont
 export const rangeBounds = (startMonth: number, startYear: number, endMonth: number, endYear: number): { from: string; to: string; label: string } => ({
   from: monthBounds(startYear, startMonth).from,
   to: monthBounds(endYear, endMonth).to,
-  label: startMonth === endMonth && startYear === endYear ? monthText(startYear, startMonth) : `${monthText(startYear, startMonth)} to ${monthText(endYear, endMonth)}`,
+  label: startMonth === endMonth && startYear === endYear ? monthText(startYear, startMonth) : t('{0} to {1}', { 0: monthText(startYear, startMonth), 1: monthText(endYear, endMonth) }),
 });
 
 /** Filters for one month, ready for `txnLink`. */

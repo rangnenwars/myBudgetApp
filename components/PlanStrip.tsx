@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Text, StyleSheet, Pressable } from 'react-native';
+import { StyleSheet, Pressable } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';

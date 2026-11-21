@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Text } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from './Card';
@@ -7,10 +8,11 @@ import { COLORS, SPACING } from '../constants/theme';
 import { getForecast, Forecast } from '../utils/database';
 import { useAuth } from '../context/AuthContext';
 import { fmtInr } from './ScreenKit';
+import { dateLocale } from '../utils/i18n';
 
 /** "Mar 2027" for a year and month (1–12). */
 export const monthLabel = (year: number, month: number): string =>
-  new Date(year, month - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  new Date(year, month - 1, 1).toLocaleDateString(dateLocale(), { month: 'short', year: 'numeric' });
 
 /** "+₹7,500" / "−₹4,500": what is left (or short) in a month. */
 export const signedInr = (n: number): string => (n < 0 ? '−' : '+') + fmtInr(Math.abs(n));

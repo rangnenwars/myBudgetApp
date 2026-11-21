@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { useFocusEffect, router } from 'expo-router';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Text } from '../../components/i18n';
+import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card } from '../../components/Card';
 import { useSharedAmounts } from '../../components/AmountText';
@@ -26,6 +27,7 @@ import { monthFilter, txnLink } from '../../utils/txnLink';
 
 
 
+import { t, dateLocale } from '../../utils/i18n';
 const fmt = (n: number) =>
   '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
@@ -36,7 +38,7 @@ export default function DashboardScreen() {
   const currentMonth = { month: now.getMonth() + 1, year: now.getFullYear() };
   const [view, setView] = useState(currentMonth);
   const isCurrentMonth = view.month === currentMonth.month && view.year === currentMonth.year;
-  const viewLabel = new Date(view.year, view.month - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const viewLabel = new Date(view.year, view.month - 1, 1).toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, netSavings: 0 });
   // Every expense category of the month; Home shows the five biggest or the five smallest of them.
   const [monthCategories, setMonthCategories] = useState<{ category: string; total: number }[]>([]);
@@ -54,6 +56,14 @@ export default function DashboardScreen() {
   // Budgets at 80% or more of their limit in the viewed month.
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
+  // The tour's last card ("Add my first spend") arrives here with ?quick=1.
+  const { quick } = useLocalSearchParams<{ quick?: string }>();
+  useEffect(() => {
+    if (quick === '1') {
+      setQuickOpen(true);
+      router.setParams({ quick: undefined });
+    }
+  }, [quick]);
   // Bumped after a quick add so the totals and the free-money card reload.
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -107,8 +117,8 @@ export default function DashboardScreen() {
   // One line for the top strip: the worst budgets first, e.g. "Food over by ₹300 · Travel 85% used".
   const alertText = (() => {
     const sorted = [...budgetAlerts].sort((a, b) => b.ratio - a.ratio);
-    const shown = sorted.slice(0, 2).map((b) => `${getCategory(b.category)?.label ?? b.category} ${b.status === 'over' ? `over by ${fmt(b.spent - b.monthly_limit)}` : `${Math.round(b.ratio * 100)}% used`}`);
-    return shown.join(' · ') + (sorted.length > 2 ? ` · +${sorted.length - 2} more` : '');
+    const shown = sorted.slice(0, 2).map((b) => `${getCategory(b.category)?.label ?? b.category} ${b.status === 'over' ? t('over by {0}', { 0: fmt(b.spent - b.monthly_limit) }) : t('{0}% used', { 0: Math.round(b.ratio * 100) })}`);
+    return shown.join(' · ') + (sorted.length > 2 ? t(' · +{0} more', { 0: sorted.length - 2 }) : '');
   })();
   const savingsRate = computeSavingsRate(summary);
   // One size for Income / Expense / Net savings so the row looks even, and no figure wraps.
@@ -179,7 +189,7 @@ export default function DashboardScreen() {
       <PlanStrip />
 
       {budgetAlerts.length > 0 && (
-        <Pressable style={styles.alertStrip} onPress={() => router.push('/budgets')} accessibilityRole="button" accessibilityLabel={`Budget alert: ${alertText}`}>
+        <Pressable style={styles.alertStrip} onPress={() => router.push('/budgets')} accessibilityRole="button" accessibilityLabel={t('Budget alert: {0}', { 0: alertText })}>
           <Ionicons name="alert-circle-outline" size={18} color={COLORS.yellow} />
           <Text style={styles.alertText} numberOfLines={2}>
             {alertText}
@@ -204,11 +214,11 @@ export default function DashboardScreen() {
 
       <Card>
         <View style={styles.summaryRow}>
-          <Pressable style={styles.summaryItem} onLayout={shared.onLayout} onPress={() => router.push(txnLink({ type: 'income', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Income ${fmt(summary.totalIncome)}, see the entries`}>
+          <Pressable style={styles.summaryItem} onLayout={shared.onLayout} onPress={() => router.push(txnLink({ type: 'income', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={t('Income {0}, see the entries', { 0: fmt(summary.totalIncome) })}>
             <Text style={styles.summaryLabel}>Income ›</Text>
             <Text numberOfLines={1} style={[styles.summaryValue, { color: COLORS.accent, fontSize: shared.fontSize }]}>{shared.texts[0]}</Text>
           </Pressable>
-          <Pressable style={styles.summaryItem} onPress={() => router.push(txnLink({ type: 'expense', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={`Expense ${fmt(summary.totalExpense)}, see the entries`}>
+          <Pressable style={styles.summaryItem} onPress={() => router.push(txnLink({ type: 'expense', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={t('Expense {0}, see the entries', { 0: fmt(summary.totalExpense) })}>
             <Text style={styles.summaryLabel}>Expense ›</Text>
             <Text numberOfLines={1} style={[styles.summaryValue, { color: COLORS.red, fontSize: shared.fontSize }]}>{shared.texts[1]}</Text>
           </Pressable>
@@ -250,7 +260,7 @@ export default function DashboardScreen() {
                 style={[styles.catRow, idx !== 0 && styles.catRowBorder]}
                 onPress={() => router.push(txnLink({ type: 'expense', category: c.category, ...monthFilter(view.year, view.month) }))}
                 accessibilityRole="link"
-                accessibilityLabel={`${cat?.label ?? c.category} ${fmt(c.total)}, see the entries`}
+                accessibilityLabel={t('{0} {1}, see the entries', { 0: cat?.label ?? c.category, 1: fmt(c.total) })}
               >
                 <View style={styles.catHeader}>
                   <Text style={styles.catLabel}>
@@ -296,7 +306,7 @@ export default function DashboardScreen() {
           ) : (
             deltas.map((d) => {
               const cat = getCategory(d.category);
-              const label = d.deltaPct == null ? 'New this month' : `${d.deltaPct >= 0 ? '+' : ''}${d.deltaPct.toFixed(0)}% vs last month`;
+              const label = d.deltaPct == null ? 'New this month' : t('{0}{1}% vs last month', { 0: d.deltaPct >= 0 ? '+' : '', 1: d.deltaPct.toFixed(0) });
               return (
                 <View key={d.category} style={[styles.catRow, styles.catRowBorder]}>
                   <View style={styles.catHeader}>

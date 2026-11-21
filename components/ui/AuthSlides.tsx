@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, StyleSheet, Platform } from 'react-native';
+import { Text } from '../i18n';
 import { FONTS, T } from '../../constants/theme';
 import { AuthSlideArt } from './AuthSlideArt';
 
+import { t } from '../../utils/i18n';
 type Slide = { title: string; body: string; note?: string };
 
 const SLIDES: Slide[] = [
@@ -75,7 +77,7 @@ export const AuthSlides: React.FC<{ compact?: boolean }> = ({ compact }) => {
             key={s.title}
             onPress={() => go(i)}
             accessibilityRole="button"
-            accessibilityLabel={`Show slide ${i + 1}: ${s.title}`}
+            accessibilityLabel={t('Show slide {0}: {1}', { 0: i + 1, 1: s.title })}
             hitSlop={8}
           >
             <View style={[styles.dot, i === index && styles.dotActive]} />

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { sql, SQL } from 'drizzle-orm';
 import { db } from '../db/client';
-import { users, transactions, loans, investments, savingsGoals, categories } from '../db/schema';
+import { users, transactions, loans, investments, savingsGoals, categories, tourOutcomes } from '../db/schema';
 import { asyncHandler } from '../lib/asyncHandler';
 import { requireAuth } from '../middleware/auth';
 import { requireSystemManager } from '../middleware/requireSystemManager';
@@ -61,6 +61,23 @@ router.get(
     }>(sql`select ${countOf(transactions)} as "txCount", ${countOf(loans)} as "loanCount", ${countOf(investments)} as "investmentCount",
       ${countOf(savingsGoals)} as "goalCount", (select count(*)::int from ${categories} where ${categories.userId} is not null) as "customCategoryCount"`).then((r) => r.rows);
 
+    // How the first-time tour ended, counted over customer accounts (staff testing it does not count).
+    const tourRows = await db.execute<{ outcome: string; step: number; language: string; n: number }>(
+      sql`select t.outcome, t.step, t.language, count(*)::int as n
+          from ${tourOutcomes} t join ${users} u on u.id = t.user_id
+          where u.account_kind = 'customer'
+          group by t.outcome, t.step, t.language`
+    ).then((r) => r.rows);
+    const tour = { finished: 0, skipped: 0, skippedByStep: {} as Record<string, number>, hindi: 0 };
+    for (const r of tourRows) {
+      if (r.outcome === 'finished') tour.finished += r.n;
+      else {
+        tour.skipped += r.n;
+        tour.skippedByStep[String(r.step)] = (tour.skippedByStep[String(r.step)] ?? 0) + r.n;
+      }
+      if (r.language === 'hi') tour.hindi += r.n;
+    }
+
     const proUsers = byTier.pro;
     const estimatedAnnualCostInr = active * COST_PER_USER_PER_YEAR_INR;
     const estimatedAnnualRevenueInr = 0; // no real billing — see comment above
@@ -69,6 +86,7 @@ router.get(
       users: { total, active, inactive, byRole, byTier },
       signups: { last30Days: signups30 },
       engagement: { loggedInLast30Days: loggedIn30, loggedInLast7Days: loggedIn7 },
+      tour,
       usage: { transactions: txCount, loans: loanCount, investments: investmentCount, goals: goalCount, customCategories: customCategoryCount },
       finance: {
         costPerUserPerYearInr: COST_PER_USER_PER_YEAR_INR,

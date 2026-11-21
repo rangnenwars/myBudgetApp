@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform, Switch } from 'react-native';
+import { ScrollView, View, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform, Switch } from 'react-native';
+import { Text } from '../components/i18n';
 import { Redirect, useFocusEffect } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card } from '../components/Card';
@@ -24,6 +25,7 @@ import {
 } from '../utils/database';
 import { parseAmount } from '../utils/amount';
 
+import { t, dateLocale } from '../utils/i18n';
 export const STATUS_COLOR: Record<BudgetStatus['status'], string> = { ok: COLORS.accent, warning: COLORS.yellow, over: COLORS.red };
 
 // One overall monthly budget (e.g. ₹15,000) with optional category limits
@@ -68,7 +70,7 @@ export default function BudgetsScreen() {
   if (isLoading) return null;
   if (!user) return <Redirect href="/login" />;
 
-  const monthLabel = new Date().toLocaleDateString('en-IN', { month: 'long' });
+  const monthLabel = new Date().toLocaleDateString(dateLocale(), { month: 'long' });
   const total = overall?.amount ?? null;
   const budgeted = new Set(items.map((b) => b.category));
   // Category limits whose spending is part of the overall total (EMI/investment
@@ -136,7 +138,7 @@ export default function BudgetsScreen() {
     }
     const replacing = editing && editing !== 'new' ? editing.category : null;
     if (category !== replacing && budgeted.has(category)) {
-      setError(`${getCategory(category)?.label ?? 'That category'} already has a limit. Tap it in the list to change it.`);
+      setError(t('{0} already has a limit. Tap it in the list to change it.', { 0: getCategory(category)?.label ?? 'That category' }));
       return;
     }
     if (!value || value <= 0) {
@@ -162,7 +164,7 @@ export default function BudgetsScreen() {
   const onRemove = () => {
     if (!editing || editing === 'new') return;
     const b = editing;
-    confirmAction('Remove limit', `Stop tracking a limit for ${getCategory(b.category)?.label ?? b.category}?`, 'Remove', async () => {
+    confirmAction('Remove limit', t('Stop tracking a limit for {0}?', { 0: getCategory(b.category)?.label ?? b.category }), 'Remove', async () => {
       await deleteBudget(b.category);
       setEditing(null);
       await load();
@@ -196,8 +198,8 @@ export default function BudgetsScreen() {
               <MiniBar percent={(overall.ratio ?? 0) * 100} color={overallColor} />
               <Text style={kit.dim}>
                 {(overall.left ?? 0) >= 0
-                  ? `${fmtInr(overall.left ?? 0)} left · ${overall.days_left} ${overall.days_left === 1 ? 'day' : 'days'} to go`
-                  : `${fmtInr(-(overall.left ?? 0))} over this month`}
+                  ? t('{0} left · {1} {2} to go', { 0: fmtInr(overall.left ?? 0), 1: overall.days_left ?? 0, 2: overall.days_left === 1 ? 'day' : 'days' })
+                  : t('{0} over this month', { 0: fmtInr(-(overall.left ?? 0)) })}
                 {overall.include_commitments ? ' · includes EMIs and investments' : ''}
               </Text>
             </Card>
@@ -216,7 +218,7 @@ export default function BudgetsScreen() {
           </Notice>
         )}
 
-        <SectionTitle>{total != null ? `Category limits (optional, inside the ${fmtInr(total)})` : 'Category limits (optional)'}</SectionTitle>
+        <SectionTitle>{total != null ? t('Category limits (optional, inside the {0})', { 0: fmtInr(total) }) : 'Category limits (optional)'}</SectionTitle>
 
         {loaded && items.length === 0 ? (
           <Text style={kit.dim}>Want to keep an eye on one area, like eating out? Set aside part of your budget for it.</Text>
@@ -235,7 +237,7 @@ export default function BudgetsScreen() {
                   </View>
                   <MiniBar percent={b.ratio * 100} color={STATUS_COLOR[b.status]} />
                   <Text style={kit.dim}>
-                    {fmtInr(b.spent)} of {fmtInr(b.monthly_limit)} · {left >= 0 ? `${fmtInr(left)} left` : `${fmtInr(-left)} over`}
+                    {fmtInr(b.spent)} of {fmtInr(b.monthly_limit)} · {left >= 0 ? t('{0} left', { 0: fmtInr(left) }) : t('{0} over', { 0: fmtInr(-left) })}
                     {total != null && !counted.includes(b) ? ' · not part of the monthly budget' : ''}
                   </Text>
                 </Card>
@@ -319,7 +321,7 @@ export default function BudgetsScreen() {
               onChangeText={setLimit}
               placeholder="0"
               keyboardType="numeric"
-              hint={notSetAside != null && isNew ? `${fmtInr(notSetAside)} of your ${fmtInr(total ?? 0)} monthly budget isn't set aside yet.` : undefined}
+              hint={notSetAside != null && isNew ? t('{0} of your {1} monthly budget isn\'t set aside yet.', { 0: fmtInr(notSetAside), 1: fmtInr(total ?? 0) }) : undefined}
             />
             <ErrorText message={error} />
             <Button label={busy ? 'Saving…' : 'Save'} onPress={onSave} disabled={busy} />

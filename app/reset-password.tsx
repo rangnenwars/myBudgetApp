@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, Text, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text } from '../components/i18n';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScreenHeader, Field, Button, ErrorText, Notice, kit } from '../components/ScreenKit';
 import { apiErrorMessage } from '../utils/api';

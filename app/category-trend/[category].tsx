@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Text } from '../../components/i18n';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../components/Card';
 import { MiniBar } from '../../components/MiniBar';
@@ -12,6 +13,7 @@ import { getTransactionsForRange } from '../../utils/database';
 import { MonthTotal, categoryByMonth } from '../../utils/expenseReports';
 import { monthFilter, txnLink } from '../../utils/txnLink';
 
+import { t } from '../../utils/i18n';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // Year view of Reports > Categories: one category, month by month.
@@ -60,7 +62,7 @@ export default function CategoryTrendScreen() {
                 style={[styles.row, i !== 0 && styles.rowBorder]}
                 onPress={() => router.push(txnLink({ type: 'expense', category: String(category), ...monthFilter(year, m.month) }))}
                 accessibilityRole="link"
-                accessibilityLabel={`${MONTHS[m.month - 1]} ${year}, ${fmtInr(m.total)}, see the entries`}
+                accessibilityLabel={t('{0} {1}, {2}, see the entries', { 0: MONTHS[m.month - 1], 1: year, 2: fmtInr(m.total) })}
               >
                 <Text style={styles.month}>{MONTHS[m.month - 1]}</Text>
                 <View style={styles.bar}>

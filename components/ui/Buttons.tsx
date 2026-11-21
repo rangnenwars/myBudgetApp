@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet, StyleProp, ViewStyle, ActivityIndicator, View, Platform } from 'react-native';
+import { Pressable, StyleSheet, StyleProp, ViewStyle, ActivityIndicator, View, Platform } from 'react-native';
+import { Text } from '../i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, CONTROL, FONTS, RADIUS, T } from '../../constants/theme';
 import { useWebAttributes } from './webAttributes';

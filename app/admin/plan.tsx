@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Switch, Pressable, RefreshControl } from 'react-native';
+import { ScrollView, View, StyleSheet, Switch, Pressable, RefreshControl } from 'react-native';
+import { Text } from '../../components/i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../../components/Card';
@@ -21,7 +22,8 @@ import {
   setEnforcement,
 } from '../../utils/plan';
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+import { t, dateLocale } from '../../utils/i18n';
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 
 // Staff view of the paid plan: price and length, who would lose access, the notice to existing
 // users, and the switch that makes the plan real. Staff read; only an admin changes things, and
@@ -123,7 +125,7 @@ export default function AdminPlanScreen() {
         setBusy(true);
         try {
           const r = await notifyExistingUsers(password);
-          setMessage(`Notice sent: ${r.emailed} emailed, ${r.extended} end dates moved, ${r.customers} customers.`);
+          setMessage(t('Notice sent: {0} emailed, {1} end dates moved, {2} customers.', { 0: r.emailed, 1: r.extended, 2: r.customers }));
           setPassword('');
           await load();
         } catch (err) {
@@ -141,7 +143,7 @@ export default function AdminPlanScreen() {
     confirmAction(
       on ? 'Turn the plan on' : 'Turn the plan off',
       on
-        ? `From now, customers whose access has ended are locked out of the paid features. ${dry?.would_lose ?? 0} would lose access today. Turn it on?`
+        ? t('From now, customers whose access has ended are locked out of the paid features. {0} would lose access today. Turn it on?', { 0: dry?.would_lose ?? 0 })
         : 'Everyone gets their access back at once. Turn it off?',
       on ? 'Turn on' : 'Turn off',
       async () => {
@@ -222,7 +224,7 @@ export default function AdminPlanScreen() {
         <SectionTitle>Turning the plan on</SectionTitle>
         <Card style={[styles.form, plan?.enforced && { borderColor: `${COLORS.accent}88` }]}>
           <Text style={styles.statusLine}>
-            {plan?.enforced ? `ON since ${plan.enforced_at ? fmtDate(plan.enforced_at) : 'earlier'}. Customers whose access has ended are locked out.` : 'OFF (shadow mode). Nobody is locked. Access works as before.'}
+            {plan?.enforced ? t('ON since {0}. Customers whose access has ended are locked out.', { 0: plan.enforced_at ? fmtDate(plan.enforced_at) : 'earlier' }) : 'OFF (shadow mode). Nobody is locked. Access works as before.'}
           </Text>
           <Step n={1} done={!!dry} title="Check the dry run">
             {dry ? (
@@ -238,7 +240,7 @@ export default function AdminPlanScreen() {
             {dry && dry.users.length > 5 && <Text style={kit.dim}>and {dry.users.length - 5} more</Text>}
           </Step>
           <Step n={2} done={!!plan?.existing_notice_at} title="Send the notice to existing users">
-            <Text style={kit.muted}>{plan?.existing_notice_at ? `Sent on ${fmtDate(plan.existing_notice_at)}. You can run it again for new customers.` : 'Not sent yet. It must go out before you can turn the plan on.'}</Text>
+            <Text style={kit.muted}>{plan?.existing_notice_at ? t('Sent on {0}. You can run it again for new customers.', { 0: fmtDate(plan.existing_notice_at) }) : 'Not sent yet. It must go out before you can turn the plan on.'}</Text>
           </Step>
           <Step n={3} done={!!plan?.enforced} title="Turn it on">
             <Text style={kit.muted}>You can turn it off again at any time. Everyone then gets their access back at once.</Text>

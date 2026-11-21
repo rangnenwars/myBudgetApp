@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, TextInput } from './i18n';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, RADIUS, SPACING, MODAL_ANIMATION } from '../constants/theme';
 import { DateField } from './DateField';
@@ -10,6 +11,7 @@ import { addPerson, addPersonEntry, Person } from '../utils/database';
 import { entryDateError, todayLocalIso } from '../utils/dates';
 import { parseAmount } from '../utils/amount';
 
+import { t } from '../utils/i18n';
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -78,7 +80,7 @@ export const IouSheet: React.FC<Props> = ({ visible, onClose, onSaved, people = 
       <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.sheet} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>{person ? `Lend or borrow: ${person.name}` : 'Lent or borrowed'}</Text>
+            <Text style={styles.title}>{person ? t('Lend or borrow: {0}', { 0: person.name }) : 'Lent or borrowed'}</Text>
             <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
               <Ionicons name="close" size={22} color={COLORS.text} />
             </Pressable>

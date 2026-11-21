@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch } from 'react-native';
+import { View, StyleSheet, Switch } from 'react-native';
+import { Text } from '../i18n';
 import { Button, ErrorText, Field } from '../ScreenKit';
 import { DateInput } from '../DateInput';
 import { COLORS, RADIUS, SPACING } from '../../constants/theme';

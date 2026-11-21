@@ -717,3 +717,20 @@ export const accessNotices = pgTable('access_notices', {
   primaryKey({ columns: [table.userId, table.kind, table.accessEnd] }),
   check('access_notices_kind_check', sql`${table.kind} IN ('welcome', 'existing', 'd30', 'd7', 'd1', 'ended')`),
 ]);
+
+// ============================================================
+// tour_outcomes — how the first-time tour ended for each person, once: 'finished' or 'skipped' (and on
+// which card). Used only for counts on System metrics, to see whether the tour helps. One row per user,
+// the first outcome wins; replaying the tour from Settings records nothing.
+// ============================================================
+export const tourOutcomes = pgTable('tour_outcomes', {
+  userId: bigint('user_id', { mode: 'number' }).primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  outcome: text('outcome', { enum: ['finished', 'skipped'] }).notNull(),
+  step: smallint('step').notNull(),
+  language: text('language', { enum: ['en', 'hi'] }).notNull().default('en'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check('tour_outcomes_outcome_check', sql`${table.outcome} IN ('finished', 'skipped')`),
+  check('tour_outcomes_step_check', sql`${table.step} BETWEEN 1 AND 20`),
+  check('tour_outcomes_language_check', sql`${table.language} IN ('en', 'hi')`),
+]);
