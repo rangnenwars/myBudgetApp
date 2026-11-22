@@ -20,7 +20,8 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export default function CategoryTrendScreen() {
   const { user } = useAuth();
   const { getCategory } = useCategories();
-  const { category, year: yearParam } = useLocalSearchParams<{ category: string; year: string }>();
+  const { category, year: yearParam, type: typeParam } = useLocalSearchParams<{ category: string; year: string; type?: string }>();
+  const kind = typeParam === 'income' ? 'income' : 'expense';
   const year = Number(yearParam);
   const [months, setMonths] = useState<MonthTotal[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -30,12 +31,12 @@ export default function CategoryTrendScreen() {
       if (!user || !category || !year) return;
       let active = true;
       getTransactionsForRange(1, year, 12, year)
-        .then((rows) => active && (setMonths(categoryByMonth(rows, category)), setFailed(false)))
+        .then((rows) => active && (setMonths(categoryByMonth(rows, category, kind)), setFailed(false)))
         .catch(() => active && setFailed(true));
       return () => {
         active = false;
       };
-    }, [user?.id, category, year])
+    }, [user?.id, category, year, kind])
   );
 
   const cat = getCategory(String(category));
@@ -52,7 +53,7 @@ export default function CategoryTrendScreen() {
           <View style={styles.center}>{failed ? <Text style={styles.muted}>Could not load this. Go back and try again.</Text> : <ActivityIndicator color={COLORS.accent} />}</View>
         ) : total === 0 ? (
           <Card>
-            <Text style={styles.muted}>No {cat?.label ?? 'expenses'} in {year}.</Text>
+            <Text style={styles.muted}>No {cat?.label ?? (kind === 'income' ? 'income' : 'expenses')} in {year}.</Text>
           </Card>
         ) : (
           <Card>
@@ -60,13 +61,13 @@ export default function CategoryTrendScreen() {
               <Pressable
                 key={m.month}
                 style={[styles.row, i !== 0 && styles.rowBorder]}
-                onPress={() => router.push(txnLink({ type: 'expense', category: String(category), ...monthFilter(year, m.month) }))}
+                onPress={() => router.push(txnLink({ type: kind, category: String(category), ...monthFilter(year, m.month) }))}
                 accessibilityRole="link"
                 accessibilityLabel={t('{0} {1}, {2}, see the entries', { 0: MONTHS[m.month - 1], 1: year, 2: fmtInr(m.total) })}
               >
                 <Text style={styles.month}>{MONTHS[m.month - 1]}</Text>
                 <View style={styles.bar}>
-                  <MiniBar percent={max > 0 ? (m.total / max) * 100 : 0} color={cat?.color ?? COLORS.red} />
+                  <MiniBar percent={max > 0 ? (m.total / max) * 100 : 0} color={cat?.color ?? (kind === 'income' ? COLORS.accent : COLORS.red)} />
                 </View>
                 <Text style={styles.amount}>{fmtInr(m.total)}</Text>
               </Pressable>
@@ -77,7 +78,7 @@ export default function CategoryTrendScreen() {
         {months && total > 0 && (
           <Pressable
             style={styles.allBtn}
-            onPress={() => router.push(txnLink({ type: 'expense', category: String(category), ...yearFilter(year, today) }))}
+            onPress={() => router.push(txnLink({ type: kind, category: String(category), ...yearFilter(year, today) }))}
             accessibilityRole="button"
           >
             <Text style={styles.allBtnText}>See transactions ›</Text>

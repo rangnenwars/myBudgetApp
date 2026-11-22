@@ -75,9 +75,35 @@ export interface CategoryRow {
   barPct: number;
 }
 
+/** The categories shown on Reports should cover about this share of the money; the rest fold into Others. */
+export const COVERAGE = 0.85;
+export const KEEP_MIN = 3;
+export const KEEP_MAX = 8;
+
+/**
+ * How many of the biggest categories to list: enough to explain most (85%) of the total, but never fewer than 3
+ * or more than 8, so a few big categories give a short list and an even spread does not give a long one.
+ * `totals` is each category's amount, any order.
+ */
+export const coverageKeep = (totals: readonly number[]): number => {
+  const sorted = [...totals].filter((n) => n > 0).sort((a, b) => b - a);
+  const all = sorted.reduce((s, n) => s + n, 0);
+  let running = 0;
+  let count = 0;
+  for (const n of sorted) {
+    running += n;
+    count += 1;
+    if (running >= all * COVERAGE) break;
+  }
+  return Math.min(KEEP_MAX, Math.max(KEEP_MIN, count));
+};
+
+export type RowOrder = 'highest' | 'lowest';
+
 /**
  * Categories for a period, largest first, with the smallest folded into one
- * "Others" row. A category the app doesn't recognise (deleted, or never
+ * "Others" row. With order 'lowest' every known category is listed, smallest first (the small ones are the
+ * point, so none is hidden), and only categories the app does not know go to Others. A category the app doesn't recognise (deleted, or never
  * categorised) always goes into Others. The rows add up to the period total.
  * `previous` is the same breakdown for the previous period, for the % change.
  */
@@ -85,14 +111,16 @@ export const categoryRows = (
   current: CategoryTotal[],
   previous: CategoryTotal[] | null,
   keep: number,
-  isKnown: (category: string) => boolean
+  isKnown: (category: string) => boolean,
+  order: RowOrder = 'highest'
 ): { total: number; rows: CategoryRow[] } => {
   const total = current.reduce((s, c) => s + c.total, 0);
-  const sorted = [...current].sort((a, b) => b.total - a.total);
+  const byTotal = (a: CategoryTotal, b: CategoryTotal) => b.total - a.total || a.category.localeCompare(b.category);
+  const sorted = [...current].sort(byTotal);
   const known = sorted.filter((c) => isKnown(c.category));
-  const kept = known.slice(0, keep);
+  const kept = order === 'lowest' ? known.filter((c) => c.total > 0).reverse() : known.slice(0, keep);
   const keptKeys = new Set(kept.map((c) => c.category));
-  const folded = sorted.filter((c) => !keptKeys.has(c.category));
+  const folded = sorted.filter((c) => !keptKeys.has(c.category) && c.total > 0);
 
   const prevMap = new Map((previous ?? []).map((c) => [c.category, c.total]));
   const entries: { category: string; total: number; prev: number | null }[] = kept.map((c) => ({ category: c.category, total: c.total, prev: previous ? prevMap.get(c.category) ?? 0 : null }));
@@ -119,11 +147,11 @@ export const categoryRows = (
  * One line for the top of the Categories view, from simple rules (no AI):
  * "Food is your top spend, up 18%". Says nothing when there are no expenses.
  */
-export const topSpendInsight = (rows: CategoryRow[], labelOf: (category: string) => string): string | null => {
-  const top = rows.find((r) => r.category !== OTHERS_KEY);
+export const topSpendInsight = (rows: CategoryRow[], labelOf: (category: string) => string, type: 'expense' | 'income' = 'expense'): string | null => {
+  const top = rows.filter((r) => r.category !== OTHERS_KEY).reduce<CategoryRow | null>((best, r) => (!best || r.total > best.total ? r : best), null);
   if (!top || top.total <= 0) return null;
   const change = top.changePct == null || top.changePct === 0 ? '' : top.changePct > 0 ? t(', up {0}%', { 0: top.changePct }) : t(', down {0}%', { 0: Math.abs(top.changePct) });
-  return t('{0} is your top spend{1}', { 0: labelOf(top.category), 1: change });
+  return t(type === 'income' ? '{0} is your top income{1}' : '{0} is your top spend{1}', { 0: labelOf(top.category), 1: change });
 };
 
 export interface MonthTotal {
@@ -132,10 +160,10 @@ export interface MonthTotal {
 }
 
 /** One category's spending in each month of a year, January to December, from that year's transactions; empty months are 0. */
-export const categoryByMonth = (transactions: { category: string; type: string; amount: number; month: number }[], category: string): MonthTotal[] => {
+export const categoryByMonth = (transactions: { category: string; type: string; amount: number; month: number }[], category: string, type: 'expense' | 'income' = 'expense'): MonthTotal[] => {
   const totals = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, total: 0 }));
   for (const t of transactions) {
-    if (t.type === 'expense' && t.category === category) totals[t.month - 1].total += t.amount;
+    if (t.type === type && t.category === category) totals[t.month - 1].total += t.amount;
   }
   return totals;
 };

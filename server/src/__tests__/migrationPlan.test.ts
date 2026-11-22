@@ -22,14 +22,18 @@ const applyAll = () => migrate(drizzle(pool), { migrationsFolder: FOLDER });
 
 beforeAll(async () => {
   admin = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  // Dropping the scratch database ends any connection still open to it; without a listener, pg turns that
+  // ("terminating connection due to administrator command") into an unhandled error that fails the whole suite.
+  admin.on('error', () => {});
   await admin.query(`CREATE DATABASE ${name}`);
   pool = new Pool({ connectionString: urlFor(name), max: 2 });
+  pool.on('error', () => {});
 });
 
 afterAll(async () => {
-  await pool?.end();
-  await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
-  await admin.end();
+  await pool?.end().catch(() => {});
+  await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`).catch(() => {});
+  await admin.end().catch(() => {});
 });
 
 describe('the plan covers every migration that came after the paid plan', () => {

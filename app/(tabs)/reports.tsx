@@ -92,7 +92,7 @@ export default function ReportsScreen() {
   const { getCategory } = useCategories();
   // Reports opens on Overview, the first tab. Home's "This month" card opens ?view=monthly.
   const [view, setView] = useState<ReportsView>('overview');
-  const { view: viewParam, n: viewNonce } = useLocalSearchParams<{ view?: string; n?: string }>();
+  const { view: viewParam, n: viewNonce, order: orderParam, month: monthParam, year: yearParam } = useLocalSearchParams<{ view?: string; n?: string; order?: string; month?: string; year?: string }>();
   useEffect(() => {
     if (viewParam === 'monthly' || viewParam === 'categories' || viewParam === 'overview') setView(viewParam);
   }, [viewParam, viewNonce]);
@@ -196,7 +196,7 @@ export default function ReportsScreen() {
           <Text style={styles.headerTitle}>Reports</Text>
         </View>
         <Segmented<ReportsView> options={VIEW_OPTIONS} value={view} onChange={setView} />
-        {view === 'monthly' ? <MonthlyExpensesView /> : <CategoriesView />}
+        {view === 'monthly' ? <MonthlyExpensesView /> : <CategoriesView preset={{ order: orderParam === 'lowest' ? 'lowest' : orderParam === 'highest' ? 'highest' : undefined, month: Number(monthParam) || undefined, year: Number(yearParam) || undefined, nonce: viewNonce }} />}
       </ScrollView>
     );
   }
