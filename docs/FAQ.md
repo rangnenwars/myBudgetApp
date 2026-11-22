@@ -36,12 +36,12 @@ What the client also computes locally, for on-screen display only (never written
 
 ### 4. Is the test/branch/function/loop coverage documented?
 
-Statement, branch, function, and line coverage — yes, documented, with minimum thresholds (measured 2026-10-06):
+Statement, branch, function, and line coverage — yes, documented, with minimum thresholds (measured 2026-11-21):
 
 | | Threshold (min) | Currently achieving | Enforced automatically? |
 |---|---|---|---|
-| **Client** (`utils/calculations.ts`, `utils/dates.ts`, `utils/issues.ts` — per file, `package.json`) | 85% branch, 100% function, 90% lines/statements | 99.6% stmts, 97% branch, 100% functions, 100% lines (109 tests) | **Yes** — `npm run quality` (pre-commit hook and CI) runs `test:coverage` |
-| **Server** (`src/routes`, `src/middleware`, `src/lib`, `src/jobs` — `server/jest.config.js`) | 80% branch, 90% function/lines/statements | 98.0% stmts, 88.0% branch, 97.7% functions, 98.9% lines (386 tests) | **Not yet** — the server's `npm run quality` runs `npm test`, not `test:coverage`; run `npm run test:coverage` to check (open item in [SECURITY_REVIEW.md](SECURITY_REVIEW.md)) |
+| **Client** (the pure logic in `utils/`, per file, `package.json`) | 85% branch, 100% function, 90% lines/statements | 99.6% stmts, 97.1% branch, 100% functions, 100% lines (448 tests) | **Yes** — `npm run quality` (pre-commit hook and CI) runs `test:coverage` |
+| **Server** (`src/routes`, `src/middleware`, `src/lib`, `src/jobs` — `server/jest.config.js`) | 80% branch, 90% function/lines/statements | 97.4% stmts, 87.4% branch, 96.8% functions, 98.6% lines (1289 tests) | **Yes** — the server's `npm run quality` runs `test:coverage`, so the commit hook and CI enforce the floors |
 
 Documented in [README.md §6](README.md#6-testing--quality), [API_REFERENCE.md](API_REFERENCE.md#keeping-this-honest), and `architecture-flows.html` §C/D.
 
@@ -137,3 +137,19 @@ Seeded automatically by `server/src/db/seed-accounts.ts` on every `docker compos
 |---|---|---|
 | Super admin | `admin@mybudget.local` | `Admin@12345` |
 | Standard user | `user@mybudget.local` | `User@12345` |
+
+### 11. Does a new account always see the first-time tour?
+
+A new customer account sees it when it signs in during its first 7 days, on any phone or browser, until it has finished or skipped it once (the server decides: `GET /tour/status`). Older accounts and staff (Company) accounts do not get it by themselves; they can open it from **Settings, then Replay the tour**. If the server cannot be reached, the app falls back to a flag saved on the device at sign-up. See [HINDI_AND_TOUR.md](HINDI_AND_TOUR.md).
+
+### 12. What sign-in and page activity do you keep, and who can see it?
+
+Sign-ins, sign-outs and page names (never amounts, names or what is typed), for 90 days, then only anonymous daily counts. A person sees their own sign-ins in Settings and can switch off page tracking; admins see one person's timeline and every look is audit-logged; admins and system managers see counts. Full rules: [USER_ACTIVITY.md](USER_ACTIVITY.md).
+
+### 13. How do I run the database migrations on production, and undo one?
+
+Migrations apply by themselves when the new server image starts. Take a backup first, deploy, then check with `docker compose ... exec -T server npm run --silent db:plan -- verify` (every line should say `applied, verified`). To undo, `npm run db:plan -- rollback <tag> --yes`, or restore the backup. Steps: [MIGRATION_STEPS.md](MIGRATION_STEPS.md).
+
+### 14. Why does local Docker not show my latest change?
+
+The local stack runs from images built earlier. Rebuild after switching to the code you want: `docker compose up -d --build mybudget-web server` (the server applies pending migrations when it starts). Merging to `main` only updates production, through the deploy workflow.

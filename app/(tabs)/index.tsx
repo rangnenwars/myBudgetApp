@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Text } from '../../components/i18n';
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
@@ -23,6 +23,7 @@ import { computeCategoryDeltas, computeSavingsRate, CategoryDelta } from '../../
 import { shiftMonth } from '../../utils/dates';
 import { barPercent, categoryBlockTitle, CategoryOrder, pickCategories } from '../../utils/categoryOrder';
 import { loadCategoryOrder, saveCategoryOrder } from '../../utils/homePrefs';
+import { TourTarget, useTourTarget, useTourTargets } from '../../context/TourTargetsContext';
 import { monthFilter, txnLink } from '../../utils/txnLink';
 
 
@@ -56,6 +57,16 @@ export default function DashboardScreen() {
   // Budgets at 80% or more of their limit in the viewed month.
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
+  // The guided tour points at items on this screen and can scroll it to bring one into view.
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const { setScroller } = useTourTargets();
+  useEffect(() => {
+    setScroller((dy) => scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: false }));
+    return () => setScroller(null);
+  }, [setScroller]);
+  const addRef = useTourTarget('home-add');
+  const settingsRef = useTourTarget('home-settings');
   // The tour's last card ("Add my first spend") arrives here with ?quick=1.
   const { quick } = useLocalSearchParams<{ quick?: string }>();
   useEffect(() => {
@@ -130,8 +141,9 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.flex}>
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+    <ScrollView ref={scrollRef} onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)} scrollEventThrottle={16} style={styles.flex} contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
+        <TourTarget id="home-header">
         <View>
           <Text style={styles.greeting}>Hi, {user?.name?.split(' ')[0] ?? 'there'}</Text>
           <View style={styles.monthNav}>
@@ -149,6 +161,7 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
         </View>
+        </TourTarget>
         <View style={styles.headerActions}>
           <Pressable onPress={() => router.push('/report-issue')} style={styles.logoutBtn} accessibilityLabel="Report an issue">
             <Ionicons name="bug-outline" size={22} color={COLORS.textMuted} />
@@ -162,7 +175,7 @@ export default function DashboardScreen() {
               <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.textMuted} />
             </Pressable>
           )}
-          <Pressable onPress={() => router.push('/settings')} style={styles.logoutBtn} accessibilityLabel="Settings">
+          <Pressable ref={settingsRef} onPress={() => router.push('/settings')} style={styles.logoutBtn} accessibilityLabel="Settings">
             <Ionicons name="settings-outline" size={22} color={COLORS.textMuted} />
           </Pressable>
           <Pressable onPress={logout} style={styles.logoutBtn} accessibilityLabel="Sign out">
@@ -198,10 +211,13 @@ export default function DashboardScreen() {
         </Pressable>
       )}
 
-      <HomeHeroCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} spent={summary.totalExpense} previousSpent={prevExpense} refreshKey={refreshKey} />
+      <TourTarget id="home-month">
+        <HomeHeroCard month={view.month} year={view.year} isCurrentMonth={isCurrentMonth} spent={summary.totalExpense} previousSpent={prevExpense} refreshKey={refreshKey} />
+      </TourTarget>
 
       {isCurrentMonth && <FreeMoneyCard refreshKey={refreshKey} />}
 
+      <TourTarget id="home-people">
       <PeopleButton
         refreshKey={refreshKey}
         beside={
@@ -212,6 +228,9 @@ export default function DashboardScreen() {
         }
       />
 
+      </TourTarget>
+
+      <TourTarget id="home-summary">
       <Card>
         <View style={styles.summaryRow}>
           <Pressable style={styles.summaryItem} onLayout={shared.onLayout} onPress={() => router.push(txnLink({ type: 'income', ...monthFilter(view.year, view.month) }))} accessibilityRole="link" accessibilityLabel={t('Income {0}, see the entries', { 0: fmt(summary.totalIncome) })}>
@@ -229,6 +248,9 @@ export default function DashboardScreen() {
         </View>
       </Card>
 
+      </TourTarget>
+
+      <TourTarget id="home-categories" style={styles.targetGap}>
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitleInline}>{categoryBlockTitle(categoryOrder)}</Text>
         {monthCategories.length > 1 && (
@@ -285,8 +307,11 @@ export default function DashboardScreen() {
         )}
       </Card>
 
+      </TourTarget>
+
       <RecentTransactions refreshKey={refreshKey} />
 
+      <TourTarget id="home-insights" style={styles.targetGap}>
       <Text style={styles.sectionTitle}>Pro insights</Text>
       <ProGate
         title="Spending insights"
@@ -319,11 +344,12 @@ export default function DashboardScreen() {
           )}
         </Card>
       </ProGate>
+      </TourTarget>
 
       <MoreFeaturesLink />
     </ScrollView>
 
-    <Pressable style={styles.fab} onPress={() => setQuickOpen(true)} accessibilityRole="button" accessibilityLabel="Add an entry">
+    <Pressable ref={addRef} style={styles.fab} onPress={() => setQuickOpen(true)} accessibilityRole="button" accessibilityLabel="Add an entry">
       <Ionicons name="add" size={30} color="#FFFFFF" />
     </Pressable>
     <QuickAddSheet visible={quickOpen} onClose={() => setQuickOpen(false)} onSaved={() => setRefreshKey((k) => k + 1)} />
@@ -333,6 +359,7 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: COLORS.bg },
+  targetGap: { gap: SPACING.md },
   container: { padding: SPACING.lg, paddingBottom: SPACING.xl * 3, gap: SPACING.md },
   fab: {
     position: 'absolute',

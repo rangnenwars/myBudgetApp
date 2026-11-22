@@ -168,7 +168,7 @@ Your friends don't need Prapanji, and nothing is sent to them. Your bank balance
 
 **Settings, then Language** switches the whole app between **English** and **हिन्दी**, on the page you are on. English is the default, and your choice is remembered on that device. New accounts can also choose on the first card of the tour.
 
-**The tour.** Right after you sign up, a short tour shows the five things you will use most. Tap **Skip tour** on any card if you already know the app. You can open it again any time from **Settings, then How to use Prapanji, then Replay the tour**.
+**The tour.** When you are new, a guided tour walks you round the real screen: Home is dimmed, one item is outlined with an arrow and a short message, and **Next** moves on. It starts with a Welcome card (where you can choose your language), goes through everything on Home from top to bottom, then points at each page in the bottom bar (Transactions, Loans, Investments, Goals, Reports) with a line on what it does, and ends with a last card that offers **Add my first spend**. Features you do not have are left out, so it is about 11 to 18 steps. It shows by itself when you sign in during your first 7 days, on any phone or browser, until you finish or skip it once. Tap **Skip tour** on any step if you already know the app. You can open it again any time from **Settings, then How to use Prapanji, then Replay the tour**.
 
 ### Your plan
 
@@ -264,3 +264,14 @@ Good practice:
 * Every role/tier/active/delete action is recorded in the **Audit log** (latest 100 shown).
 * Keep at least **two** active admins. To make the very first admin, or fix a locked-out one, see [DB_ADMIN_QUERIES.md](DB_ADMIN_QUERIES.md) §2.
 * Unconfirmed emails are tagged in the Users list; grant Pro by opening the user and choosing **Pro**.
+
+**Other staff screens** (icons at the top of the Users screen):
+
+| Screen | Who | What it is for |
+|---|---|---|
+| **System metrics** | Admin, system manager | Counts of users, sign-ups, usage, the first-time tour (finished, skipped, on which step) and the cost and revenue estimate. Never shows one person's data. |
+| **User activity** | Admin, system manager | How often people sign in and which pages they use, over 7, 30 or 90 days (customer accounts only; staff are left out). Admins can also search for one person and open their timeline: each visit with the pages opened, in order. **Every look at one person is written to the Audit log.** Pages only: no amounts, names or ids. |
+| **Feature access** | Admin, system manager | Switch Goals, Loans, Investments and Plan ahead on or off for one person, with an optional end date. |
+| **Plan and pricing** | Admin | The price, free months, notice days and the switch that turns the paid plan on (needs your password). Off until you switch it on. See [PAID_PLAN.md](PAID_PLAN.md). |
+| **Payments**, **Payment details**, **Exceptions** | Admin | Confirm or reject payment claims, set the UPI ID and QR shown to customers, and give an account free access (optionally until a date). |
+| **Audit log** | Admin | Everything staff changed, including each look at a person's activity. |

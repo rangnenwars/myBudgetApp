@@ -133,3 +133,48 @@ describe('the tour counts on System metrics', () => {
     expect(await db.select().from(tourOutcomes).where(eq(tourOutcomes.userId, user.id))).toHaveLength(0);
   });
 });
+
+describe('GET /tour/status (who should see the first-time tour)', () => {
+  const status = (token: string) => request(app).get('/api/v1/tour/status').set(auth(token));
+  const ageDays = (id: number, days: number) => db.update(users).set({ createdAt: new Date(Date.now() - days * 86400_000) }).where(eq(users.id, id));
+
+  it('requires authentication', async () => {
+    expect((await request(app).get('/api/v1/tour/status')).status).toBe(401);
+  });
+  it('a brand new account should see it', async () => {
+    const { accessToken } = await registerUser();
+    expect((await status(accessToken)).body).toEqual({ pending: true });
+  });
+  it('still true at a later sign-in on another device, until it has an outcome', async () => {
+    const { accessToken } = await registerUser();
+    expect((await status(accessToken)).body.pending).toBe(true);
+    expect((await status(accessToken)).body.pending).toBe(true);
+  });
+  it('is false after finishing or skipping it, wherever that happened', async () => {
+    for (const outcome of ['finished', 'skipped']) {
+      const { accessToken } = await registerUser();
+      await record(accessToken, { outcome, step: 2 });
+      expect((await status(accessToken)).body.pending).toBe(false);
+    }
+  });
+  it('is false for an account older than 7 days, true just inside it', async () => {
+    const old = await registerUser();
+    await ageDays(old.user.id, 8);
+    expect((await status(old.accessToken)).body.pending).toBe(false);
+    const recent = await registerUser();
+    await ageDays(recent.user.id, 6);
+    expect((await status(recent.accessToken)).body.pending).toBe(true);
+  });
+  it('is false for company accounts, so staff are not shown it', async () => {
+    const { accessToken, user } = await registerUser();
+    await db.update(users).set({ accountKind: 'company' }).where(eq(users.id, user.id));
+    expect((await status(accessToken)).body.pending).toBe(false);
+  });
+  it('is about the person asking, not anyone else', async () => {
+    const a = await registerUser();
+    const b = await registerUser();
+    await record(a.accessToken, { outcome: 'finished', step: 5 });
+    expect((await status(a.accessToken)).body.pending).toBe(false);
+    expect((await status(b.accessToken)).body.pending).toBe(true);
+  });
+});

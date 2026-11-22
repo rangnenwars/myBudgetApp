@@ -14,7 +14,7 @@ flowchart LR
   classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-**Screens:** [App map](#map) · [Login](#login) · [Register](#register) · [Forgot password](#forgot) · [Reset password](#reset) · [Confirm email](#verify) · [Dashboard](#dashboard) · [Quick add](#quickadd) · [Input expenses](#input) · [Transactions](#transactions) · [Loans](#loans) · [People](#people) · [Split a bill](#splitbill) · [Person](#person) · [Investments](#investments) · [Goals](#goals) · [Accounts](#accounts) · [Budgets](#budgets) · [Free-money day](#freemoney) · [Reports](#reports) · [Settings](#settings) · [Report issue](#issue) · [Admin: Users](#users) · [Admin: Audit log](#audit) · [Admin: System metrics](#metrics)
+**Screens:** [App map](#map) · [Login](#login) · [Register](#register) · [Forgot password](#forgot) · [Reset password](#reset) · [Confirm email](#verify) · [Dashboard](#dashboard) · [Quick add](#quickadd) · [Input expenses](#input) · [Transactions](#transactions) · [Loans](#loans) · [People](#people) · [Split a bill](#splitbill) · [Person](#person) · [Investments](#investments) · [Goals](#goals) · [Accounts](#accounts) · [Budgets](#budgets) · [Free-money day](#freemoney) · [Reports](#reports) · [Settings](#settings) · [Report issue](#issue) · [Admin: Users](#users) · [Admin: Audit log](#audit) · [Admin: System metrics](#metrics) · [Reports: Categories](#categories) · [First-time tour](#tour) · [My sign-in history](#signins) · [Admin: User activity](#activity)
 
 Words are kept to a minimum on purpose. Full explanations are in [USER_MANUAL.md](USER_MANUAL.md); the screen files are listed in [README.md](README.md) §5.
 
@@ -528,6 +528,30 @@ flowchart LR
 
 ## Your account
 
+<a id="categories"></a>
+
+### Reports: Categories
+
+`/(tabs)/reports` (Categories) · Signed in · `components/CategoriesView.tsx`
+
+```mermaid
+flowchart LR
+  H(["Home: All categories"]):::entry -->|"same order and month as Home"| C["Reports > Categories"]
+  R(["Reports tab > Categories"]):::entry --> C
+  C --> K{"Expenses or Income?"}
+  K --> O{"Highest or Lowest?"}
+  O -->|Highest| HI["Categories covering about 85% of the total (3 to 8), the rest in Others"]
+  O -->|Lowest| LO["Every category, smallest first"]
+  C --> P["Month or Year, ‹ › to step"]
+  HI --> T["Tap: that category's entries (Month) or month by month (Year)"]:::ok
+  LO --> T
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
 <a id="settings"></a>
 
 ### Settings
@@ -542,6 +566,10 @@ flowchart LR
   S --> C["Download my data"] --> C1["One file saved"]:::ok
   S --> D["Sign out everywhere"] --> D1{"Confirm?"} -->|yes| D2["Every device signed out"]:::warn --> LO["Login"]
   S --> E["Delete my account"] --> E1["Enter password"] --> E2{"Confirm?"} -->|yes| E3["Account + data gone"]:::bad --> LO
+  S --> L["Language: English / हिन्दी"] --> L1["Whole app changes in place"]:::ok
+  S --> PV["Share which pages I visit"] --> PV1{"On?"} -->|off| PV2["No page hits stored; sign-ins still are"]:::warn
+  S --> SH["My sign-in history"] --> SHP["Sign-in history page"]
+  S --> RT["Replay the tour"] --> RTH["Home, then the tour"]
   classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
@@ -566,6 +594,53 @@ flowchart LR
 ```
 
 Access carries on for 3 days while a payment waits, once per access period. Details in [PAID_PLAN.md](PAID_PLAN.md).
+
+<a id="signins"></a>
+
+### My sign-in history
+
+`/sign-in-history` · Signed in · `app/sign-in-history.tsx`
+
+```mermaid
+flowchart LR
+  S(["Settings: My sign-in history"]):::entry --> L["Last 90 days, newest first"]
+  L --> R["Signed in / Signed up / Signed out / Signed out everywhere"]
+  L --> D["Device and coarse location only"]
+  L --> X{"One that is not you?"}
+  X -->|yes| P["Change password, then Sign out everywhere"]:::warn
+  X -->|no| OK["Nothing to do"]:::ok
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+<a id="tour"></a>
+
+### First-time tour
+
+`/` (on Home) · Signed in · `components/TourSheet.tsx`, `utils/tour.ts`
+
+```mermaid
+flowchart LR
+  SI(["Sign in"]):::entry --> Q{"New customer account, first 7 days, no outcome yet?"}
+  Q -->|no| H["Home as usual"]
+  Q -->|yes| W["Welcome card + language choice"]
+  W --> HS["Home dimmed: each item outlined with an arrow, top to bottom"]
+  HS --> TB["Then each tab-bar page: Transactions, Loans, Investments, Goals, Reports"]
+  TB --> RD["Last card"] --> A{"Add my first spend?"}
+  A -->|yes| QA["Quick add opens"]:::ok
+  A -->|no| H
+  W --> SK["Skip tour on any step"]:::warn --> REC["Outcome saved once: shows no more"]
+  RD --> REC
+  H --> RP["Settings: Replay the tour"] --> HS
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
 
 <a id="issue"></a>
 
@@ -630,6 +705,28 @@ flowchart LR
   E["Role / tier / active / delete change"] --> L["Audit log"]:::ok
   A(["Users: document icon"]):::pro --> V["Latest 100 entries"]
   L --> V --> R["Who  |  What  |  Whom  |  Details"]
+  classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef pro fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef warn fill:#fef3c7,stroke:#d97706,color:#78350f
+```
+
+<a id="activity"></a>
+
+### Admin: User activity
+
+`/admin/activity`, `/admin/activity-user` · Admin, System manager (counts); Admin only (one person) · `app/admin/activity.tsx`
+
+```mermaid
+flowchart LR
+  A(["Users screen: pulse icon"]):::pro --> O["Counts: sign-ins, people, page views"]
+  O --> R["7, 30 or 90 days"]
+  O --> TP["Most visited pages, platform split"]
+  O --> X["Customer accounts only: staff left out"]:::warn
+  O --> S{"Admin?"}
+  S -->|yes| F["Search a person"] --> T["Timeline: each visit, pages in order"] --> AU["Audit log: viewed_activity"]:::ok
+  S -->|"system manager"| N["Counts only: no one person"]:::warn
   classDef entry fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef ok fill:#d1fae5,stroke:#059669,color:#064e3b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d

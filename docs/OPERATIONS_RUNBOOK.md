@@ -207,6 +207,12 @@ deploy@droplet$ dc logs --tail=50 server   # "Running migrations…", "Seeding c
 deploy@droplet$ cat release.env deploy-history.log | tail -3
 ```
 
+If the release added migrations, check they are really in place (read-only):
+
+```bash
+deploy@droplet$ dc exec -T server npm run --silent db:plan -- verify; echo "exit $?"   # every line: applied, verified; exit 0
+```
+
 Open https://prapanji.in in a browser, register/sign in, add a transaction.
 
 ### 5.2 First-ever deployment only: create the first admin

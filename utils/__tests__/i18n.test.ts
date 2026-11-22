@@ -1,6 +1,6 @@
 import { HI, HI_PATTERNS } from '../i18nHi';
 import { LANGUAGES, dateLocale, getLanguage, interpolate, parseLanguage, setCurrentLanguage, t, translate, translateNode } from '../i18n';
-import { TOUR_LENGTH, TOUR_STEPS, clampStep, stepButtons } from '../tour';
+import { MAX_STEPS, TOUR_STEPS, clampStep, stepButtons, stepsFor } from '../tour';
 
 afterEach(() => setCurrentLanguage('en'));
 
@@ -169,9 +169,9 @@ describe('the dictionary itself', () => {
 });
 
 describe('the tour', () => {
-  it('has five cards, each with a title and a body, and a unique key', () => {
-    expect(TOUR_LENGTH).toBe(5);
-    expect(new Set(TOUR_STEPS.map((s) => s.key)).size).toBe(5);
+  it('has a title and a body on every step, a unique key, and never more steps than the server accepts', () => {
+    expect(TOUR_STEPS.length).toBeLessThanOrEqual(MAX_STEPS);
+    expect(new Set(TOUR_STEPS.map((s) => s.key)).size).toBe(TOUR_STEPS.length);
     for (const s of TOUR_STEPS) {
       expect(s.title.length).toBeGreaterThan(3);
       expect(s.body.length).toBeGreaterThan(20);
@@ -191,15 +191,17 @@ describe('the tour', () => {
   });
 
   it('Skip is on every card except the last; Back only in the middle; Next until the last', () => {
-    expect(stepButtons(0)).toEqual({ back: false, next: true, skip: true });
-    expect(stepButtons(2)).toEqual({ back: true, next: true, skip: true });
-    expect(stepButtons(3)).toEqual({ back: true, next: true, skip: true });
-    expect(stepButtons(4)).toEqual({ back: false, next: false, skip: false });
+    expect(stepButtons(0, 5)).toEqual({ back: false, next: true, skip: true });
+    expect(stepButtons(2, 5)).toEqual({ back: true, next: true, skip: true });
+    expect(stepButtons(3, 5)).toEqual({ back: true, next: true, skip: true });
+    expect(stepButtons(4, 5)).toEqual({ back: false, next: false, skip: false });
+    expect(stepButtons(17, 18)).toEqual({ back: false, next: false, skip: false });
   });
 
   it('clampStep keeps a card number inside the tour', () => {
     expect(clampStep(-3)).toBe(0);
-    expect(clampStep(99)).toBe(4);
+    expect(clampStep(99)).toBe(TOUR_STEPS.length - 1);
+    expect(clampStep(99, 5)).toBe(4);
     expect(clampStep(2.7)).toBe(2);
     expect(clampStep(Number.NaN)).toBe(0);
   });

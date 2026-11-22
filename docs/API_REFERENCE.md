@@ -558,6 +558,9 @@ All changes are audit-logged.
 
 ## First-time tour — `/api/v1/tour` 🔒
 
+### `GET /tour/status` 🔒
+→ `{ pending: boolean }`. True for a customer account created in the last 7 days that has no tour outcome yet; false otherwise (older account, company account, or already finished or skipped). The app opens the first-time tour when this is true.
+
 ### `POST /tour/outcome` 🔒
 Body: `{ outcome: 'finished' | 'skipped', step: 1–20, language?: 'en' | 'hi' }` (language defaults to `en`). Records how the tour ended for the caller, **once**: the first outcome is kept and a later call changes nothing.
 → **201** `{ recorded: true }`, or **200** `{ recorded: false }` when one was already saved
@@ -662,4 +665,4 @@ The nightly digest that analyses these and emails fix suggestions is a backgroun
 
 This document is authoritative for what's *implemented*, not what's *planned* — if a route here doesn't exist in `server/src/routes/`, or a route exists that isn't listed here, one of the two is wrong and needs fixing in the same change that caused the drift.
 
-**Every route above has at least one test** in `server/src/__tests__/` (one file per resource, named to match; the `support`/`system_manager` roles and the audit-log and system-metrics routes are covered in `roles.test.ts`) — 216 tests total, run against a real Postgres instance, no mocking. `server/jest.config.js` enforces a coverage floor (80% branches, 90% functions/lines/statements) over `src/routes/`, `src/middleware/`, and `src/lib/`, so a new endpoint or background process shipped without a test fails `npm run test:coverage` — see [README.md §6](README.md#6-testing--quality) for the exact commands, and the repo's git pre-commit hook (`.husky/pre-commit` — see §"Enforcement") which runs the full quality gate automatically before every commit.
+**Every route above has at least one test** in `server/src/__tests__/` (one file per resource, named to match; the `support`/`system_manager` roles and the audit-log and system-metrics routes are covered in `roles.test.ts`) — 1,289 tests total (as of 2026-11-21), run against a real Postgres instance, no mocking. `server/jest.config.js` enforces a coverage floor (80% branches, 90% functions/lines/statements) over `src/routes/`, `src/middleware/`, and `src/lib/`, so a new endpoint or background process shipped without a test fails `npm run test:coverage` — see [README.md §6](README.md#6-testing--quality) for the exact commands, and the repo's git pre-commit hook (`.husky/pre-commit` — see §"Enforcement") which runs the full quality gate automatically before every commit.

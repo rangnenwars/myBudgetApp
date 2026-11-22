@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { getLanguage } from '../utils/i18n';
-import { recordTourOutcome } from '../utils/database';
+import { getTourPending, recordTourOutcome } from '../utils/database';
 import { clearTourPending, isTourPending } from '../utils/tourPrefs';
 
 interface TourValue {
@@ -21,18 +21,22 @@ export const TourProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [visible, setVisible] = useState(false);
   const [replay, setReplay] = useState(false);
 
-  // A new sign-up sees the tour once. Signing out closes it.
+  // A new account sees the tour once, on any device: the server says so for a sign-up in the last 7 days with
+  // no outcome yet. If the server cannot be reached, the flag saved on this device at sign-up is used instead.
+  // Signing out closes it.
   useEffect(() => {
     if (!user) {
       setVisible(false);
       return;
     }
     let active = true;
-    isTourPending(user.id).then((pending) => {
-      if (!active || !pending) return;
-      setReplay(false);
-      setVisible(true);
-    });
+    getTourPending()
+      .catch(() => isTourPending(user.id))
+      .then((pending) => {
+        if (!active || !pending) return;
+        setReplay(false);
+        setVisible(true);
+      });
     return () => {
       active = false;
     };

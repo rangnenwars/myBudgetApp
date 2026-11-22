@@ -1,11 +1,11 @@
 # Test cases for review
 
-Generated 2026-11-09 from the Jest suites (every test name, grouped by file and section, with its latest result).
+Generated 2026-11-21 from the Jest suites by `scripts/genTestCases.js` (every test name, grouped by file and section, with its latest result). Regenerate it after adding tests; do not edit it by hand.
 
 | Suite | Test files | Test cases | Passed | Failed |
 |---|---|---|---|---|
-| Server | 47 | 1028 | 1016 | 12 |
-| Client | 11 | 191 | 191 | 0 |
+| Server | 54 | 1289 | 1289 | 0 |
+| Client | 21 | 448 | 448 | 0 |
 
 
 ---
@@ -106,6 +106,162 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 - [PASS] requires the password, then deletes the account and its data
 - [PASS] lets an admin delete their account while another active admin remains
+
+### `src/__tests__/activity.test.ts` (110)
+
+**coarse location**
+
+- [PASS] 203.0.113.57 is kept as 203.0.113.0/24
+- [PASS] ::ffff:203.0.113.57 is kept as 203.0.113.0/24
+- [PASS] 2001:db8:abcd:12:1:2:3:4 is kept as 2001:db8:abcd::/48
+- [PASS] 2001:0db8:0000:0000:0000:0000:0000:0001 is kept as 2001:db8:0::/48
+- [PASS] ::1 is kept as 0:0:0::/48
+- [PASS] fe80::1%eth0 is kept as fe80:0:0::/48
+- [PASS] 2001:db8:: is kept as 2001:db8:0::/48
+- [PASS] null is not an address, so nothing is kept
+- [PASS] undefined is not an address, so nothing is kept
+- [PASS] "" is not an address, so nothing is kept
+- [PASS] "not an ip" is not an address, so nothing is kept
+- [PASS] "999.1.1.1" is not an address, so nothing is kept
+- [PASS] "1.2.3" is not an address, so nothing is kept
+- [PASS] "1.2.3.4.5" is not an address, so nothing is kept
+- [PASS] "12345::" is not an address, so nothing is kept
+- [PASS] "g::1" is not an address, so nothing is kept
+- [PASS] never keeps the last part of the address
+
+**what the app says about itself**
+
+- [PASS] reads a good platform, version and session id
+- [PASS] ignores { 'x-app-platform': 'windows' }
+- [PASS] ignores { 'x-app-platform': '<script>' }
+- [PASS] ignores { 'x-app-version': 'xxxxxxxxxxxxxxxxxxxxx' }
+- [PASS] ignores { 'x-app-version': '1 2' }
+- [PASS] ignores { 'x-session-id': 'abc' }
+- [PASS] ignores {
+  'x-session-id': 'acae7452-4282-4328-9e37-21b48f26cde6; drop table users'
+}
+
+**sign-ins and sign-outs**
+
+- [PASS] a sign-in records the time, platform, version, session and only a coarse location
+- [PASS] signing up records a sign-in marked as sign-up
+- [PASS] a failed sign-in records nothing
+- [PASS] a deactivated account that is refused records nothing
+- [PASS] signing out records one sign-out, and signing out again records nothing more
+- [PASS] signing out with a token that is not real records nothing
+- [PASS] signing out everywhere records it once, marked as everywhere
+- [PASS] headers that are not the expected shape are ignored, not stored
+- [PASS] a failure to write the record never breaks signing in
+
+**POST /activity/pages**
+
+- [PASS] requires authentication
+- [PASS] keeps known pages and says how many it kept and dropped
+- [PASS] stores the page pattern, never the real address, id, month or query
+- [PASS] drops "/people/abc" and stores nothing for it
+- [PASS] drops "/admin/secret" and stores nothing for it
+- [PASS] drops "https://evil.example/" and stores nothing for it
+- [PASS] drops "//x" and stores nothing for it
+- [PASS] drops "/transactions/../admin" and stores nothing for it
+- [PASS] drops "/people/<script>" and stores nothing for it
+- [PASS] drops "" and stores nothing for it
+- [PASS] drops "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and stores nothing for it
+- [PASS] every stored page is one of the known patterns, whatever is sent
+- [PASS] keeps a time within the last day, and drops one that is in the future, too old, or not a date
+- [PASS] refuses no pages, and stores nothing
+- [PASS] refuses no body, and stores nothing
+- [PASS] refuses pages that are not a list, and stores nothing
+- [PASS] refuses more than 50 pages, and stores nothing
+- [PASS] refuses a path over 200 characters, and stores nothing
+- [PASS] refuses a path that is not text, and stores nothing
+- [PASS] accepts exactly 50 pages at once
+- [PASS] always records for the person who is signed in, whatever the body says
+- [PASS] stores nothing about what is in the body besides the path and time
+
+**POST /activity/pages › when the person has switched sharing off**
+
+- [PASS] records no pages and says so, but still records sign-ins and sign-outs
+- [PASS] switching it back on starts recording again
+
+**POST /activity/pages › rate limit**
+
+- [PASS] the 31st report in a minute is refused with 429, and another person is not affected
+
+**PATCH /auth/me/activity-sharing**
+
+- [PASS] requires authentication
+- [PASS] is on for a new account, and the profile shows what was chosen
+- [PASS] refuses text
+- [PASS] refuses a number
+- [PASS] refuses null
+- [PASS] refuses nothing
+
+**GET /activity/me (my sign-in history)**
+
+- [PASS] requires authentication
+- [PASS] lists my own sign-ins and sign-outs, newest first, and no page hits
+- [PASS] never shows someone else's
+- [PASS] leaves out anything older than 90 days
+
+**admin overview**
+
+- [PASS] requires authentication
+- [PASS] an ordinary user and support staff are refused; an admin and a system manager can read it
+- [PASS] counts sign-ins, people and page views, with the most visited pages and the platform split
+- [PASS] leaves company accounts out, so staff testing does not count
+- [PASS] only counts what falls inside the range
+- [PASS] refuses a range of 0 days
+- [PASS] refuses a range of 91 days
+- [PASS] refuses a range of -1 days
+- [PASS] refuses a range of 1.5 days
+- [PASS] refuses a range of "x" days
+- [PASS] refuses a range of "" days
+- [PASS] shows counts only: no person, email or address anywhere
+
+**one person's timeline (admin only)**
+
+- [PASS] requires authentication, and refuses an ordinary user, support and a system manager
+- [PASS] groups a visit by its session: signed in, the pages in order, signed out
+- [PASS] every look at a person is written to the audit log with who looked
+- [PASS] a refused look is not logged as a view
+- [PASS] does not include another person's events
+- [PASS] an unknown person is 987654321
+- [PASS] a bad id is abc
+- [PASS] zero is 0
+- [PASS] refuses a range of 0 days
+- [PASS] refuses a range of 91 days
+- [PASS] refuses a range of "x" days
+
+**grouping events into sessions**
+
+- [PASS] events with the same session id are one session, newest session first
+- [PASS] without a session id, a gap of more than half an hour starts a new session
+- [PASS] an event with no session id joins the session just before it, within the gap
+- [PASS] the same id after a long idle gap is shown as a new visit
+- [PASS] knows when a session started and ended
+- [PASS] no events, no sessions
+
+**keeping activity for 90 days**
+
+- [PASS] adds old activity up into daily counts and deletes it; recent activity stays
+- [PASS] keeps only anonymous numbers: the daily table has no person in it
+- [PASS] leaves company accounts out of the daily counts, though their old rows are still removed
+- [PASS] running it twice changes nothing the second time
+- [PASS] a day of activity right at the cut-off is rolled up whole, never split
+
+**removal and export**
+
+- [PASS] deleting an account removes that person's activity
+- [PASS] "Download my data" includes my own activity and my sharing choice, and nobody else's
+
+**what the database itself refuses**
+
+- [PASS] a page hit with no page
+- [PASS] a sign-in that carries a page
+- [PASS] an unknown kind
+- [PASS] an unknown platform
+- [PASS] a page longer than 80 characters
+- [PASS] a row for a person who does not exist
 
 ### `src/__tests__/admin.test.ts` (19)
 
@@ -375,7 +531,7 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 **when access ends**
 
 - [PASS] turns the feature off for the user but keeps their data
-- [FAIL] is not counted as someone having the feature
+- [PASS] is not counted as someone having the feature
 - [PASS] lets the user ask again, and staff see the request with whether they said they paid
 
 **asking without paying**
@@ -456,6 +612,27 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] refuses a user who does not have Plan ahead
 - [PASS] returns 12 months built from the user’s repeating entries
 - [PASS] never shows another user’s entries
+
+### `src/__tests__/forecastEdits.test.ts` (13)
+
+**Plan ahead income with no repeating income**
+
+- [PASS] is the average of the last full months while this month has no income
+- [PASS] counts this month's income as soon as it is entered, and follows edits and deletes
+- [PASS] this month's income is still counted when it is all there is
+
+**editing a repeating entry**
+
+- [PASS] with update_repeat, the repeat takes the new amount and Plan ahead follows
+- [PASS] without update_repeat, only that entry changes and the repeat is left as it was
+- [PASS] an entry that does not repeat is edited and the flag changes nothing else
+- [PASS] does not guess when two repeats look the same
+- [PASS] only the amount is passed on: changing the category or note alone leaves the repeat alone
+- [PASS] never touches another user's repeat
+- [PASS] update_repeat as text is refused
+- [PASS] update_repeat as a number is refused
+- [PASS] update_repeat as null is refused
+- [PASS] a repeat changed this way is still found when the entry is deleted, so the repeat stops too
 
 ### `src/__tests__/goals.test.ts` (23)
 
@@ -562,17 +739,6 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] skips a run while another process holds the digest lock
 - [PASS] runs when the lock is free, and releases it afterwards
 
-### `src/__tests__/issueSuggestions.test.ts` (3)
-
-**suggestFix**
-
-- [PASS] is worked out on the server from the report and the stack analysis
-- [PASS] still suggests something without analysis context
-
-**issue reports never leave the server**
-
-- [PASS] the server depends on no AI / outside-processing SDK
-
 ### `src/__tests__/issues.test.ts` (21)
 
 **POST /api/v1/issues**
@@ -610,6 +776,56 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] drops screenshots of reports closed longer ago than the retention period, keeping the text
 - [PASS] reads the retention period from the environment, ignoring blank or invalid values
 - [PASS] runs every night even when the digest email is switched off
+
+### `src/__tests__/issueSuggestions.test.ts` (3)
+
+**suggestFix**
+
+- [PASS] is worked out on the server from the report and the stack analysis
+- [PASS] still suggests something without analysis context
+
+**issue reports never leave the server**
+
+- [PASS] the server depends on no AI / outside-processing SDK
+
+### `src/__tests__/loanPaymentDelete.test.ts` (25)
+
+**DELETE /loans/:id/payments/:paymentId**
+
+- [PASS] requires authentication
+- [PASS] undoes the newest part payment: balance, EMI, expense entry and list row all go back
+- [PASS] restores an EMI that does not divide evenly to the exact original
+- [PASS] a loan that logs no expense has nothing to remove from Transactions
+- [PASS] reopens a loan that the payment had paid off, keeping the EMI it had
+- [PASS] deleting an older part payment leaves the newer one, and moves the later balances by the same amount
+- [PASS] deleting every part payment, newest first, returns the loan to where it started
+- [PASS] a part payment of one paisa can be deleted and leaves the balance exactly as it was
+
+**what cannot be deleted**
+
+- [PASS] EMI rows are refused and nothing changes
+- [PASS] another user's payment is a 404 and changes nothing
+- [PASS] a payment cannot be deleted through a different loan's URL
+- [PASS] a payment id of "abc" is a 400
+- [PASS] a payment id of "0" is a 400
+- [PASS] a payment id of "-1" is a 400
+- [PASS] a payment id of "1.5" is a 400
+- [PASS] a payment id of "99999999999999999999" is a 400
+- [PASS] a payment or loan that does not exist is a 404
+- [PASS] deleting twice restores the balance only once
+- [PASS] two deletes at the same moment restore the balance only once
+- [PASS] a user without the Loans feature is refused
+
+**part payments made before the link existed**
+
+- [PASS] finds and removes the one matching expense entry
+- [PASS] deletes the payment but leaves the entries alone when none matches
+- [PASS] does not guess when two entries match
+- [PASS] never touches another user's matching entry
+
+**deleting the expense entry by hand, then the payment**
+
+- [PASS] still works: the link was cleared, so no entry is found, and the loan is restored
 
 ### `src/__tests__/loans.test.ts` (61)
 
@@ -756,6 +972,35 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 - [PASS] recognises PNG, JPEG and WebP from their first bytes, and nothing else
 
+### `src/__tests__/migrationPlan.test.ts` (14)
+
+**the plan covers every migration that came after the paid plan**
+
+- [PASS] has an entry for each, and none for a migration that does not exist
+- [PASS] removes the migration record in its last rollback statement, with the real timestamp
+
+**on a scratch database**
+
+- [PASS] before anything runs, every step is pending
+- [PASS] after migrating, every step is applied and its result is there
+- [PASS] migrating again changes nothing
+- [PASS] undoes one migration and the ones after it, and says which
+- [PASS] undoing something already undone does nothing
+- [PASS] applies again after an undo
+- [PASS] can undo everything back to the paid plan, then apply it all again
+- [PASS] refuses an unknown migration
+- [PASS] is a failed undo that leaves the database as it was
+- [PASS] notices a result that is missing although the migration is recorded
+- [PASS] notices a result that is already there although the migration is not recorded
+- [PASS] will not undo a migration that has no written rollback
+
+### `src/__tests__/monthlyExpenses.test.ts` (2)
+
+**Monthly expenses match the Transactions month filter**
+
+- [PASS] has the same total for every month, keeps empty months as 0, and counts expenses only
+- [PASS] gives a category breakdown that adds up to the month total
+
 ### `src/__tests__/monthRollover.test.ts` (13)
 
 **month and year rollover for one user**
@@ -776,13 +1021,6 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] 6 Nov: spending this month counts only against November, and Home compares it with October
 - [PASS] left unopened until 2 Jan: January is a fresh month, and October drops out of the budget class
 - [PASS] 2 Jan: the comparison crosses the year, December against January
-
-### `src/__tests__/monthlyExpenses.test.ts` (2)
-
-**Monthly expenses match the Transactions month filter**
-
-- [PASS] has the same total for every month, keeps empty months as 0, and counts expenses only
-- [PASS] gives a category breakdown that adds up to the month total
 
 ### `src/__tests__/negativeApi.test.ts` (299)
 
@@ -1106,20 +1344,20 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] login with an array for the email is refused
 - [PASS] a deactivated user cannot sign in
 - [PASS] a used or invented refresh token gets no new session
-- [FAIL] changing a password needs the right current password and a long enough new one
-- [FAIL] deleting an account needs the password
-- [FAIL] an admin cannot be demoted, deactivated or deleted by an ordinary user, and cannot be changed by name alone
+- [PASS] changing a password needs the right current password and a long enough new one
+- [PASS] deleting an account needs the password
+- [PASS] an admin cannot be demoted, deactivated or deleted by an ordinary user, and cannot be changed by name alone
 
 **paid plan abuse**
 
-- [FAIL] a payment claim with no transaction id is refused and nothing is held
-- [FAIL] a payment claim with a transaction id that is too short is refused and nothing is held
-- [FAIL] a payment claim with a transaction id with symbols is refused and nothing is held
-- [FAIL] a payment claim with a screenshot that is not an image is refused and nothing is held
-- [FAIL] a payment claim with a screenshot that is not base64 is refused and nothing is held
-- [FAIL] cannot cancel or see another user's claim
-- [FAIL] a user cannot set their own account kind, grant themselves an exception, or read the payment screenshot
-- [FAIL] the profile cannot be told it has more access than the server computed
+- [PASS] a payment claim with no transaction id is refused and nothing is held
+- [PASS] a payment claim with a transaction id that is too short is refused and nothing is held
+- [PASS] a payment claim with a transaction id with symbols is refused and nothing is held
+- [PASS] a payment claim with a screenshot that is not an image is refused and nothing is held
+- [PASS] a payment claim with a screenshot that is not base64 is refused and nothing is held
+- [PASS] cannot cancel or see another user's claim
+- [PASS] a user cannot set their own account kind, grant themselves an exception, or read the payment screenshot
+- [PASS] the profile cannot be told it has more access than the server computed
 
 ### `src/__tests__/netWorth.test.ts` (4)
 
@@ -1618,6 +1856,116 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 - [PASS] runs the bcrypt comparison for an unknown email too, so timing matches a wrong password
 
+### `src/__tests__/serverHardening.test.ts` (11)
+
+**numbers must be numbers**
+
+- [PASS] rejects an array, a boolean, an object, null and an empty string as an amount, and saves nothing
+- [PASS] still accepts a number and a plain numeric string
+- [PASS] applies the same rule to other number fields and to query strings
+
+**validation errors are in plain words**
+
+- [PASS] says what is wrong without zod jargon
+
+**editing keeps what you did not change**
+
+- [PASS] renaming an account leaves its balance alone, and an empty edit is refused
+
+**dates must be sensible**
+
+- [PASS] refuses years outside 2000–2100
+- [PASS] refuses an entry dated in the future, but allows today and a day of timezone slack
+- [PASS] applies the same rule when editing, to the ledger and to part payments
+- [PASS] still lets a deadline or a repeat end date be in the future
+
+**two payment submissions at the same moment**
+
+- [PASS] leave exactly one waiting claim
+
+**marking an EMI paid**
+
+- [PASS] lowers the balance and writes its history together, once per tap, even for simultaneous taps
+
+### `src/__tests__/sipPosting.test.ts` (59)
+
+**adding a SIP to an investment**
+
+- [PASS] the first posting adds the expense only and leaves the invested amount as entered
+- [PASS] reading again never posts the same month twice
+- [PASS] reading Transactions, not only Investments, adds a SIP that is due
+- [PASS] a SIP whose day has not come yet this month adds nothing and says when it is next
+- [PASS] an investment with no SIP is unchanged and shows no next date
+- [PASS] every category a SIP can use is accepted
+- [PASS] an end date today or later is accepted
+
+**a SIP that is refused saves nothing**
+
+- [PASS] an amount of zero
+- [PASS] an amount of negative
+- [PASS] an amount of text
+- [PASS] an amount of one paisa fraction
+- [PASS] an amount of above the maximum
+- [PASS] a day of zero
+- [PASS] a day of 32
+- [PASS] a day of negative
+- [PASS] a day of a fraction
+- [PASS] a day of text
+- [PASS] the category "rent"
+- [PASS] the category "salary_1"
+- [PASS] the category ""
+- [PASS] the category "no_such_category"
+- [PASS] no end date and not marked as having none
+- [PASS] both an end date and "no end date"
+- [PASS] an end date of "2026-02-30"
+- [PASS] an end date of "2026-13-01"
+- [PASS] an end date of "soon"
+- [PASS] an end date of "12/11/2026"
+- [PASS] an end date in the past
+- [PASS] a SIP given as a string
+- [PASS] a SIP given as a number
+- [PASS] a SIP given as an array
+
+**changing a SIP**
+
+- [PASS] can be switched on later, and started from the first posting
+- [PASS] switching it off stops new postings and keeps the ones already in Transactions
+- [PASS] a patch that does not mention the SIP leaves it alone
+- [PASS] can change the amount and day
+- [PASS] a refused change leaves the SIP as it was
+- [PASS] another user's investment cannot be given a SIP
+- [PASS] switching it back on after a long gap does not backfill the months it was off
+
+**posting several months (postDueSips with a fixed date)**
+
+- [PASS] catches up every missed month, each on the SIP day, and raises the investment each time
+- [PASS] a second run the same day adds nothing
+- [PASS] two runs at the same moment add each month only once
+- [PASS] this month is added only once its day has arrived
+- [PASS] a day of 31 lands on the last day of a shorter month
+- [PASS] stops at the end date, and the investment is raised only for months that were added
+- [PASS] a gap longer than two years adds only the last 24 months
+- [PASS] amounts add up to the paisa with no drift
+- [PASS] an investment with no saved value raises only the invested amount
+- [PASS] never touches another user's investment
+- [PASS] something other than a SIP is never posted: no SIP, no transactions
+
+**what the database itself refuses**
+
+- [PASS] a SIP with an amount but no day
+- [PASS] a SIP that does not say when it ends
+- [PASS] a SIP with both an end date and no end
+- [PASS] a day outside 1 to 31
+- [PASS] an amount of zero
+- [PASS] a category that does not exist
+
+**who can see it**
+
+- [PASS] a user without the Investments feature is refused the list
+- [PASS] not signed in is refused
+- [PASS] another user's SIP never appears in my transactions
+- [PASS] the SIP expense counts in the month summary like any other expense
+
 ### `src/__tests__/splitFreeMoney.test.ts` (33)
 
 **POST /transactions/split**
@@ -1689,6 +2037,46 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 - [PASS] lets the app open the repeating bill behind a line
 
+### `src/__tests__/tour.test.ts` (29)
+
+**POST /tour/outcome**
+
+- [PASS] requires authentication
+- [PASS] records a finished tour
+- [PASS] records a skip and the card it happened on
+- [PASS] English is the default language
+- [PASS] the first outcome is kept; a replay records nothing
+- [PASS] two at the same moment still leave one row
+- [PASS] refuses no outcome and records nothing
+- [PASS] refuses an unknown outcome and records nothing
+- [PASS] refuses no step and records nothing
+- [PASS] refuses step 0 and records nothing
+- [PASS] refuses step 21 and records nothing
+- [PASS] refuses a fractional step and records nothing
+- [PASS] refuses a text step and records nothing
+- [PASS] refuses an unknown language and records nothing
+- [PASS] refuses an empty body and records nothing
+- [PASS] refuses an array and records nothing
+- [PASS] cannot record for someone else: it always records for the caller
+
+**the tour counts on System metrics**
+
+- [PASS] counts finished and skipped, and where people skipped
+- [PASS] leaves company accounts out, so staff testing the tour does not count
+- [PASS] shows counts only, never who
+- [PASS] an ordinary user cannot read them
+- [PASS] removing a user removes their row
+
+**GET /tour/status (who should see the first-time tour)**
+
+- [PASS] requires authentication
+- [PASS] a brand new account should see it
+- [PASS] still true at a later sign-in on another device, until it has an outcome
+- [PASS] is false after finishing or skipping it, wherever that happened
+- [PASS] is false for an account older than 7 days, true just inside it
+- [PASS] is false for company accounts, so staff are not shown it
+- [PASS] is about the person asking, not anyone else
+
 ### `src/__tests__/transactions.test.ts` (16)
 
 **transactions CRUD**
@@ -1718,6 +2106,25 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 ## Client tests
 
+### `utils/__tests__/activity.test.ts` (11)
+
+**session id**
+
+- [PASS] looks like a uuid and differs each time
+- [PASS] stays the same until reset
+
+**ActivityBuffer**
+
+- [PASS] keeps the pattern, never the real address
+- [PASS] skips unknown pages
+- [PASS] skips the same page twice in a row but keeps it after another page
+- [PASS] treats the same pattern with a different id as a repeat
+- [PASS] stamps the time
+- [PASS] hands out at most 50 at a time
+- [PASS] never holds more than the cap, dropping the oldest
+- [PASS] puts a batch back in front when sending failed
+- [PASS] clear forgets everything, including the last page
+
 ### `utils/__tests__/amount.test.ts` (5)
 
 **parseAmount**
@@ -1728,7 +2135,7 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] is NaN for anything that is not a plain number, instead of a truncated value
 - [PASS] rejects negatives unless allowed, as for an account balance below zero
 
-### `utils/__tests__/calculations.test.ts` (83)
+### `utils/__tests__/calculations.test.ts` (90)
 
 **classifyLocal**
 
@@ -1888,6 +2295,16 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] keeps a quiet month after the first one as zero savings
 - [PASS] falls back to the current month so far when no full month has activity
 
+**undoPartPayment**
+
+- [PASS] puts the balance back and, for the newest payment, the exact saved EMI
+- [PASS] scales the EMI back by the same ratio when the saved EMI is missing (old payments)
+- [PASS] scales the EMI by the ratio when a later payment exists, even if an EMI was saved
+- [PASS] a loan at zero keeps its EMI, or takes the saved one
+- [PASS] ignores a saved EMI of zero or less
+- [PASS] adds money without float drift
+- [PASS] undoes any run of part payments, newest first, back to the start
+
 ### `utils/__tests__/calendar.test.ts` (4)
 
 **calendar helpers**
@@ -1896,6 +2313,78 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] applies min and max inclusively
 - [PASS] greys a month only when no day in it can be picked
 - [PASS] moves between months across years
+
+### `utils/__tests__/categoryOrder.test.ts` (12)
+
+**pickCategories**
+
+- [PASS] highest: the five biggest, biggest first
+- [PASS] lowest: the five smallest that have spending, smallest first, leaving out zero
+- [PASS] fewer than five categories: shows them all, in the chosen order
+- [PASS] no spending at all gives an empty list in both orders
+- [PASS] ties keep a steady order by category key
+- [PASS] does not change the list it is given
+- [PASS] keeps extra fields on each row
+- [PASS] a limit of three
+
+**barPercent**
+
+- [PASS] is measured against the month's biggest category
+- [PASS] never goes outside 0 to 100, and a zero biggest gives 0
+
+**title and saved choice**
+
+- [PASS] names the block after what it shows
+- [PASS] anything unknown or missing is the default, highest
+
+### `utils/__tests__/dateRanges.test.ts` (29)
+
+**weekStartIso (weeks run Monday to Sunday)**
+
+- [PASS] a Monday is its own week start
+- [PASS] a Sunday belongs to the week that began six days earlier
+- [PASS] midweek days map to that Monday
+- [PASS] crosses month and year boundaries
+- [PASS] a leap day
+
+**presetRange**
+
+- [PASS] this week: Monday to Sunday, both included
+- [PASS] this week across a month end
+- [PASS] this month: first to last day
+- [PASS] this year: 1 January to 31 December
+- [PASS] the first and the last day of the year give the same year
+
+**presetHint**
+
+- [PASS] describes each quick choice for the sheet
+
+**customRangeError**
+
+- [PASS] accepts a normal range, a single day, and a whole year
+- [PASS] refuses a To before From
+- [PASS] refuses a From of ""
+- [PASS] refuses a From of "2026-13-01"
+- [PASS] refuses a From of "2026-02-30"
+- [PASS] refuses a From of "12/11/2026"
+- [PASS] refuses a From of "abc"
+- [PASS] refuses a From of "2026-1-5"
+- [PASS] refuses a To of ""
+- [PASS] refuses a To of "2026-13-01"
+- [PASS] refuses a To of "2026-02-30"
+- [PASS] refuses a To of "tomorrow"
+- [PASS] a leap day is valid only in a leap year
+
+**customRange labels**
+
+- [PASS] same year: the year only at the end
+- [PASS] different years: both years
+- [PASS] one day
+- [PASS] keeps the dates it was given
+
+**netOf**
+
+- [PASS] is money in minus money out, to the paisa
 
 ### `utils/__tests__/dates.test.ts` (14)
 
@@ -1934,7 +2423,7 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] says today and yesterday, and otherwise the day and month
 - [PASS] handles yesterday across a month and year end
 
-### `utils/__tests__/expenseReports.test.ts` (22)
+### `utils/__tests__/expenseReports.test.ts` (33)
 
 **changePct**
 
@@ -1976,6 +2465,114 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] compares the year so far with the same months last year
 - [PASS] compares a finished year with the whole year before
 
+**coverageKeep (how many categories Reports lists)**
+
+- [PASS] lists enough categories to explain 85% of the money
+- [PASS] never lists fewer than 3, even when one category is nearly everything
+- [PASS] never lists more than 8, even when spending is spread evenly
+- [PASS] ignores order and categories with nothing
+
+**categoryRows, lowest first**
+
+- [PASS] lists every category with something, smallest first, and still adds up
+- [PASS] bars are against the biggest category, so a small one looks small
+- [PASS] still puts unknown categories under Others, last
+- [PASS] highest stays as it was by default
+- [PASS] breaks ties by name so the list does not jump around
+
+**income**
+
+- [PASS] categoryByMonth counts income only when asked for income
+- [PASS] the top line says income, and names the biggest row even when listed smallest first
+
+### `utils/__tests__/fitAmount.test.ts` (8)
+
+**fitFontSize**
+
+- [PASS] keeps the normal size while the width is unknown or the figure already fits
+- [PASS] shrinks until the characters fit the width, never growing past the base
+- [PASS] shrinks more for a longer figure in the same width
+
+**compactInr**
+
+- [PASS] writes crores, lakhs and thousands the Indian way
+- [PASS] writes small amounts in full and keeps the sign
+
+**fitAmount**
+
+- [PASS] shrinks a figure that is a little too wide
+- [PASS] switches to the compact form when the full figure would be too small to read
+- [PASS] never goes compact when the caller needs the exact figure, and still stays readable
+
+### `utils/__tests__/i18n.test.ts` (35)
+
+**translate**
+
+- [PASS] English is the default and returns the text unchanged
+- [PASS] Hindi returns the Hindi text
+- [PASS] text with no Hindi falls back to the English text, never blank
+- [PASS] spacing at the ends is kept while the words are translated
+- [PASS] an empty string stays empty
+
+**interpolate**
+
+- [PASS] fills placeholders by name or number
+- [PASS] leaves a placeholder with no value as written, and ignores extra values
+- [PASS] the same placeholder can appear twice
+- [PASS] a value that looks like a placeholder is not filled again
+- [PASS] numbers keep their value, including zero
+
+**sentences with values, in both languages**
+
+- [PASS] Hindi sentence with values
+- [PASS] the Hindi can move the values to where the sentence needs them
+- [PASS] a plural suffix passed in English is not glued onto Hindi
+
+**server messages**
+
+- [PASS] translates a fixed message
+- [PASS] translates a message that carries a value, keeping the value
+- [PASS] a specific pattern wins over a general one
+- [PASS] an unknown server message stays in English
+- [PASS] patterns are anchored: a longer sentence that merely contains one is not rewritten
+
+**translateNode (the children of a Text)**
+
+- [PASS] translates strings, in an array too, and leaves numbers and elements alone
+- [PASS] in English it returns the same children untouched
+
+**language helpers**
+
+- [PASS] parseLanguage defaults to English for anything unknown
+- [PASS] lists English first, with the language names written in their own script
+- [PASS] the date locale follows the language
+- [PASS] a date in Hindi has Devanagari month names
+
+**the dictionary itself**
+
+- [PASS] has no empty translations
+- [PASS] a translation never adds a placeholder the English does not have
+- [PASS] a translation keeps the placeholders a sentence needs (numbers named in the English survive)
+- [PASS] Hindi keeps the finance words people say in English
+- [PASS] every pattern is anchored at both ends
+- [PASS] a translation is written in Devanagari (or is a code or name left as is)
+
+**the tour**
+
+- [PASS] has a title and a body on every step, a unique key, and never more steps than the server accepts
+- [PASS] every tour card has Hindi
+- [PASS] does not talk about price, free months or plans
+- [PASS] Skip is on every card except the last; Back only in the middle; Next until the last
+- [PASS] clampStep keeps a card number inside the tour
+
+### `utils/__tests__/i18nCoverage.test.ts` (3)
+
+**Hindi covers every piece of text**
+
+- [PASS] in the screens
+- [PASS] in the messages the server sends
+- [PASS] no Hindi entry is left for text that no longer exists in the screens
+
 ### `utils/__tests__/issues.test.ts` (5)
 
 **base64ByteLength**
@@ -1988,6 +2585,93 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 - [PASS] posts a report with a long upload timeout and returns the saved row
 - [PASS] fetches the user's own reports
+
+### `utils/__tests__/pagePatterns.test.ts` (76)
+
+**normalizePage**
+
+- [PASS] / is /
+- [PASS] /index is /
+- [PASS] /transactions is /transactions
+- [PASS] /transactions/ is /transactions
+- [PASS] /transactions?month=5&q=salary is /transactions
+- [PASS] /transactions#top is /transactions
+- [PASS] /settings?x=1#y is /settings
+- [PASS] /admin/audit-log is /admin/audit-log
+- [PASS] /legal/privacy is /legal/privacy
+- [PASS] replaces ids, months and category keys, so the real value is never kept
+- [PASS] a fixed page wins over a dynamic one with the same start
+- [PASS] drops "/people/abc"
+- [PASS] drops "/people/42/edit"
+- [PASS] drops "/people/-1"
+- [PASS] drops "/people/12345678901234567890"
+- [PASS] drops "/monthly-expenses/2026-1"
+- [PASS] drops "/monthly-expenses/november"
+- [PASS] drops "/category-trend/Rent Money"
+- [PASS] drops "/category-trend/a/b"
+- [PASS] drops "/nope"
+- [PASS] drops "/admin/secret"
+- [PASS] drops "/Transactions"
+- [PASS] drops "transactions"
+- [PASS] drops ""
+- [PASS] drops "https://evil.example/transactions"
+- [PASS] drops "//transactions"
+- [PASS] drops "/transactions/../admin"
+- [PASS] drops "/people/<script>"
+- [PASS] drops anything that is not text, and anything too long
+- [PASS] what it returns is always a known pattern
+
+**page labels**
+
+- [PASS] every pattern has a label and a pattern appears once
+- [PASS] an unknown pattern is shown as written
+- [PASS] isKnownPattern is exact
+
+**every screen in the app has a page pattern**
+
+- [PASS] finds the screens
+- [PASS] (tabs)/goals.tsx is /goals
+- [PASS] (tabs)/index.tsx is /
+- [PASS] (tabs)/investments.tsx is /investments
+- [PASS] (tabs)/loans.tsx is /loans
+- [PASS] (tabs)/reports.tsx is /reports
+- [PASS] (tabs)/transactions.tsx is /transactions
+- [PASS] accounts.tsx is /accounts
+- [PASS] admin/activity-user.tsx is /admin/activity-user
+- [PASS] admin/activity.tsx is /admin/activity
+- [PASS] admin/audit-log.tsx is /admin/audit-log
+- [PASS] admin/exceptions.tsx is /admin/exceptions
+- [PASS] admin/features.tsx is /admin/features
+- [PASS] admin/index.tsx is /admin
+- [PASS] admin/metrics.tsx is /admin/metrics
+- [PASS] admin/payment-details.tsx is /admin/payment-details
+- [PASS] admin/payments.tsx is /admin/payments
+- [PASS] admin/plan.tsx is /admin/plan
+- [PASS] budgets.tsx is /budgets
+- [PASS] category-trend/[category].tsx is /category-trend/food
+- [PASS] forgot-password.tsx is /forgot-password
+- [PASS] free-money-day.tsx is /free-money-day
+- [PASS] index.tsx is /
+- [PASS] input-expenses.tsx is /input-expenses
+- [PASS] legal/privacy.tsx is /legal/privacy
+- [PASS] legal/terms.tsx is /legal/terms
+- [PASS] loan-payments.tsx is /loan-payments
+- [PASS] login.tsx is /login
+- [PASS] monthly-expenses/[ym].tsx is /monthly-expenses/2026-11
+- [PASS] more-features.tsx is /more-features
+- [PASS] people/index.tsx is /people
+- [PASS] people/split.tsx is /people/split
+- [PASS] people/[id].tsx is /people/7
+- [PASS] plan-ahead/index.tsx is /plan-ahead
+- [PASS] plan-ahead/[ym].tsx is /plan-ahead/2026-11
+- [PASS] plan.tsx is /plan
+- [PASS] register.tsx is /register
+- [PASS] renew.tsx is /renew
+- [PASS] report-issue.tsx is /report-issue
+- [PASS] reset-password.tsx is /reset-password
+- [PASS] settings.tsx is /settings
+- [PASS] sign-in-history.tsx is /sign-in-history
+- [PASS] verify-email.tsx is /verify-email
 
 ### `utils/__tests__/people.test.ts` (15)
 
@@ -2049,6 +2733,28 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 - [PASS] everyone with the plan switched on, except company accounts
 
+### `utils/__tests__/prefs.test.ts` (11)
+
+**language**
+
+- [PASS] is English until a choice is saved
+- [PASS] remembers Hindi, and going back to English
+- [PASS] ignores a saved value it does not know
+- [PASS] does not throw when storage fails, and stays English
+
+**tour pending**
+
+- [PASS] nobody has a tour waiting at first
+- [PASS] is waiting for exactly the user who signed up, and no one else
+- [PASS] clearing it means it never opens again by itself
+- [PASS] a new sign-up on the same device replaces the earlier one
+- [PASS] does not throw when storage fails: no automatic tour, the app still works
+
+**home category order**
+
+- [PASS] is Highest until a choice is saved, then remembers Lowest
+- [PASS] falls back to Highest when storage fails or holds something unknown
+
 ### `utils/__tests__/repeatEnd.test.ts` (7)
 
 **repeat end date**
@@ -2060,6 +2766,60 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] requires a choice and a usable date
 - [PASS] builds the request fields
 - [PASS] labels a rule by its end
+
+### `utils/__tests__/sip.test.ts` (34)
+
+**sipPostingDate**
+
+- [PASS] lands on the chosen day
+- [PASS] the 29th to 31st fall back to the last day of a shorter month
+- [PASS] month start
+
+**sipMonthsDue**
+
+- [PASS] a SIP never posted starts this month, once its day has arrived
+- [PASS] nothing yet while this month's day has not arrived: never dated in the future
+- [PASS] after a month is settled, the next one is due only on its day
+- [PASS] catches up every missed month, oldest first
+- [PASS] catch-up crosses a year end
+- [PASS] a day of 31 uses the last day of shorter months
+- [PASS] months after the end date are settled but add nothing
+- [PASS] an end date earlier than the first day adds nothing at all
+- [PASS] a long gap is capped at the most recent months
+- [PASS] a settled month in the future of today lists nothing
+
+**nextSipDate**
+
+- [PASS] a new SIP: this month if it has not passed, otherwise it is due now
+- [PASS] after a month is settled, the following month
+- [PASS] is null once the SIP has ended
+- [PASS] short months
+
+**ordinalDay**
+
+- [PASS] 1
+- [PASS] 2
+- [PASS] 3
+- [PASS] 4
+- [PASS] 11
+- [PASS] 12
+- [PASS] 13
+- [PASS] 21
+- [PASS] 22
+- [PASS] 23
+- [PASS] 30
+- [PASS] 31
+
+**applySip**
+
+- [PASS] raises invested and value by the SIP, and works out the gain again
+- [PASS] with no value saved, the gain stays at zero
+- [PASS] adds to the paisa with no float drift
+- [PASS] a loss stays a loss
+
+**SIP_CATEGORIES**
+
+- [PASS] are the four investment categories
 
 ### `utils/__tests__/theme.test.ts` (21)
 
@@ -2093,6 +2853,43 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 
 - [PASS] converts a hex colour to rgba
 
+### `utils/__tests__/tourSpotlight.test.ts` (20)
+
+**isUsable**
+
+- [PASS] accepts an item that is on screen
+- [PASS] rejects nothing, a zero size, or NaN
+- [PASS] rejects an item below the fold, accepts one only just clipped
+- [PASS] rejects one scrolled off the top or the side
+
+**padRect**
+
+- [PASS] grows the item and keeps it on the screen
+
+**dimRects**
+
+- [PASS] covers everything but the item: the four pieces add up to the screen minus the hole
+- [PASS] leaves no piece where the item touches an edge
+- [PASS] never makes a piece with no size
+
+**placeBubble**
+
+- [PASS] goes below an item near the top, arrow pointing up at its centre
+- [PASS] goes above an item near the bottom, arrow pointing down
+- [PASS] gives up when it fits neither side, so the caller can show a centred card
+- [PASS] stays inside the screen sideways, with the arrow still on the item
+- [PASS] is no wider than the maximum on a big screen, and fits a narrow one
+- [PASS] never puts the arrow off the bubble
+- [PASS] gives up on an unusably narrow screen
+
+**the tour steps**
+
+- [PASS] starts with a welcome and ends with a card, with no item to point at on either
+- [PASS] walks Home top to bottom, then the other pages from the tab bar
+- [PASS] every item is named once
+- [PASS] leaves out a step whose optional item is not on screen, and keeps everything else
+- [PASS] only an optional step can be dropped
+
 ### `utils/__tests__/txnLink.test.ts` (4)
 
 **txnLink**
@@ -2101,3 +2898,4 @@ Generated 2026-11-09 from the Jest suites (every test name, grouped by file and 
 - [PASS] spans a range of months and labels it
 - [PASS] builds the link with only the filters that were given
 - [PASS] reads the filters back, and treats a plain open as no filter
+

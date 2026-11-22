@@ -52,3 +52,32 @@ A review of Prapanji's server code, database structure and handling of users' co
 | Client files with enforced thresholds | `utils/calculations.ts` | + `utils/dates.ts`, `utils/issues.ts` |
 
 New test files: `issueSuggestions.test.ts` (server-side suggestions, plus a guard that no AI SDK is a server dependency), `mail.test.ts` (SMTP, nodemailer mocked), `middlewareUnits.test.ts`, `dbIntegrity.test.ts`, `issueDigestRender.test.ts`, `issueConstants.test.ts` (client constants vs database CHECKs), and `utils/__tests__/issues.test.ts`.
+
+---
+
+## 4. Addendum, 2026-11-21: what changed since the review
+
+The review above is a record of 2026-10-06 and is left as it was. These are the changes since that touch confidentiality or process.
+
+**New data collected: sign-in and page activity** (design and rules: [USER_ACTIVITY.md](USER_ACTIVITY.md); migration 0029)
+
+| Question | Answer |
+|---|---|
+| What is stored | Sign-ins, sign-outs and page names; for a sign-in also the device type, app version and a **coarse location** (the first three parts of an IPv4 address, the first three groups of an IPv6 address). Never the full address. |
+| What is never stored | Failed sign-ins; the real page address, ids, months, amounts, names or search text; anything typed. A page hit is stored as one of a fixed list of patterns (`utils/pagePatterns.ts`), and the server drops anything not on the list. Tests cover this. |
+| Who can read it | A person reads their own sign-ins (Settings, My sign-in history). Admins read one person's timeline, and **every look is written to the audit log** (`viewed_activity`). Admins and system managers read counts only. Support reads none. Staff and tester accounts are left out of counts. |
+| How long | Raw rows 90 days, then added up into anonymous daily counts (no user id) and deleted by the nightly job. Removed with the account; included in "Download my data". |
+| Person's control | "Share which pages I visit" switch in Settings. Off stops page hits; sign-ins are always recorded (they are also the security history). |
+| Rate limit | 30 page reports a minute per account. |
+
+**Status and open points**
+
+| # | Point | Status |
+|---|---|---|
+| 12 | Existing users start with page-visit sharing **on** (the new column defaults to true). | Open, owner decision: switch it to off for existing users, or keep on and rely on the Settings switch and the policy text. |
+| 13 | The Privacy Policy has a new paragraph about sign-ins and pages visited. It is a draft. | Open: needs a lawyer's check before launch, as the rest of the policy. |
+| 14 | Finding 11 (server coverage floor not enforced). | **Resolved**: the server's `quality` script now runs with coverage, so the floors in `jest.config.js` are enforced by the commit hook too. |
+| 15 | The tour's `GET /tour/status` and the finished/skipped counts. | No personal data beyond a yes/no for the signed-in person; counts on System metrics are for customer accounts only. |
+| 16 | Production database changes. | A one-command check and undo exists (`npm run db:plan`, `server/scripts/migrate-safe.sh`); the guide says to back up first. See [MIGRATION_STEPS.md](MIGRATION_STEPS.md). |
+
+**Test numbers now:** 1289 server tests in 54 files and 448 app tests in 21 files, all passing. Server coverage 97.4% statements, 87.4% branches, 96.8% functions, 98.6% lines (floors: 80% branches, 90% the rest). The full list is [TEST_CASES.md](TEST_CASES.md).

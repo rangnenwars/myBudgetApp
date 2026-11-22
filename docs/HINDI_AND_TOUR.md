@@ -5,7 +5,7 @@ Two features that shipped together: the app can be used in **Hindi** on every pa
 ## For people using the app
 
 - **Language:** Settings, then **Language**, switches between English and हिन्दी. The whole app changes at once, on the page you are on, and the choice is remembered on that device. English is the default. A new sign-up can also choose on the first tour card.
-- **The tour:** opens by itself once, right after sign-up. Five cards: Welcome, Add a spend, See your month, Split bills, You're ready. **Skip tour** is on every card but the last. The last card offers **Add my first spend**. People who already use the app never get it by itself. **Settings, then How to use Prapanji, then Replay the tour** opens it any time.
+- **The tour:** opens by itself right after sign-up, and again at each sign-in on any device until it has been finished or skipped once, for the first 7 days of the account (the server decides: `GET /tour/status`). If the server cannot be reached, the flag saved on the device at sign-up is used. It is a guided walk on the real Home screen: the screen is dimmed, one item is outlined with an arrow and a short message, and **Next** moves to the next. After a Welcome card (with the language choice) it goes through Home top to bottom (your month, Settings, the + button, This month, Money left after fixed bills, People and Accounts, Income/expense/savings, Where the money goes, Recent transactions, Insights, More features), then points at each page in the tab bar (Transactions, Loans, Investments, Goals, Reports) with a line on what it does, and ends with a last card. Items you do not have (a feature switched off, no recent entries yet) are left out, so it is 11 to 18 steps. Home scrolls by itself to bring an item into view, and if an item cannot be shown on a very small window that step becomes a centred card. **Skip tour** is on every step but the last. The last card offers **Add my first spend**. Accounts older than 7 days, and company (staff) accounts, never get it by itself. **Settings, then How to use Prapanji, then Replay the tour** opens it any time.
 
 ## How the Hindi works
 
@@ -39,6 +39,14 @@ Text that is code and not words goes in `scripts/i18nIgnore.json`.
 ### Please have the Hindi reviewed
 
 The Hindi was written by Claude and has not been read by a native speaker. Money words in particular have more than one reasonable choice, and some people prefer more English words ("budget", "report") than the current text uses. Send corrections as a list of English text and the Hindi you want, or edit the files above directly.
+
+## Who sees the tour
+
+`GET /tour/status` returns `{ pending }`: true for a **customer** account created in the **last 7 days** with **no outcome** yet. The app opens the tour when it is true, so it shows at sign-in on any device. If the server cannot be reached, the flag saved on the device at sign-up is used. Replaying from Settings goes to Home first and records nothing.
+
+## Changing the tour
+
+Steps and wording are in `utils/tour.ts`. A step points at a Home item by name: mark the item with `TourTarget` (or `useTourTarget`) from `context/TourTargetsContext.tsx`; a step without a target is a centred card; `optional: true` leaves the step out when the item is not on screen. Placement maths (the dimmed area, the bubble and its arrow) is in `utils/tourSpotlight.ts`. Add Hindi for any new text, or the translation test fails. The server accepts step numbers 1 to 20, so keep the tour within 20 steps (a test checks it). Skipped-on-step counts from before the walkthrough are numbered against the old five cards and are not comparable.
 
 ## Counting the tour
 
